@@ -48,7 +48,7 @@ constexpr auto creature_radius = static_cast<int>
 constexpr auto item_radius = static_cast<int>
                              ( 20 );     // and for items (every tile costs a map lookup)
 constexpr auto marker_box_height = static_cast<float>( 1.0f );
-constexpr auto item_size = static_cast<float>( 0.6f );
+constexpr auto item_size = static_cast<float>( 1.0f );
 
 // Light colour with a zero alpha: no depth pull (see r3d_block.vert), for everything in the
 // entity mesh that is not the top of a billboard.

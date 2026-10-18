@@ -56,7 +56,7 @@ struct camera {
     float z_scale = 1.0f;
     float yaw = 0.0f;
     float pitch = 0.96f;       // ~55 degrees
-    float distance = 24.0f;
+    float distance = 18.0f;
     float fovy = 0.785f;       // 45 degrees
     bool orthographic = false;
 
