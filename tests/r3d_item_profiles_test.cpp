@@ -1,13 +1,19 @@
 #include "catch/catch.hpp"
 #include "r3d_item_profiles.h"
 
-TEST_CASE("r3d_pressurized_tanks_use_repeated_sprite_geometry", "[r3d][items]") {
+TEST_CASE("r3d_cylinder_items_use_repeated_sprite_geometry", "[r3d][items]") {
     for (const auto id :
          {"carbondioxide_tank", "hydrogen_tank", "nitrogen_tank", "oxygen_cylinder", "oxygen_tank",
-          "smoxygen_tank"}) {
+          "smoxygen_tank", "scuba_tank", "small_scuba_tank", "tinyweldtank", "weldtank",
+          "gradcylinder"}) {
         const auto profile = r3d::item_profile(id);
         CHECK(profile.geometry == r3d::item_geometry::repeated_sprite_volume);
-        CHECK(profile.depth_fraction == Approx(0.38f));
+        CHECK(
+            profile.depth_fraction
+            == Approx(
+                id == std::string_view("small_scuba_tank") || id == std::string_view("tinyweldtank")
+                    ? 0.28f
+                    : 0.38f));
     }
 }
 
