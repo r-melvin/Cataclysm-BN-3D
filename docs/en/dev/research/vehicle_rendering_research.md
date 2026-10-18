@@ -77,15 +77,25 @@ extruded art looks the same from both sides. Those constraints make it a possibl
 authoring aid for an isolated wheel or other compact vehicle part, not a way to
 replace the live vehicle assembled from BN parts.
 
-The renderer currently has no `.vox`/glTF model importer. The next useful trial is
-to author one wheel from the BN wheel sprite, export `.vox`, and add a small
-renderer-owned per-part model path that preserves BN's part state, mount, yaw,
-lighting, and visibility. Keep the tileset sprite as the front-facing texture while
-using the authored volume for shape and the opposite face. Compare that result
-against the new faceted procedural wheel at the same camera angles before
-expanding to body panels. Kenney Shape's `.vox` output is a standard interchange
-format according to its documentation; source-art licensing still applies to the
-sprite used to author the model.
+The renderer now has a pure `.vox` reader and exposed-face extractor in
+[`r3d_vox.cpp`](../../../../src/r3d_vox.cpp), but it does not yet load voxel assets
+into vehicle meshes or draw their palette. The next useful trial is to author one
+wheel from the BN wheel sprite, export `.vox`, and add a renderer-owned per-part
+model path that preserves BN's part state, mount, yaw, lighting, and visibility.
+Keep the tileset sprite as the front-facing texture while using the authored
+volume for shape and the opposite face. Compare that result against the new
+faceted procedural wheel at the same camera angles before expanding to body
+panels. Kenney Shape's `.vox` output is a standard interchange format according
+to its documentation; source-art licensing still applies to the sprite used to
+author the model.
+
+Kenney Shape is a Unity application, so the [MelonLoader project](https://github.com/LavaGang/MelonLoader)
+is one possible automation route: it states that it supports Mono and Il2Cpp
+Unity games, including native Linux. Compatibility with Kenney Shape's particular
+Unity version and scripting backend is unverified. First check for a documented
+import/export API or command-line workflow; otherwise test a small optional
+plugin that imports sprite art, applies depth, and exports `.vox`. Avoid coupling
+the game renderer to private details of the authoring tool.
 
 ## Validation matrix
 
