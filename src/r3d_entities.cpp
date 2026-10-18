@@ -26,10 +26,12 @@
 #include "monster.h"
 #include "mtype.h"
 #include "npc.h"
+#include "options.h"
+#include "r3d_decals.h"
+#include "r3d_item_profiles.h"
+#include "r3d_scene_rules.h"
 #include "r3d_shapes.h"
 #include "r3d_vehicle_rules.h"
-#include "r3d_scene_rules.h"
-#include "r3d_decals.h"
 #include "enums.h"
 #include "units_utility.h"
 #include "vehicle/vehicle.h"
@@ -334,6 +336,46 @@ auto make_solid_uvs( const sprite_ref &s ) -> uvs_t
     const auto u_mid = static_cast<float>( s.u0 + ( s.u1 - s.u0 ) * fx );
     const auto v_mid = static_cast<float>( s.v0 + ( s.v1 - s.v0 ) * fy );
     return uvs_t{{ { u_mid, v_mid }, { u_mid, v_mid }, { u_mid, v_mid }, { u_mid, v_mid } }};
+}
+
+struct emit_sprite_volume_options {
+    quad_sink &sink;
+    const sprite_ref &sprite;
+    float cx;
+    float cy;
+    float z_base;
+    uint32_t color;
+    float depth_fraction;
+};
+
+/// Repeats a pixel-art sprite around a shallow four-sided volume for selected upright items.
+auto emit_sprite_volume( const emit_sprite_volume_options &options ) -> void
+{
+    const auto &sprite = options.sprite;
+    const auto width = static_cast<float>( std::clamp( sprite.size_x, 0.25f, 1.0f ) );
+    const auto height = static_cast<float>( std::clamp( sprite.size_y, 0.25f, 1.5f ) );
+    const auto depth = static_cast<float>( width * options.depth_fraction );
+    const auto x0 = static_cast<float>( options.cx - width * 0.5f );
+    const auto x1 = static_cast<float>( options.cx + width * 0.5f );
+    const auto y0 = static_cast<float>( options.cy - depth * 0.5f );
+    const auto y1 = static_cast<float>( options.cy + depth * 0.5f );
+    const auto z1 = static_cast<float>( options.z_base + height );
+    const auto faces = std::array<corners_t, 4> {{
+            {{ { x0, y0, z1 }, { x1, y0, z1 }, { x1, y0, options.z_base }, { x0, y0, options.z_base } }},
+            {{ { x1, y1, z1 }, { x0, y1, z1 }, { x0, y1, options.z_base }, { x1, y1, options.z_base } }},
+            {{ { x0, y1, z1 }, { x0, y0, z1 }, { x0, y0, options.z_base }, { x0, y1, options.z_base } }},
+            {{ { x1, y0, z1 }, { x1, y1, z1 }, { x1, y1, options.z_base }, { x1, y0, options.z_base } }}
+        }
+    };
+    const auto shades = std::array<float, 4> {{ 0.65f, 0.83f, 0.59f, 0.73f }};
+    const auto uvs = make_sprite_uvs( sprite );
+    for( auto i = size_t{ 0 }; i < faces.size(); ++i ) {
+        options.sink.add_colored( { .sprite = sprite, .corners = faces[i], .uvs = uvs, .ref = light_ref{},
+                                    .color = no_pull( modulate_light( options.color, shades[i] ) ) } );
+    }
+    const auto cap = corners_t {{ { x0, y0, z1 }, { x1, y0, z1 }, { x1, y1, z1 }, { x0, y1, z1 } }};
+    options.sink.add_colored( { .sprite = sprite, .corners = cap, .uvs = make_solid_uvs( sprite ),
+                                .ref = light_ref{}, .color = no_pull( modulate_light( options.color, 0.95f ) ) } );
 }
 
 auto map_sprite_uv( const sprite_ref &s, float gx, float gy ) -> std::array<float, 2>
@@ -1516,11 +1558,21 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                 }
                 const auto id = std::string( ( *stack.begin() )->typeId().str() );
                 const tile_info &sprite = view.cache.named( { .category = C_ITEM, .id = id, .tiles = view.tiles } );
-                // Keep the item's illustrated profile visible at every camera angle, like
-                // creature sprites, rather than projecting it onto the ground.
-                emit_billboard( { .sink = sink, .layers = { &sprite }, .right_world = right, .up_world = up, .toward_world = toward, .z_scale = view.cam.z_scale,
-                                  .cx = frame_x( p ), .cy = frame_y( p ), .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
-                                  .color = light, .mirrored = false, .scale = item_size } );
+                const auto profile = item_profile( id );
+                if( get_option<bool>( "R3D_VOXEL_ITEMS" ) &&
+                    profile.geometry == item_geometry::repeated_sprite_volume && !sprite.backdrop.valid ) {
+                    emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
+                                          .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
+                                          .color = light, .depth_fraction = profile.depth_fraction } );
+                } else {
+                    // Keep unprofiled items' illustrated profile visible at every camera angle,
+                    // like creature sprites, rather than projecting them onto the ground.
+                    emit_billboard( { .sink = sink, .layers = { &sprite }, .right_world = right, .up_world = up,
+                                      .toward_world = toward, .z_scale = view.cam.z_scale,
+                                      .cx = frame_x( p ), .cy = frame_y( p ),
+                                      .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
+                                      .color = light, .mirrored = false, .scale = item_size } );
+                }
             }
         }
     }

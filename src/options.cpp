@@ -2567,9 +2567,9 @@ void options_manager::add_options_graphics()
 #endif
 
 #if defined(TILES)
-    add( "RENDERER_3D", graphics, translate_marker( "3D renderer (experimental)" ),
-         translate_marker( "If true, draws the map as a textured 3D scene instead of flat tiles.  "
-                           "Needs a GPU renderer; falls back to flat tiles otherwise." ),
+    add( "RENDERER_3D", graphics, translate_marker( "Voxelised 3D renderer (experimental)" ),
+         translate_marker( "If true, draws the map as a voxelised 3D scene instead of the standard isometric view.  "
+                           "Turn it off to return to the standard view.  Needs a GPU renderer; falls back to flat tiles otherwise." ),
          false, COPT_CURSES_HIDE
        );
 
@@ -2615,6 +2615,14 @@ void options_manager::add_options_graphics()
        );
 
     get_option( "R3D_CUTAWAY" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_VOXEL_ITEMS", graphics, translate_marker( "3D voxel-style item models (experimental)" ),
+         translate_marker( "Give selected loose items four-sided sprite volumes in the 3D view.  "
+                           "Other items keep their upright sprite appearance." ),
+         false, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_VOXEL_ITEMS" ).setPrerequisite( "RENDERER_3D" );
 
     add( "TEXTURE_STREAMING", graphics, translate_marker( "Texture Streaming" ),
          translate_marker( "Use texture-streaming instead of render-to-texture for dynamic graphics. Requires restart." ),

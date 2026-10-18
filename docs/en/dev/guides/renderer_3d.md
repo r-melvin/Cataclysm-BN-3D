@@ -20,8 +20,10 @@ cmake --build --preset linux-slim --target cataclysm-bn-tiles cata_test-tiles
 ```
 
 In Options > Graphics, select the `gpu` renderer, restart if changing renderers,
-and enable **3D renderer (experimental)**. New configurations prefer `gpu` when SDL
-provides it. Unsupported graphics backends retain BN's ordinary 2D view.
+and enable **Voxelised 3D renderer (experimental)**. This setting is off by
+default; disable it in the same menu to return to the standard isometric view.
+New configurations prefer `gpu` when SDL provides it. Unsupported graphics
+backends retain BN's ordinary 2D view.
 
 - **Ctrl+B** toggles 3D.
 - With **3D WASD controls** enabled, W/A/S/D walk relative to the camera and arrows
@@ -44,6 +46,13 @@ variants ending in `_nw`, `_ne`, `_sw`, or `_se` trim the corresponding body cor
 These are generated part IDs, not new map or vehicle rules. Once a vehicle has a
 lit or known mount, its remaining mounts use that light instead of disappearing
 individually; a model with no lit or known mounts remains hidden.
+
+The optional **3D voxel-style item models** graphics setting repeats selected
+gas-tank item sprites around shallow four-sided volumes with sampled top caps.
+It is off by default; other items keep the upright sprite fallback. This adapts
+the general single-sprite extrusion idea from
+[2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer) to the
+renderer; no external code or art is included.
 
 ## Comparison reports
 
