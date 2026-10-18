@@ -51,9 +51,26 @@ struct entity_view {
     std::function<float( const tripoint_bub_ms & )> surface;
 };
 
+/// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.
+auto build_vehicle_mesh( const entity_view &view ) -> chunk_mesh;
+
 /// Billboards for creatures, the player and loose items near the viewed tile, in the scene frame
 /// (so drawn with a zero offset). Rebuilt every frame since they move.
 auto build_entity_mesh( const entity_view &view ) -> chunk_mesh;
+
+struct sprite_opaque_bounds {
+    float local_r_min = -0.5f;
+    float local_r_max = 0.5f;
+    float local_f_min = -0.5f;
+    float local_f_max = 0.5f;
+    bool has_trim = false;
+};
+
+/// Computes local footprint bounds from a sprite's opaque fraction and rotation.
+auto get_sprite_opaque_bounds( const sprite_ref &s ) -> sprite_opaque_bounds;
+
+/// Converts 0xAARRGGBB color to packed vertex light (pack_light) modulated by ambient light without swapping channels.
+auto color_to_packed_light( uint32_t color_argb, uint32_t ambient_light ) -> uint32_t;
 
 } // namespace r3d
 

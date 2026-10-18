@@ -75,6 +75,9 @@ struct tile_info {
     bool wall_connection = false; // walls and door/window openings, excluding solid props
     bool thin_wall = false; // constructed walls share the door/window profile
     bool window = false; // a pane with a wall surround rather than a full-height door
+    bool door = false;   // a door in a wall line, open or closed
+    bool open_door = false; // an open door or empty frame
+    ter_id closed_door_id; // closed counterpart for open doors
     uint32_t side_tint = 0xffffffu; // 0xRRGGBB colours for the side texture and the cap
     uint32_t cap_tint = 0xffffffu;
     bool see_through = false; // transparent terrain (fences, bars): the floor shows through it
@@ -150,6 +153,7 @@ class tile_info_cache
             int subtile = -1;
             int rota = 0;
             const std::string &variant = "";
+            bool allow_unknown = true;
         };
 
         auto named( const named_options &options ) -> const tile_info &; // *NOPAD*

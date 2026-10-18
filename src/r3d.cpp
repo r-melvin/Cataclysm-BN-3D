@@ -47,6 +47,9 @@
 #include "r3d_dda.h"
 #include "r3d_entities.h"
 #include "r3d_scene_rules.h"
+#include "r3d_shapes.h"
+#include "vehicle/vehicle.h"
+#include "vehicle/vpart_position.h"
 #include "r3d_gpu.h"
 #include "r3d_mesh.h"
 #include "rng.h"
@@ -131,12 +134,21 @@ struct state {
     uint32_t dyn_position_bytes = 0;
     uint32_t dyn_light_bytes = 0;
     uint32_t dyn_index_bytes = 0;
+    // Per-frame buffers for vehicles, separate from entities for independent cutaway uniforms.
+    SDL_GPUBuffer *veh_positions = nullptr;
+    SDL_GPUBuffer *veh_lights = nullptr;
+    SDL_GPUBuffer *veh_indices = nullptr;
+    uint32_t veh_position_bytes = 0;
+    uint32_t veh_light_bytes = 0;
+    uint32_t veh_index_bytes = 0;
     shown_view shown;
     bool map_drawn = false; // the game's map view has been on screen (a game is running)
     vec3 pan; // free camera: offset of the camera target from the viewed tile, world space
     bool walls_on = false; // whether the cache was given the wall side rules and atlas
     bool thin_walls = true;
     bool plaster_atlas = false; // whether painted walls take the atlas plaster (see the option)
+    bool was_controlling_vehicle = false;
+    float last_vehicle_yaw = 0.0f;
 };
 
 auto st() -> state &
@@ -157,6 +169,15 @@ auto release_dynamic( state &s ) -> void
     s.dyn_position_bytes = 0;
     s.dyn_light_bytes = 0;
     s.dyn_index_bytes = 0;
+    s.device.release_buffer( s.veh_positions );
+    s.device.release_buffer( s.veh_lights );
+    s.device.release_buffer( s.veh_indices );
+    s.veh_positions = nullptr;
+    s.veh_lights = nullptr;
+    s.veh_indices = nullptr;
+    s.veh_position_bytes = 0;
+    s.veh_light_bytes = 0;
+    s.veh_index_bytes = 0;
 }
 
 // Makes sure a dynamic buffer holds at least bytes, then queues the data for upload.
@@ -312,7 +333,12 @@ auto column_height( state &s, const map &here, const tripoint_bub_ms &p ) -> flo
     if( !here.inbounds( p ) ) {
         return 0.0f;
     }
-    const auto t = shape( s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } ).sh );
+    const auto &t_info = s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } );
+    if( t_info.open_door ) {
+        const auto furn_h = s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh.height;
+        return std::min( std::max( floor_height, furn_h ), 1.0f );
+    }
+    const auto t = shape( t_info.sh );
     auto h = static_cast<float>( t.height );
     if( t.kind == shape_kind::floor ) {
         h = std::max( h, s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh.height );
@@ -335,6 +361,9 @@ auto surface_height( state &s, const map &here, const tripoint_bub_ms &p ) -> fl
 {
     if( !here.inbounds( p ) ) {
         return floor_height;
+    }
+    if( here.veh_at( p ) ) {
+        return floor_height + chassis_floor_h;
     }
     const auto t = shape( s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } ).sh );
     if( t.kind != shape_kind::floor ) {
@@ -571,11 +600,21 @@ auto set_cutaway( const set_cutaway_options &options ) -> void
     const auto &you = get_avatar();
     const auto p = tripoint_bub_ms( you.bub_pos() );
     if( !get_option<bool>( "R3D_CUTAWAY" ) || p.z() != center.z() ) {
+        u.cut[3] = 0.0f;
         return;
     }
+
+    const auto &here = get_map();
+    const auto vp = here.veh_at( p );
+    const auto is_driving = you.in_vehicle && vp && vp->vehicle().player_in_control( you );
+    if( is_driving ) {
+        u.cut[3] = 0.0f;
+        return;
+    }
+
     // Radius in tiles around the player's middle, and the height (above their floor) below which
     // nothing is cut, so the floor and low furniture around them stay.
-    constexpr auto radius = static_cast<float>( 1.3f );
+    constexpr auto radius = static_cast<float>( 0.55f );
     constexpr auto keep_below = static_cast<float>( 0.3f );
     const auto base = static_cast<float>( floor_height );
     const auto middle = vec3( tile_to_world( { .x = static_cast<float>( p.x() - center.x() ) + 0.5f,
@@ -585,7 +624,7 @@ auto set_cutaway( const set_cutaway_options &options ) -> void
     const auto side = vec3( transform_point( view_proj, middle + cam.ground_right() * radius ) );
     u.cut[0] = at.x;
     u.cut[1] = at.y;
-    u.cut[2] = at.z;
+    u.cut[2] = at.z - 0.0005f;
     u.cut[3] = std::abs( side.x - at.x );
     u.cut2[0] = 1.0f / std::max( aspect, 0.01f );
     u.cut2[1] = base + keep_below;
@@ -1146,6 +1185,8 @@ auto reset() -> void
     s.cam = camera();
     s.pan = vec3{};
     s.env_camera_applied = false;
+    s.was_controlling_vehicle = false;
+    s.last_vehicle_yaw = 0.0f;
 }
 
 auto contains( float x, float y ) -> bool
@@ -1365,6 +1406,39 @@ auto draw( const draw_options &options ) -> bool
     const auto sampler = light_sampler{ .here = here, .vvc = here.get_visibility_variables_cache(), .you = get_avatar(),
                                         .vision_floor = -OVERMAP_DEPTH, .vision_top = OVERMAP_HEIGHT, .view_z = view_z };
     const auto frame_light_key = static_cast<uint64_t>( light_key( { .here = here, .origin = origin, .z_lo = z_lo, .z_hi = z_hi } ) );
+    const auto &you = get_avatar();
+    const auto vp = here.veh_at( you.bub_pos() );
+    const auto is_controlling = vp && vp->vehicle().player_in_control( you );
+    if( is_controlling ) {
+        const auto veh_face = vp->vehicle().face.dir();
+        auto veh_yaw = static_cast<float>( units::to_radians( 270_degrees - veh_face ) );
+        constexpr auto two_pi = static_cast<float>( 2.0 * M_PI );
+        veh_yaw = std::fmod( veh_yaw, two_pi );
+        if( veh_yaw > static_cast<float>( M_PI ) ) {
+            veh_yaw -= two_pi;
+        } else if( veh_yaw < static_cast<float>( -M_PI ) ) {
+            veh_yaw += two_pi;
+        }
+
+        if( !s.was_controlling_vehicle ) {
+            s.cam.yaw = veh_yaw;
+            s.last_vehicle_yaw = veh_yaw;
+            s.was_controlling_vehicle = true;
+        } else {
+            auto delta = veh_yaw - s.last_vehicle_yaw;
+            while( delta > static_cast<float>( M_PI ) ) {
+                delta -= two_pi;
+            }
+            while( delta < static_cast<float>( -M_PI ) ) {
+                delta += two_pi;
+            }
+            s.cam.yaw += delta;
+            s.cam.yaw = std::fmod( s.cam.yaw, two_pi );
+            s.last_vehicle_yaw = veh_yaw;
+        }
+    } else {
+        s.was_controlling_vehicle = false;
+    }
 
     // The scene is drawn in a frame whose origin is the viewed tile, which keeps floats small.
     s.cam.target = tile_to_world( { .x = 0.5f, .y = 0.5f, .z = 0.5f } ) + s.pan;
@@ -1451,6 +1525,17 @@ auto draw( const draw_options &options ) -> bool
         add_markers( queued.highlights, "highlight", false );
         add_markers( queued.cursors, "cursor", true );
     }
+    const auto vehicles = chunk_mesh( build_vehicle_mesh( entities_view ) );
+    const auto draw_vehicles = static_cast<bool>( !vehicles.empty() &&
+                               upload_dynamic( { .s = s, .buffer = s.veh_positions, .capacity = s.veh_position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                       .data = vehicles.vertices.data(),
+                                       .bytes = static_cast<uint32_t>( vehicles.vertices.size() * sizeof( vertex ) ) } ) &&
+                               upload_dynamic( { .s = s, .buffer = s.veh_lights, .capacity = s.veh_light_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                       .data = vehicles.light.data(),
+                                       .bytes = static_cast<uint32_t>( vehicles.light.size() * sizeof( uint32_t ) ) } ) &&
+                               upload_dynamic( { .s = s, .buffer = s.veh_indices, .capacity = s.veh_index_bytes, .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                                       .data = vehicles.indices.data(),
+                                       .bytes = static_cast<uint32_t>( vehicles.indices.size() * sizeof( uint32_t ) ) } ) );
     const auto entities = chunk_mesh( build_entity_mesh( entities_view ) );
     const auto draw_entities = static_cast<bool>( !entities.empty() &&
                                upload_dynamic( { .s = s, .buffer = s.dyn_positions, .capacity = s.dyn_position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
@@ -1480,6 +1565,26 @@ auto draw( const draw_options &options ) -> bool
         for( const mesh_batch &b : vc.chunk->batches ) {
             s.device.draw_block( { .positions = vc.chunk->positions, .lights = vc.chunk->lights, .indices = vc.chunk->indices,
                                    .first_index = b.first_index, .index_count = b.index_count, .sheet = b.sheet, .uniforms = uniforms } );
+        }
+    }
+    if( draw_vehicles ) {
+        s.device.bind_entity_pipeline();
+        uniforms.offset[0] = 0.0f;
+        uniforms.offset[1] = 0.0f;
+        uniforms.offset[2] = 0.0f;
+        uniforms.pull[0] = 0.0f;
+        uniforms.pull[1] = 0.0f;
+        uniforms.pull[2] = 0.0f;
+        uniforms.pull[3] = 0.0f;
+        set_cutaway( { .u = uniforms, .view_proj = view_proj, .aspect = aspect, .cam = s.cam, .center = center } );
+        if( is_controlling ) {
+            uniforms.cut[3] = 0.0f;
+        } else {
+            uniforms.cut2[1] = floor_height + 0.52f;
+        }
+        for( const mesh_batch &b : vehicles.batches ) {
+            s.device.draw_block( { .positions = s.veh_positions, .lights = s.veh_lights, .indices = s.veh_indices, .first_index = b.first_index, .index_count = b.index_count,
+                                   .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
     if( draw_entities ) {

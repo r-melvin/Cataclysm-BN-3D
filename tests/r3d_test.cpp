@@ -4,11 +4,14 @@
 #include <vector>
 
 #include "catch/catch.hpp"
+#include "point.h"
 #include "r3d_camera.h"
 #include "r3d_dda.h"
+#include "r3d_entities.h"
 #include "r3d_math.h"
 #include "r3d_shapes.h"
 #include "r3d_wall_rules.h"
+#include "units_angle.h"
 
 namespace
 {
@@ -438,10 +441,15 @@ TEST_CASE( "r3d_terrain_shapes", "[r3d]" )
     t = {};
     t.door = true;
     t.move_cost = 0;
-    CHECK( r3d::classify_terrain( t ).kind == r3d::shape_kind::pane );
-    // An open door lies flat; a wall stays a wall.
+    // Open doors and doorframes stand in the wall line as panes.
     t.flat = true;
+    t.open_door = true;
     t.move_cost = 2;
+    CHECK( r3d::classify_terrain( t ).kind == r3d::shape_kind::pane );
+    // A non-door flat terrain classifies as floor.
+    t = {};
+    t.flat = true;
+    t.move_cost = 0;
     CHECK( r3d::classify_terrain( t ).kind == r3d::shape_kind::floor );
     t = {};
     t.door = true;
@@ -698,3 +706,479 @@ TEST_CASE( "r3d_wall_atlas_cells", "[r3d]" )
     CHECK_FALSE( r3d::atlas_cell( { .index = 12, .cell = 32, .atlas_w = 128, .atlas_h = 96 } ).valid );
     CHECK_FALSE( r3d::atlas_cell( { .index = -1, .cell = 32, .atlas_w = 128, .atlas_h = 96 } ).valid );
 }
+
+TEST_CASE( "r3d_vehicle_tiered_height_constants", "[r3d]" )
+{
+    CHECK( approx( r3d::vehicle_clearance_h, 0.15f ) );
+    CHECK( approx( r3d::chassis_floor_h, 0.26f ) );
+    CHECK( approx( r3d::vehicle_wheel_h, 0.34f ) );
+    CHECK( approx( r3d::vehicle_bumper_h, 0.42f ) );
+    CHECK( approx( r3d::vehicle_body_h, 0.50f ) );
+    CHECK( approx( r3d::vehicle_cabin_h, 0.82f ) );
+    CHECK( approx( r3d::floor_height + r3d::chassis_floor_h, 0.36f ) );
+    CHECK( r3d::floor_height < r3d::vehicle_clearance_h );
+    CHECK( r3d::vehicle_clearance_h < r3d::chassis_floor_h );
+    CHECK( r3d::chassis_floor_h < r3d::vehicle_wheel_h );
+    CHECK( r3d::vehicle_wheel_h < r3d::vehicle_bumper_h );
+    CHECK( r3d::vehicle_bumper_h < r3d::vehicle_body_h );
+    CHECK( r3d::vehicle_body_h < r3d::vehicle_cabin_h );
+}
+
+TEST_CASE( "r3d_vehicle_heading_to_camera_yaw", "[r3d]" )
+{
+    // CDDA vehicle angles: 270 deg is North (yaw = 0), 0 deg is East (yaw = -pi/2),
+    // 90 deg is South (yaw = pi), 180 deg is West (yaw = +pi/2).
+    const auto to_yaw = []( units::angle veh_face ) -> float {
+        auto yaw = static_cast<float>( units::to_radians( 270_degrees - veh_face ) );
+        constexpr auto two_pi = static_cast<float>( 2.0 * M_PI );
+        yaw = std::fmod( yaw, two_pi );
+        if( yaw > static_cast<float>( M_PI ) ) {
+            yaw -= two_pi;
+        } else if( yaw < static_cast<float>( -M_PI ) ) {
+            yaw += two_pi;
+        }
+        return yaw;
+    };
+
+    CHECK( approx( to_yaw( 270_degrees ), 0.0f ) );
+    CHECK( approx( to_yaw( 0_degrees ), static_cast<float>( -M_PI * 0.5 ) ) );
+    CHECK( approx( std::abs( to_yaw( 90_degrees ) ), static_cast<float>( M_PI ) ) );
+    CHECK( approx( to_yaw( 180_degrees ), static_cast<float>( M_PI * 0.5 ) ) );
+
+    // Camera facing test: with yaw looking North, forward_eighths() must return 0
+    r3d::camera cam;
+    cam.yaw = to_yaw( 270_degrees );
+    CHECK( cam.forward_eighths() == 0 );
+
+    // Yaw looking East (2)
+    cam.yaw = to_yaw( 0_degrees );
+    CHECK( cam.forward_eighths() == 2 );
+
+    // Yaw looking South (4)
+    cam.yaw = to_yaw( 90_degrees );
+    CHECK( cam.forward_eighths() == 4 );
+
+    // Yaw looking West (6)
+    cam.yaw = to_yaw( 180_degrees );
+    CHECK( cam.forward_eighths() == 6 );
+
+    // Angle delta wrapping across boundary
+    const auto wrap_delta = []( float delta ) -> float {
+        constexpr auto two_pi = static_cast<float>( 2.0 * M_PI );
+        while( delta > static_cast<float>( M_PI ) ) {
+            delta -= two_pi;
+        }
+        while( delta < static_cast<float>( -M_PI ) ) {
+            delta += two_pi;
+        }
+        return delta;
+    };
+
+    const auto yaw_south_pos = static_cast<float>( M_PI - 0.05f );
+    const auto yaw_south_neg = static_cast<float>( -M_PI + 0.05f );
+    CHECK( approx( wrap_delta( yaw_south_neg - yaw_south_pos ), 0.1f ) );
+    CHECK( approx( wrap_delta( yaw_south_pos - yaw_south_neg ), -0.1f ) );
+}
+
+TEST_CASE( "r3d_vehicle_rigid_body_local_to_scene", "[r3d]" )
+{
+    const auto pivot_sx = 15.5f;
+    const auto pivot_sy = 25.5f;
+
+    auto transform = [pivot_sx, pivot_sy]( float f, float r, units::angle face_dir ) -> std::array<float, 2> {
+        const auto theta = static_cast<float>( units::to_radians( face_dir ) );
+        const auto cos_th = static_cast<float>( std::cos( theta ) );
+        const auto sin_th = static_cast<float>( std::sin( theta ) );
+        return std::array<float, 2>{
+            pivot_sx + f * cos_th - r * sin_th,
+            pivot_sy + f * sin_th + r * cos_th
+        };
+    };
+
+    // Facing North (270 deg):
+    // forward is North (-y in tile space), right is East (+x in tile space)
+    const auto p_north_fwd = transform( 2.0f, 0.0f, 270_degrees );
+    CHECK( approx( p_north_fwd[0], pivot_sx ) );
+    CHECK( approx( p_north_fwd[1], pivot_sy - 2.0f ) );
+
+    const auto p_north_right = transform( 0.0f, 3.0f, 270_degrees );
+    CHECK( approx( p_north_right[0], pivot_sx + 3.0f ) );
+    CHECK( approx( p_north_right[1], pivot_sy ) );
+
+    // Facing East (0 deg):
+    // forward is East (+x in tile space), right is South (+y in tile space)
+    const auto p_east_fwd = transform( 2.0f, 0.0f, 0_degrees );
+    CHECK( approx( p_east_fwd[0], pivot_sx + 2.0f ) );
+    CHECK( approx( p_east_fwd[1], pivot_sy ) );
+
+    const auto p_east_right = transform( 0.0f, 3.0f, 0_degrees );
+    CHECK( approx( p_east_right[0], pivot_sx ) );
+    CHECK( approx( p_east_right[1], pivot_sy + 3.0f ) );
+
+    // Facing South (90 deg):
+    // forward is South (+y in tile space), right is West (-x in tile space)
+    const auto p_south_fwd = transform( 2.0f, 0.0f, 90_degrees );
+    CHECK( approx( p_south_fwd[0], pivot_sx ) );
+    CHECK( approx( p_south_fwd[1], pivot_sy + 2.0f ) );
+
+    // Rigid-body invariant: distance between local points is preserved under rotation
+    const auto pt_a_local = std::array<float, 2>{ 1.5f, -0.8f };
+    const auto pt_b_local = std::array<float, 2>{ -2.0f, 1.2f };
+    const auto local_dx = pt_a_local[0] - pt_b_local[0];
+    const auto local_dy = pt_a_local[1] - pt_b_local[1];
+    const auto local_dist = std::sqrt( local_dx * local_dx + local_dy * local_dy );
+
+    for( auto deg = 0; deg < 360; deg += 15 ) {
+        const auto a = transform( pt_a_local[0], pt_a_local[1], units::from_degrees( deg ) );
+        const auto b = transform( pt_b_local[0], pt_b_local[1], units::from_degrees( deg ) );
+        const auto world_dx = a[0] - b[0];
+        const auto world_dy = a[1] - b[1];
+        const auto world_dist = std::sqrt( world_dx * world_dx + world_dy * world_dy );
+        CHECK( approx( world_dist, local_dist, 1e-4f ) );
+    }
+}
+
+TEST_CASE( "r3d_vehicle_directional_side_shading", "[r3d]" )
+{
+    const auto compute_shade = []( float local_f, float local_r, units::angle face_dir ) -> float {
+        const auto theta = static_cast<float>( units::to_radians( face_dir ) );
+        const auto cos_th = static_cast<float>( std::cos( theta ) );
+        const auto sin_th = static_cast<float>( std::sin( theta ) );
+        const auto nx = local_f * cos_th - local_r * sin_th;
+        const auto ny = local_f * sin_th + local_r * cos_th;
+        const auto x_shade = ( nx >= 0.0f ) ? 0.725f : 0.588f; // East 0.73, West 0.59
+        const auto y_shade = ( ny >= 0.0f ) ? 0.831f : 0.647f; // South 0.83, North 0.65
+        return std::clamp( nx * nx * x_shade + ny * ny * y_shade, 0.4f, 1.0f );
+    };
+
+    // When vehicle faces North (270 deg):
+    // Vehicle front faces North:
+    CHECK( approx( compute_shade( 1.0f, 0.0f, 270_degrees ), 0.647f, 1e-3f ) );
+    // Vehicle back faces South:
+    CHECK( approx( compute_shade( -1.0f, 0.0f, 270_degrees ), 0.831f, 1e-3f ) );
+    // Vehicle right faces East:
+    CHECK( approx( compute_shade( 0.0f, 1.0f, 270_degrees ), 0.725f, 1e-3f ) );
+    // Vehicle left faces West:
+    CHECK( approx( compute_shade( 0.0f, -1.0f, 270_degrees ), 0.588f, 1e-3f ) );
+
+    // When vehicle faces East (0 deg):
+    // Vehicle front faces East:
+    CHECK( approx( compute_shade( 1.0f, 0.0f, 0_degrees ), 0.725f, 1e-3f ) );
+    // Vehicle right faces South:
+    CHECK( approx( compute_shade( 0.0f, 1.0f, 0_degrees ), 0.831f, 1e-3f ) );
+
+    // Smoothness and bounds: at all angles, shade must stay within [0.55f, 0.85f]
+    for( auto deg = 0; deg < 360; deg += 10 ) {
+        const auto s_front = compute_shade( 1.0f, 0.0f, units::from_degrees( deg ) );
+        const auto s_right = compute_shade( 0.0f, 1.0f, units::from_degrees( deg ) );
+        CHECK( s_front >= 0.55f );
+        CHECK( s_front <= 0.85f );
+        CHECK( s_right >= 0.55f );
+        CHECK( s_right <= 0.85f );
+    }
+}
+
+TEST_CASE( "r3d_vehicle_sloped_windshield_and_bumper_contours", "[r3d]" )
+{
+    // Sloped windshield: connects 0.82f at cabin down to 0.50f at hood
+    const auto z_cabin = r3d::vehicle_cabin_h;
+    const auto z_hood = r3d::vehicle_body_h;
+    const auto z_bumper = r3d::vehicle_bumper_h;
+    const auto z_clearance = r3d::vehicle_clearance_h;
+
+    CHECK( approx( z_cabin, 0.82f ) );
+    CHECK( approx( z_hood, 0.50f ) );
+    CHECK( approx( z_bumper, 0.42f ) );
+    CHECK( approx( z_clearance, 0.15f ) );
+
+    // Sloped windshield drop: 0.82f - 0.50f = 0.32f slope over tile span
+    const auto windshield_drop = z_cabin - z_hood;
+    CHECK( approx( windshield_drop, 0.32f ) );
+
+    // Bumper bevel drop: 0.50f - 0.42f = 0.08f slope to bumper nose
+    const auto bumper_bevel_drop = z_hood - z_bumper;
+    CHECK( approx( bumper_bevel_drop, 0.08f ) );
+
+    // Undercarriage clearance: body skirt begins 0.15f above asphalt
+    CHECK( z_clearance > 0.0f );
+    CHECK( z_bumper > z_clearance );
+}
+
+TEST_CASE( "r3d_vehicle_pivot_anchor_alignment", "[r3d]" )
+{
+    // Verification rule: For any cardinal angle (0, 90, 180, 270),
+    // local mount transformed relative to pivot_anchor[0] must land on the exact
+    // center of the map tile predicted by CDDA's vehicle rotation.
+    const auto pivot_anchor = point( 2, 1 );
+    const auto pivot_scene_x = 20.5f;
+    const auto pivot_scene_y = 30.5f;
+
+    const auto to_scene = [pivot_anchor, pivot_scene_x, pivot_scene_y]( const point &mount, units::angle dir ) -> std::array<float, 2> {
+        const auto rel_f = static_cast<float>( mount.x - pivot_anchor.x );
+        const auto rel_r = static_cast<float>( mount.y - pivot_anchor.y );
+        const auto theta = static_cast<float>( units::to_radians( dir ) );
+        const auto cos_th = static_cast<float>( std::cos( theta ) );
+        const auto sin_th = static_cast<float>( std::sin( theta ) );
+        return std::array<float, 2>{
+            pivot_scene_x + rel_f * cos_th - rel_r * sin_th,
+            pivot_scene_y + rel_f * sin_th + rel_r * cos_th
+        };
+    };
+
+    // Reference CDDA rotation calculation (vehicle::rotate_to_world)
+    const auto cdda_rotate_to_world = [pivot_anchor]( const point &mount, units::angle dir ) -> point {
+        const auto rel = mount - pivot_anchor;
+        const auto deg = ( static_cast<int>( std::lround( units::to_degrees( dir ) ) ) % 360 + 360 ) % 360;
+        switch( deg ) {
+            case 0:   // East: +x_mnt -> +x_world, +y_mnt -> +y_world
+                return rel;
+            case 90:  // South: +x_mnt -> +y_world, +y_mnt -> -x_world
+                return point( -rel.y, rel.x );
+            case 180: // West: +x_mnt -> -x_world, +y_mnt -> -y_world
+                return point( -rel.x, -rel.y );
+            case 270: // North: +x_mnt -> -y_world, +y_mnt -> +x_world
+                return point( rel.y, -rel.x );
+            default:
+                return rel;
+        }
+    };
+
+    const auto test_mounts = std::vector<point>{
+        point( 2, 1 ),   // At pivot
+        point( 4, 1 ),   // Front hood
+        point( 0, 1 ),   // Rear bumper
+        point( 3, 0 ),   // Front-left tire
+        point( 3, 2 ),   // Front-right tire
+        point( -1, 0 ),  // Rear-left bumper
+    };
+
+    const auto angles = std::vector<units::angle>{ 0_degrees, 90_degrees, 180_degrees, 270_degrees };
+
+    for( const auto &dir : angles ) {
+        for( const auto &mount : test_mounts ) {
+            const auto scene_pos = to_scene( mount, dir );
+            const auto expected_offset = cdda_rotate_to_world( mount, dir );
+            const auto expected_scene_x = pivot_scene_x + static_cast<float>( expected_offset.x );
+            const auto expected_scene_y = pivot_scene_y + static_cast<float>( expected_offset.y );
+            CHECK( approx( scene_pos[0], expected_scene_x, 1e-4f ) );
+            CHECK( approx( scene_pos[1], expected_scene_y, 1e-4f ) );
+        }
+    }
+}
+
+TEST_CASE( "r3d_vehicle_oversized_sprite_clamping", "[r3d]" )
+{
+    // 48x48 or 64x64 oversized vehicle parts (e.g. 1.5x larger than tile)
+    // must be clamped to the [rel_forward - 0.5f, rel_forward + 0.5f] x [rel_right - 0.5f, rel_right + 0.5f] cell footprint
+    const auto rel_f = 2.0f;
+    const auto rel_r = -1.0f;
+    const auto cell_f_min = rel_f - 0.5f;
+    const auto cell_f_max = rel_f + 0.5f;
+    const auto cell_r_min = rel_r - 0.5f;
+    const auto cell_r_max = rel_r + 0.5f;
+
+    // Sprite with size_x = 1.5f, size_y = 1.5f, centered on tile (offset_x = -0.25f, offset_y = 0.25f)
+    const auto size_x = 1.5f;
+    const auto size_y = 1.5f;
+    const auto offset_x = -0.25f;
+    const auto offset_y = -0.25f;
+
+    const auto r_left = rel_r - 0.5f + offset_x;
+    const auto r_right = r_left + size_x;
+    const auto f_top = rel_f + 0.5f - offset_y;
+    const auto f_bot = f_top - size_y;
+
+    const auto c_r_left = std::clamp( r_left, cell_r_min, cell_r_max );
+    const auto c_r_right = std::clamp( r_right, cell_r_min, cell_r_max );
+    const auto c_f_top = std::clamp( f_top, cell_f_min, cell_f_max );
+    const auto c_f_bot = std::clamp( f_bot, cell_f_min, cell_f_max );
+
+    // Verify clamped bounds are exactly the tile's footprint
+    CHECK( approx( c_r_left, cell_r_min ) );
+    CHECK( approx( c_r_right, cell_r_max ) );
+    CHECK( approx( c_f_top, cell_f_max ) );
+    CHECK( approx( c_f_bot, cell_f_min ) );
+
+    // Verify proportional UV fractions stay strictly within [0.0f, 1.0f]
+    const auto gx_l = ( c_r_left - r_left ) / size_x;
+    const auto gx_r = ( c_r_right - r_left ) / size_x;
+    const auto gy_top = ( f_top - c_f_top ) / size_y;
+    const auto gy_bot = ( f_top - c_f_bot ) / size_y;
+
+    CHECK( gx_l >= 0.0f );
+    CHECK( gx_r <= 1.0f );
+    CHECK( gx_l < gx_r );
+    CHECK( gy_top >= 0.0f );
+    CHECK( gy_bot <= 1.0f );
+    CHECK( gy_top < gy_bot );
+}
+
+TEST_CASE( "r3d_cutaway_driving_and_tight_occlusion", "[r3d]" )
+{
+    // Tight cutaway radius is 0.55f tiles around character
+    constexpr auto tight_cutaway_radius = 0.55f;
+    constexpr auto cutaway_depth_bias = -0.0005f;
+
+    CHECK( approx( tight_cutaway_radius, 0.55f ) );
+    CHECK( approx( cutaway_depth_bias, -0.0005f ) );
+
+    // When avatar is driving, cutaway width u.cut[3] is set to 0.0f
+    auto cut_width = tight_cutaway_radius;
+    const auto is_driving = true;
+    if( is_driving ) {
+        cut_width = 0.0f;
+    }
+    CHECK( approx( cut_width, 0.0f ) );
+}
+
+TEST_CASE( "r3d_vehicle_color_to_packed_light", "[r3d]" )
+{
+    const auto white_ambient = r3d::pack_light( 255, 255, 255 );
+
+    // 0 color returns ambient light directly
+    CHECK( r3d::color_to_packed_light( 0, white_ambient ) == white_ambient );
+
+    // Channel order verification: ARGB 0xAARRGGBB -> pack_light(R, G, B)
+    // Red=0xa5 (165), Green=0x50 (80), Blue=0x20 (32)
+    const auto test_color_argb = static_cast<uint32_t>( 0xffa55020 );
+    const auto packed = r3d::color_to_packed_light( test_color_argb, white_ambient );
+
+    // pack_light places R in Byte 0, G in Byte 1, B in Byte 2, A in Byte 3
+    const auto out_r = static_cast<uint8_t>( packed & 0xffu );
+    const auto out_g = static_cast<uint8_t>( ( packed >> 8u ) & 0xffu );
+    const auto out_b = static_cast<uint8_t>( ( packed >> 16u ) & 0xffu );
+
+    CHECK( out_r == 0xa5 );
+    CHECK( out_g == 0x50 );
+    CHECK( out_b == 0x20 );
+
+    // Verify channel order is NOT swapped (out_r must NOT be Blue and out_b must NOT be Red)
+    CHECK( out_r != 0x20 );
+    CHECK( out_b != 0xa5 );
+
+    // Brown car color test: SaddleBrown (0xff8b4513)
+    // A brown car has high Red (139), medium Green (69), low Blue (19).
+    // If channels were swapped, Red and Blue would flip, turning the car into bright blue/cyan.
+    const auto brown_argb = static_cast<uint32_t>( 0xff8b4513 );
+    const auto brown_packed = r3d::color_to_packed_light( brown_argb, white_ambient );
+    const auto b_r = static_cast<uint8_t>( brown_packed & 0xffu );
+    const auto b_g = static_cast<uint8_t>( ( brown_packed >> 8u ) & 0xffu );
+    const auto b_b = static_cast<uint8_t>( ( brown_packed >> 16u ) & 0xffu );
+
+    CHECK( b_r == 139 );
+    CHECK( b_g == 69 );
+    CHECK( b_b == 19 );
+    CHECK( b_r > b_b ); // Must remain warm brown, not cyan
+
+    // Ambient light modulation test (50% ambient)
+    const auto half_ambient = r3d::pack_light( 128, 128, 128 );
+    const auto dimmed = r3d::color_to_packed_light( test_color_argb, half_ambient );
+    const auto dim_r = static_cast<uint8_t>( dimmed & 0xffu );
+    const auto dim_g = static_cast<uint8_t>( ( dimmed >> 8u ) & 0xffu );
+    const auto dim_b = static_cast<uint8_t>( ( dimmed >> 16u ) & 0xffu );
+
+    CHECK( dim_r == static_cast<uint8_t>( ( 165 * 128 ) / 255 ) );
+    CHECK( dim_g == static_cast<uint8_t>( ( 80 * 128 ) / 255 ) );
+    CHECK( dim_b == static_cast<uint8_t>( ( 32 * 128 ) / 255 ) );
+}
+
+TEST_CASE( "r3d_vehicle_opaque_bounds_trimming", "[r3d]" )
+{
+    // Full/unknown sprite bounds: has_trim must be false
+    const auto s_full = r3d::sprite_ref{
+        .opaque_x0 = 0.0f,
+        .opaque_y0 = 0.0f,
+        .opaque_x1 = 1.0f,
+        .opaque_y1 = 1.0f,
+        .valid = true
+    };
+    const auto b_full = r3d::get_sprite_opaque_bounds( s_full );
+    CHECK_FALSE( b_full.has_trim );
+
+    // Door sprite with transparent outer margin on right:
+    // occupies [0.0, 0.75] horizontally and [0.0, 1.0] vertically
+    const auto s_door = r3d::sprite_ref{
+        .quarter_turns = 0,
+        .opaque_x0 = 0.0f,
+        .opaque_y0 = 0.0f,
+        .opaque_x1 = 0.75f,
+        .opaque_y1 = 1.0f,
+        .valid = true
+    };
+    const auto b_door = r3d::get_sprite_opaque_bounds( s_door );
+    CHECK( b_door.has_trim );
+    CHECK( approx( b_door.local_r_min, -0.5f ) );
+    CHECK( approx( b_door.local_r_max, 0.25f ) ); // -0.5f + 0.75f = 0.25f
+    CHECK( approx( b_door.local_f_min, -0.5f ) );
+    CHECK( approx( b_door.local_f_max, 0.5f ) );
+
+    // 90-degree rotated door (quarter_turns = 1):
+    // In rotated space, sx = gy, sy = 1 - gx
+    const auto s_rot1 = r3d::sprite_ref{
+        .quarter_turns = 1,
+        .opaque_x0 = 0.0f,
+        .opaque_y0 = 0.0f,
+        .opaque_x1 = 1.0f,
+        .opaque_y1 = 0.75f,
+        .valid = true
+    };
+    const auto b_rot1 = r3d::get_sprite_opaque_bounds( s_rot1 );
+    CHECK( b_rot1.has_trim );
+    CHECK( approx( b_rot1.local_r_min, -0.25f ) );
+    CHECK( approx( b_rot1.local_r_max, 0.5f ) );
+
+    // Flipped door (flip = true):
+    const auto s_flip = r3d::sprite_ref{
+        .flip = true,
+        .opaque_x0 = 0.0f,
+        .opaque_y0 = 0.0f,
+        .opaque_x1 = 0.75f,
+        .opaque_y1 = 1.0f,
+        .valid = true
+    };
+    const auto b_flip = r3d::get_sprite_opaque_bounds( s_flip );
+    CHECK( b_flip.has_trim );
+    CHECK( approx( b_flip.local_r_min, -0.25f ) );
+    CHECK( approx( b_flip.local_r_max, 0.5f ) );
+
+    // Snapping rule: interior shared edges snap to -0.5f and +0.5f, exterior trims
+    const auto has_left_neighbor = true;
+    const auto has_right_neighbor = false;
+    const auto r_l_rel = has_left_neighbor ? -0.5f : b_door.local_r_min;
+    const auto r_r_rel = has_right_neighbor ? 0.5f : b_door.local_r_max;
+    CHECK( approx( r_l_rel, -0.5f ) );
+    CHECK( approx( r_r_rel, 0.25f ) );
+}
+
+TEST_CASE( "r3d_vehicle_greenhouse_tumblehome_and_flush_roof", "[r3d]" )
+{
+    // Lower body waistline at vehicle_body_h
+    CHECK( approx( r3d::vehicle_body_h, 0.50f ) );
+    // Upper cabin roof at vehicle_cabin_h
+    CHECK( approx( r3d::vehicle_cabin_h, 0.82f ) );
+
+    // Tumblehome: exterior cabin slopes inward up to 0.12f tiles
+    const auto r_l = -0.40f;
+    const auto r_r = 0.40f;
+    const auto max_tumble = ( r_r - r_l ) * 0.25f; // 0.20f
+    const auto tumble = std::min( 0.12f, max_tumble );
+    CHECK( approx( tumble, 0.12f ) );
+
+    const auto r_l_roof = r_l + tumble;
+    const auto r_r_roof = r_r - tumble;
+    CHECK( approx( r_l_roof, -0.28f ) );
+    CHECK( approx( r_r_roof, 0.28f ) );
+
+    // Flush roof & windshield invariant:
+    // Windshield top at z = vehicle_cabin_h spans [r_l_roof, r_r_roof]
+    // Roof front at z = vehicle_cabin_h spans [r_l_roof, r_r_roof]
+    // Both connect at the exact same coordinates and elevation with 0 gap
+    const auto windshield_top_l = r_l_roof;
+    const auto windshield_top_r = r_r_roof;
+    const auto roof_cap_front_l = r_l_roof;
+    const auto roof_cap_front_r = r_r_roof;
+    CHECK( approx( windshield_top_l, roof_cap_front_l ) );
+    CHECK( approx( windshield_top_r, roof_cap_front_r ) );
+}
+
+

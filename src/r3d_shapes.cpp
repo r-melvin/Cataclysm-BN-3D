@@ -33,8 +33,8 @@ auto classify_terrain( const tile_traits &t ) -> shape
     if( t.shrub ) {
         return { .kind = shape_kind::upright, .height = shrub_height, .slab = 0.0f, .ground_backdrop = true };
     }
-    // Windows and closed doors stand in the wall line as panels rather than filling the tile.
-    if( !t.wall && ( t.window || ( t.door && !t.flat ) ) ) {
+    // Windows, doors and doorframes stand in the wall line as panels rather than filling the tile.
+    if( !t.wall && ( t.window || t.door ) ) {
         return { .kind = shape_kind::pane, .height = 1.0f };
     }
     if( t.wall || ( t.move_cost <= 0 && !t.flat ) ) {
