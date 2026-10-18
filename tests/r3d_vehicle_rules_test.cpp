@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ranges>
 #include <set>
 #include <span>
 #include <string_view>
@@ -96,6 +97,33 @@ TEST_CASE("r3d_vehicle_wheel_outline_is_round_and_faceted", "[r3d][vehicle]") {
              .radius_z = 1.0f})
             .size()
         == 3);
+}
+
+TEST_CASE("r3d_vehicle_profile_preserves_semantic_part_layers", "[r3d][vehicle]") {
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    const auto mount = tripoint_mnt_veh::zero();
+    REQUIRE(veh.install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh.install_part(mount, vpart_id("halfboard_horizontal"), true) >= 0);
+    REQUIRE(veh.install_part(mount, vpart_id("wheel_mount_medium"), true) >= 0);
+    REQUIRE(veh.install_part(mount, vpart_id("wheel"), true) >= 0);
+    REQUIRE(veh.install_part(mount, vpart_id("roof"), true) >= 0);
+    REQUIRE(veh.install_part(mount, vpart_id("solar_panel"), true) >= 0);
+
+    const auto profile = r3d::vehicle_profile(veh, mount);
+    const auto has_role = [&profile](const r3d::vehicle_render_role role) {
+        return std::ranges::any_of(profile.layers, [role](const auto& layer) {
+            return std::ranges::find(layer.roles, role) != layer.roles.end();
+        });
+    };
+
+    CHECK(has_role(r3d::vehicle_render_role::frame));
+    CHECK(has_role(r3d::vehicle_render_role::body_panel));
+    CHECK(has_role(r3d::vehicle_render_role::wheel));
+    CHECK(has_role(r3d::vehicle_render_role::roof));
+    CHECK(has_role(r3d::vehicle_render_role::roof_accessory));
+    CHECK(std::ranges::all_of(profile.layers, [](const auto& layer) {
+        return !layer.open && !layer.broken;
+    }));
 }
 
 #if defined(TILES)

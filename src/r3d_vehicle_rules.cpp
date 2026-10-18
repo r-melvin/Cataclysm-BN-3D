@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numbers>
 #include <string>
+#include <utility>
 #include "r3d_shapes.h"
 #include "vehicle/vehicle.h"
 #include "vehicle/vehicle_part.h"
@@ -13,21 +14,65 @@ namespace r3d
 {
 auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> vehicle_render_profile
 {
-    auto data = vehicle_render_profile{ .mount = mount };
+    auto data = vehicle_render_profile{ .mount = mount, .layers = {} };
     const auto parts = veh.parts_at_relative( mount, true );
+    data.layers.reserve( parts.size() );
     auto half_height_panel = false;
     for( const auto index : parts ) {
         const auto &part = veh.cpart( index );
         const auto &info = veh.part_info( index );
         if( part.removed ) { continue; }
+        auto layer = vehicle_render_layer{ .part_idx = index, .roles = {}, .open = part.open,
+                                           .broken = part.is_broken() };
+        if( info.location == "structure" ) {
+            layer.roles.push_back( vehicle_render_role::frame );
+        }
+        if( info.has_flag( "HALF_BOARD" ) || info.has_flag( "FULL_BOARD" ) ) {
+            layer.roles.push_back( vehicle_render_role::body_panel );
+        }
+        if( info.has_flag( "WINDSHIELD" ) ) {
+            layer.roles.push_back( vehicle_render_role::glass );
+        }
+        if( info.has_flag( "OPAQUE" ) && !info.has_flag( "WINDSHIELD" ) &&
+            !info.has_flag( "OPENABLE" ) ) {
+            layer.roles.push_back( vehicle_render_role::opaque_structure );
+        }
+        if( info.has_flag( "DOOR" ) || info.location == "door" ) {
+            layer.roles.push_back( vehicle_render_role::door );
+        }
+        if( info.has_flag( "OPENABLE" ) ) {
+            layer.roles.push_back( vehicle_render_role::openable );
+        }
+        if( info.has_flag( "WHEEL" ) ) {
+            layer.roles.push_back( vehicle_render_role::wheel );
+        }
+        if( info.has_flag( "ROOF" ) ) {
+            layer.roles.push_back( vehicle_render_role::roof );
+        }
+        const auto accessory = info.location == "on_roof" || info.has_flag( "SOLAR_PANEL" ) ||
+                               info.has_flag( "TURRET" );
+        if( accessory ) {
+            layer.roles.push_back( vehicle_render_role::roof_accessory );
+        }
+        if( info.has_flag( "BOARDABLE" ) || info.has_flag( "AISLE" ) || info.has_flag( "SEAT" ) ||
+            info.has_flag( "BED" ) || ( info.has_flag( "OPENABLE" ) && part.open ) ) {
+            layer.roles.push_back( vehicle_render_role::interior );
+        }
+        if( layer.roles.empty() ) {
+            layer.roles.push_back( vehicle_render_role::detail );
+        }
+        data.layers.push_back( std::move( layer ) );
+        const auto has_role = [&data]( const vehicle_render_role role ) {
+            return std::ranges::any_of( data.layers.back().roles, [role]( const auto layer_role ) {
+                return layer_role == role;
+            } );
+        };
         if( info.z_order < 9 && ( data.main_part_idx < 0 ||
                                   info.z_order > veh.part_info( data.main_part_idx ).z_order ) ) {
             data.main_part_idx = index;
         }
         if( part.is_broken() ) { continue; }
-        const auto roof = info.has_flag( "ROOF" );
-        const auto accessory = info.location == "on_roof" || info.has_flag( "SOLAR_PANEL" ) ||
-                               info.has_flag( "TURRET" );
+        const auto roof = has_role( vehicle_render_role::roof );
         if( roof ) {
             data.has_roof = true;
             data.roof_part_idx = index;
@@ -47,17 +92,14 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
             else if( id.ends_with( "_sw" ) ) { data.corner = panel_corner::rear_left; }
             else if( id.ends_with( "_se" ) ) { data.corner = panel_corner::rear_right; }
         }
-        data.is_windshield |= info.has_flag( "WINDSHIELD" );
-        data.is_openable |= info.has_flag( "OPENABLE" );
-        data.is_door |= info.has_flag( "DOOR" ) || info.location == "door";
-        data.has_wheel |= info.has_flag( "WHEEL" );
-        data.is_opaque_wall |= info.has_flag( "OPAQUE" ) && !info.has_flag( "WINDSHIELD" ) &&
-                               !info.has_flag( "OPENABLE" );
+        data.is_windshield |= has_role( vehicle_render_role::glass );
+        data.is_openable |= has_role( vehicle_render_role::openable );
+        data.is_door |= has_role( vehicle_render_role::door );
+        data.has_wheel |= has_role( vehicle_render_role::wheel );
+        data.is_opaque_wall |= has_role( vehicle_render_role::opaque_structure );
         data.is_tall_cabin |= info.has_flag( "WINDSHIELD" ) || info.has_flag( "OPAQUE" ) ||
                               ( info.has_flag( "OBSTACLE" ) && !half_panel && !part.open );
-        data.is_interior |= info.has_flag( "BOARDABLE" ) || info.has_flag( "AISLE" ) ||
-                            info.has_flag( "SEAT" ) || info.has_flag( "BED" ) ||
-                            ( info.has_flag( "OPENABLE" ) && part.open );
+        data.is_interior |= has_role( vehicle_render_role::interior );
     }
     data.show_roof = data.has_roof;
     data.height = data.is_tall_cabin ? vehicle_cabin_h : half_height_panel ? vehicle_body_h :

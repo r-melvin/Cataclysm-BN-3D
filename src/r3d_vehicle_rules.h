@@ -12,8 +12,31 @@ class vehicle;
 namespace r3d
 {
 enum class panel_corner { none, front_left, front_right, rear_left, rear_right };
+
+enum class vehicle_render_role : uint8_t {
+    frame,
+    body_panel,
+    glass,
+    opaque_structure,
+    door,
+    openable,
+    wheel,
+    roof,
+    roof_accessory,
+    interior,
+    detail
+};
+
+struct vehicle_render_layer {
+    int part_idx = -1;
+    std::vector<vehicle_render_role> roles;
+    bool open = false;
+    bool broken = false;
+};
+
 struct vehicle_render_profile {
     tripoint_mnt_veh mount;
+    std::vector<vehicle_render_layer> layers;
     int main_part_idx = -1;
     int roof_part_idx = -1;
     int accessory_part_idx = -1;
