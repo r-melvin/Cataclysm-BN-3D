@@ -6,16 +6,25 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "coordinates.h"
 #include "r3d_camera.h"
 #include "r3d_mesh.h"
+#include "r3d_vox.h"
 
 class cata_tiles;
 
 namespace r3d
 {
+
+struct vehicle_vox_asset {
+    vox_model model;
+    vox_surface surface;
+    sprite_ref palette;
+};
 
 /// Largest depth pull of a billboard top, in stretched units; the draw passes it as pull.w.
 constexpr auto max_billboard_pull = static_cast<float>( 8.0f );
@@ -49,6 +58,8 @@ struct entity_view {
 
     /// Height within its level of what stands on a tile: the floor, or a bench or counter top.
     std::function<float( const tripoint_bub_ms & )> surface;
+    /// Optional MagicaVoxel wheel models keyed by native vehicle part ID.
+    const std::unordered_map<std::string, vehicle_vox_asset> *vehicle_vox_parts = nullptr;
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.

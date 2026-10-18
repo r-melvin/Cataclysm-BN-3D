@@ -441,6 +441,105 @@ auto emit_vehicle_wheel( const emit_vehicle_wheel_options &options ) -> void
     emit_cap( 1 );
 }
 
+struct emit_vox_wheel_options {
+    quad_sink &sink;
+    const vehicle_vox_asset &asset;
+    const to_scene_transform &transform;
+    float center_forward;
+    float r_min;
+    float r_max;
+    float z_base;
+    float radius_forward;
+    float radius_z;
+};
+
+/// Draw an authored voxel wheel within the procedural wheel's mount-space bounds.
+auto emit_vox_wheel( const emit_vox_wheel_options &options ) -> void
+{
+    const auto &model = options.asset.model;
+    if( !options.asset.palette.valid || model.size_x == 0 || model.size_y == 0 || model.size_z == 0 ) {
+        return;
+    }
+    const auto point = [&options, &model]( const float x, const float y, const float z ) {
+        const auto local_f = options.center_forward - options.radius_forward +
+                             2.0f * options.radius_forward * x / static_cast<float>( model.size_x );
+        const auto local_r = options.r_min + ( options.r_max - options.r_min ) * y /
+                             static_cast<float>( model.size_y );
+        const auto world = options.transform.apply( local_f, local_r );
+        return std::array<float, 3> { world.x, world.y,
+                                      options.z_base + 2.0f * options.radius_z *z /
+                                      static_cast<float>( model.size_z )
+                                    };
+    };
+    for( const auto &face : options.asset.surface.faces ) {
+        const auto x0 = static_cast<float>( face.x );
+        const auto x1 = x0 + 1.0f;
+        const auto y0 = static_cast<float>( face.y );
+        const auto y1 = y0 + 1.0f;
+        const auto z0 = static_cast<float>( face.z );
+        const auto z1 = z0 + 1.0f;
+        auto shade = 0.75f;
+        auto corners = corners_t{};
+        switch( face.direction ) {
+            case vox_face_direction::negative_x:
+                corners = {{
+                        point( x0, y1, z1 ), point( x0, y0, z1 ),
+                        point( x0, y0, z0 ), point( x0, y1, z0 )
+                    }
+                };
+                shade = compute_side_shade( -1.0f, 0.0f, options.transform.cos_th, options.transform.sin_th );
+                break;
+            case vox_face_direction::positive_x:
+                corners = {{
+                        point( x1, y0, z1 ), point( x1, y1, z1 ),
+                        point( x1, y1, z0 ), point( x1, y0, z0 )
+                    }
+                };
+                shade = compute_side_shade( 1.0f, 0.0f, options.transform.cos_th, options.transform.sin_th );
+                break;
+            case vox_face_direction::negative_y:
+                corners = {{
+                        point( x0, y0, z1 ), point( x1, y0, z1 ),
+                        point( x1, y0, z0 ), point( x0, y0, z0 )
+                    }
+                };
+                shade = compute_side_shade( 0.0f, -1.0f, options.transform.cos_th, options.transform.sin_th );
+                break;
+            case vox_face_direction::positive_y:
+                corners = {{
+                        point( x1, y1, z1 ), point( x0, y1, z1 ),
+                        point( x0, y1, z0 ), point( x1, y1, z0 )
+                    }
+                };
+                shade = compute_side_shade( 0.0f, 1.0f, options.transform.cos_th, options.transform.sin_th );
+                break;
+            case vox_face_direction::negative_z:
+                corners = {{
+                        point( x0, y1, z0 ), point( x1, y1, z0 ),
+                        point( x1, y0, z0 ), point( x0, y0, z0 )
+                    }
+                };
+                shade = 0.5f;
+                break;
+            case vox_face_direction::positive_z:
+                corners = {{
+                        point( x0, y0, z1 ), point( x1, y0, z1 ),
+                        point( x1, y1, z1 ), point( x0, y1, z1 )
+                    }
+                };
+                shade = 0.95f;
+                break;
+        }
+        const auto uv = ( static_cast<float>( face.color_index ) + 0.5f ) / 256.0f;
+        const auto palette_uv = std::array<float, 2> { uv, 0.5f };
+        const auto uvs = uvs_t{{ palette_uv, palette_uv, palette_uv, palette_uv }};
+        const auto brightness = static_cast<uint8_t>( std::clamp( shade * 255.0f, 0.0f, 255.0f ) );
+        options.sink.add_colored( { .sprite = options.asset.palette, .corners = corners,
+                                    .uvs = uvs, .ref = light_ref{},
+                                    .color = no_pull( pack_light( brightness, brightness, brightness ) ) } );
+    }
+}
+
 struct emit_sprite_volume_options {
     quad_sink &sink;
     const sprite_ref &sprite;
@@ -828,6 +927,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                    ? cell_spr
                                    : ( best_body_spr ? best_body_spr : cell_spr );
             auto wheel_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
+            const vehicle_vox_asset *wheel_vox = nullptr;
             const auto wheel_layer = std::ranges::find_if( cell.layers, []( const auto &layer ) {
                 return std::ranges::find( layer.roles, vehicle_render_role::wheel ) != layer.roles.end();
             } );
@@ -835,6 +935,12 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 auto modifier = char{ 0 };
                 const auto &id = veh.part_id_string( wheel_layer->part_idx, false, modifier );
                 if( !id.is_null() ) {
+                    if( view.vehicle_vox_parts ) {
+                        const auto vox_part = view.vehicle_vox_parts->find( id.str() );
+                        if( vox_part != view.vehicle_vox_parts->end() ) {
+                            wheel_vox = &vox_part->second;
+                        }
+                    }
                     const auto &wheel_part = veh.cpart( wheel_layer->part_idx );
                     const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
                     const auto dir_deg = static_cast<int>( std::lround( units::to_degrees(
@@ -1431,8 +1537,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             }
 
             // 3. Distinct 3D Wheels
-            if( cell.has_wheel && wheel_spr && wheel_spr->valid ) {
-                const auto &s = *wheel_spr;
+            if( cell.has_wheel && ( wheel_vox || ( wheel_spr && wheel_spr->valid ) ) ) {
                 const auto f_center = ( f_top + f_bot ) * 0.5f;
                 constexpr auto wheel_w = 0.26f;
                 constexpr auto wheel_radius_f = 0.29f;
@@ -1466,11 +1571,20 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         outer_side = 0;
                     }
                 }
-                emit_vehicle_wheel( { .sink = sink, .sprite = s, .transform = transform,
+                if( wheel_vox ) {
+                    emit_vox_wheel( { .sink = sink, .asset = *wheel_vox, .transform = transform,
                                       .center_forward = f_center, .r_min = r_min, .r_max = r_max,
-                                      .z_base = z_base, .radius_forward = wheel_radius_f,
-                                      .radius_z = wheel_radius_z, .outer_side = outer_side,
-                                      .cos_th = cos_th, .sin_th = sin_th } );
+                                      .z_base = z_base + vehicle_wheel_h * 0.5f - wheel_radius_z,
+                                      .radius_forward = wheel_radius_f,
+                                      .radius_z = wheel_radius_z } );
+                } else {
+                    const auto &s = *wheel_spr;
+                    emit_vehicle_wheel( { .sink = sink, .sprite = s, .transform = transform,
+                                          .center_forward = f_center, .r_min = r_min, .r_max = r_max,
+                                          .z_base = z_base, .radius_forward = wheel_radius_f,
+                                          .radius_z = wheel_radius_z, .outer_side = outer_side,
+                                          .cos_th = cos_th, .sin_th = sin_th } );
+                }
             }
 
             // 4. Cargo Highlight

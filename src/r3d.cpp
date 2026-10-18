@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <limits>
 #include <memory>
@@ -46,6 +47,7 @@
 #include "r3d_camera.h"
 #include "r3d_dda.h"
 #include "r3d_entities.h"
+#include "r3d_vox.h"
 #include "r3d_scene_rules.h"
 #include "r3d_shapes.h"
 #include "vehicle/vehicle.h"
@@ -115,6 +117,7 @@ struct shown_view {
 struct state {
     gpu device;
     tile_info_cache cache;
+    std::unordered_map<std::string, vehicle_vox_asset> vehicle_vox_parts;
     std::unordered_map<chunk_key, chunk_gpu, chunk_key_hash> chunks;
     camera cam;
     unsigned epoch = 0;
@@ -145,6 +148,7 @@ struct state {
     bool map_drawn = false; // the game's map view has been on screen (a game is running)
     vec3 pan; // free camera: offset of the camera target from the viewed tile, world space
     bool walls_on = false; // whether the cache was given the wall side rules and atlas
+    bool vox_parts_loaded = false;
     bool thin_walls = true;
     bool plaster_atlas = false; // whether painted walls take the atlas plaster (see the option)
     bool comparison_camera = false;
@@ -325,6 +329,72 @@ auto load_wall_sides( gpu &device ) -> std::shared_ptr<const wall_sides>
         DebugLog( DL::Warn, DC::Main ) << "r3d: wall side textures not loaded: " << e.what();
         return nullptr;
     }
+}
+
+auto make_vox_palette_sprite( gpu &device, const vox_model &model ) -> sprite_ref
+{
+    const auto surface = SDL_Surface_Ptr( SDL_CreateSurface( 256, 1, SDL_PIXELFORMAT_RGBA32 ) );
+    if( !surface ) { return {}; }
+    for( auto index = 0; index < 256; ++index ) {
+        const auto &color = model.palette[static_cast<size_t>( index )];
+        const auto rect = SDL_Rect{.x = index, .y = 0, .w = 1, .h = 1};
+        const auto pixel = SDL_MapRGBA( SDL_GetPixelFormatDetails( surface->format ), nullptr,
+                                        color.r, color.g, color.b, color.a );
+        if( !SDL_FillSurfaceRect( surface.get(), &rect, pixel ) ) { return {}; }
+    }
+    auto texture = device.create_sheet( surface.get() );
+    if( !texture ) { return {}; }
+    auto sprite = sprite_ref{};
+    sprite.sheet = texture.get();
+    sprite.owner = std::move( texture );
+    sprite.u0 = 0.5f / 256.0f;
+    sprite.v0 = 0.5f;
+    sprite.u1 = 255.5f / 256.0f;
+    sprite.v1 = 0.5f;
+    sprite.valid = true;
+    return sprite;
+}
+
+auto load_vehicle_vox_parts( gpu &device ) -> std::unordered_map<std::string, vehicle_vox_asset>
+{
+    const auto dir = std::filesystem::path( PATH_INFO::datadir() ) / "raw" / "r3d" / "vehicle_parts";
+    auto assets = std::unordered_map<std::string, vehicle_vox_asset> {};
+    std::error_code error;
+    if( !std::filesystem::is_directory( dir, error ) ) { return assets; }
+    try {
+        for( const auto &entry : std::filesystem::directory_iterator( dir ) ) {
+            if( !entry.is_regular_file() || entry.path().extension() != ".vox" ) { continue; }
+            auto input = std::ifstream( entry.path(), std::ios::binary );
+            const auto bytes = std::vector<uint8_t>( std::istreambuf_iterator<char>( input ), {} );
+            const auto model = read_vox_model( bytes );
+            if( !model ) {
+                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot load vehicle voxel model "
+                                               << entry.path() << ": " << model.error();
+                continue;
+            }
+            const auto surface = extract_vox_surface( *model );
+            if( !surface ) {
+                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot mesh vehicle voxel model "
+                                               << entry.path() << ": " << surface.error();
+                continue;
+            }
+            if( surface->faces.empty() ) {
+                DebugLog( DL::Warn, DC::Main ) << "r3d: vehicle voxel model is empty: " << entry.path();
+                continue;
+            }
+            auto palette = make_vox_palette_sprite( device, *model );
+            if( !palette.valid ) {
+                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot upload palette for " << entry.path();
+                continue;
+            }
+            const auto id = entry.path().stem().string();
+            assets.emplace( id, vehicle_vox_asset{
+                .model = *model, .surface = *surface, .palette = std::move( palette )} );
+        }
+    } catch( const std::exception &e ) {
+        DebugLog( DL::Warn, DC::Main ) << "r3d: vehicle voxel models not loaded: " << e.what();
+    }
+    return assets;
 }
 
 // Height of the solid part of a tile as drawn: 0 for open air, the floor slab, furniture or a
@@ -1289,6 +1359,8 @@ auto shutdown() -> void
     release_dynamic( s );
     s.cache.set_wall_sides( nullptr );
     s.walls_on = false;
+    s.vehicle_vox_parts.clear();
+    s.vox_parts_loaded = false;
     s.tileset_loads = 0;
     s.device.shutdown();
     s.epoch_valid = false;
@@ -1335,6 +1407,11 @@ auto draw( const draw_options &options ) -> bool
         }
         s.epoch = render_epoch;
         s.epoch_valid = true;
+    }
+
+    if( !s.vox_parts_loaded ) {
+        s.vehicle_vox_parts = load_vehicle_vox_parts( s.device );
+        s.vox_parts_loaded = true;
     }
 
     // The wall-side rules and atlas are always loaded (they name each wall's material); the
@@ -1526,7 +1603,7 @@ auto draw( const draw_options &options ) -> bool
     }, .markers = {}, .uprights = std::move( upright_list ), .surface = [&s, &here]( const tripoint_bub_ms & p )
     -> float {
         return surface_height( s, here, p );
-    } };
+    }, .vehicle_vox_parts = &s.vehicle_vox_parts };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
     {
         const auto queued = cata_tiles::frame_markers( tilecontext->get_frame_markers() );
