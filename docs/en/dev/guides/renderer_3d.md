@@ -50,12 +50,15 @@ Installed wheel parts now use faceted elliptical tire meshes with raised hubs,
 and map the installed wheel sprite onto the tire face. BN remains authoritative
 for wheel damage, removal, and vehicle behavior.
 
-The optional **3D voxel-style item models** graphics setting extrudes selected
-gas-tank sprites from their alpha silhouettes. The renderer keeps the source art
-on the front and back, then adds shaded faces only along opaque-pixel boundaries;
-transparent corners and notches remain open. Sprite rotation and mirroring are
-applied to the silhouette as well. It is off by default; other items keep the
-upright sprite fallback. This adapts the general single-sprite extrusion idea from
+The optional **3D voxel-style item models** graphics setting extrudes loose-item
+sprites that have a transparent foreground and no separate backdrop. The source
+art stays on the front and back, while shaded faces follow opaque-pixel
+boundaries, preserving transparent corners and notches. Sprite rotation and
+mirroring are applied to the silhouette. Generic items use a shallow volume;
+cylinders use deeper profiles, and authored `.vox` items take precedence when
+available. Items without a supported transparent sprite keep the upright
+billboard fallback. The setting is off by default. This adapts the general
+single-sprite extrusion idea from
 [2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer) to the
 renderer; no external code or art is included.
 

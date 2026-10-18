@@ -8,12 +8,12 @@
   configurable thin walls and cutaways, and multiple visible storeys.
 - Wall faces, window surrounds, mounted boards, fitted shallow lockers, upright
   loose items, natural objects, and vehicles rendered in 3D.
-- Optional alpha-silhouette voxel models for selected gas tanks; enable them in
-  **Options → Graphics** after enabling the 3D renderer. Sprite pixels shape the
-  extruded volume, so transparent corners no longer fill a rectangular box.
+- Optional alpha-silhouette voxel models for loose items; enable them in
+  **Options → Graphics** after enabling the 3D renderer. Supported transparent
+  sprites keep their pixel silhouette, including corners and notches.
 - Vehicle wheels use faceted 3D geometry.
-- Optional voxel-style models for selected loose items; enable them separately in
-  **Options → Graphics** after enabling the 3D renderer.
+- Authored `.vox` item models can replace sprite-derived volumes when present in
+  the renderer's item asset directory.
 - Automated comparisons while playing: a private save copy records a 2D reference,
   eight 3D angles, current saves, settings, and diagnostic logs. Reports are split
   into ZIPs below GitHub's attachment limit. The launcher checks executable/shader
