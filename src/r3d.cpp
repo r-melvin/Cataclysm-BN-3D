@@ -147,6 +147,7 @@ struct state {
     bool walls_on = false; // whether the cache was given the wall side rules and atlas
     bool thin_walls = true;
     bool plaster_atlas = false; // whether painted walls take the atlas plaster (see the option)
+    bool comparison_camera = false;
     bool was_controlling_vehicle = false;
     float last_vehicle_yaw = 0.0f;
 };
@@ -868,6 +869,13 @@ auto capture( const std::string &path ) -> bool
     return ok;
 }
 
+struct comparison_view_options {
+    const camera &cam;
+    const vec3 &pan;
+    bool env_camera;
+    int zoom;
+};
+
 // Restores the complete player view even when capture or tileset loading throws.
 struct comparison_view_guard {
     options_manager::cOpt &tiles = get_options().get_option( "TILES" );
@@ -878,10 +886,15 @@ struct comparison_view_guard {
     vec3 old_pan;
     bool old_env_camera;
     int old_zoom;
+    bool old_controlling = st().was_controlling_vehicle;
+    float old_vehicle_yaw = st().last_vehicle_yaw;
     bool attempted = false;
 
-    comparison_view_guard( const camera &cam, const vec3 &pan, bool env_camera, int zoom ) :
-        old_camera( cam ), old_pan( pan ), old_env_camera( env_camera ), old_zoom( zoom ) {}
+    explicit comparison_view_guard( const comparison_view_options &options ) :
+        old_camera( options.cam ), old_pan( options.pan ), old_env_camera( options.env_camera ),
+        old_zoom( options.zoom ) {
+        st().comparison_camera = true;
+    }
 
     auto restore() -> bool {
         tiles.setValue( old_tiles );
@@ -891,6 +904,9 @@ struct comparison_view_guard {
         st().cam = old_camera;
         st().pan = old_pan;
         st().env_camera_applied = old_env_camera;
+        st().was_controlling_vehicle = old_controlling;
+        st().last_vehicle_yaw = old_vehicle_yaw;
+        st().comparison_camera = false;
         // Flush the restored atlas before resuming the player's world view.
         if( const auto &r = get_sdl_renderer() ) {
             SDL_RenderPresent( r.get() );
@@ -911,6 +927,7 @@ struct comparison_view_guard {
                 DebugLog( DL::Error, DC::Main ) << "r3d compare: view restoration failed: " << e.what();
             }
         }
+        st().comparison_camera = false;
     }
 };
 } // namespace
@@ -1038,7 +1055,7 @@ auto compare_capture( bool gameplay_boundary ) -> void
             return;
         }
     }
-    auto original_view = comparison_view_guard( old_camera, old_pan, old_env_camera, old_zoom );
+    auto original_view = comparison_view_guard( { .cam = old_camera, .pan = old_pan, .env_camera = old_env_camera, .zoom = old_zoom } );
     auto &tiles = original_view.tiles;
     auto &view_3d = original_view.view_3d;
     const auto env_or = []( const char *name, const char *fallback ) -> std::string {
@@ -1409,7 +1426,7 @@ auto draw( const draw_options &options ) -> bool
     const auto &you = get_avatar();
     const auto vp = here.veh_at( you.bub_pos() );
     const auto is_controlling = vp && vp->vehicle().player_in_control( you );
-    if( is_controlling ) {
+    if( !s.comparison_camera && is_controlling ) {
         const auto veh_face = vp->vehicle().face.dir();
         auto veh_yaw = static_cast<float>( units::to_radians( 270_degrees - veh_face ) );
         constexpr auto two_pi = static_cast<float>( 2.0 * M_PI );
@@ -1436,7 +1453,7 @@ auto draw( const draw_options &options ) -> bool
             s.cam.yaw = std::fmod( s.cam.yaw, two_pi );
             s.last_vehicle_yaw = veh_yaw;
         }
-    } else {
+    } else if( !s.comparison_camera ) {
         s.was_controlling_vehicle = false;
     }
 
