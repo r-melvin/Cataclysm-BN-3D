@@ -37,6 +37,14 @@ wall-mounted boards, shallower lockers fitted against walls, upright loose items
 solid natural objects, and visible vehicles. Movement, combat, vehicle physics,
 and item behavior remain BN's own.
 
+Vehicle quarterpanels (`HALF_BOARD`) stay at body height even beneath a roof;
+full panels and windshields keep cabin height. Roof caps take the exterior panel
+material, while rooftop equipment keeps its own sprite. Native `shapes` direction
+variants ending in `_nw`, `_ne`, `_sw`, or `_se` trim the corresponding body corner.
+These are generated part IDs, not new map or vehicle rules. Once a vehicle has a
+lit or known mount, its remaining mounts use that light instead of disappearing
+individually; a model with no lit or known mounts remains hidden.
+
 ## Comparison reports
 
 BN ships the `HitButton_iso` reference and `UltimateCataclysm` tilesets; no external

@@ -9,6 +9,8 @@ Use when adding or changing automated tests.
 
 ## Gates
 
+- Texture-coordinate assertions must also check the source texture sheet; unrelated atlas sheets can share the same UV range.
+
 - Test one behavior contract, not incidental implementation details.
 - Use deterministic fixtures from `data/mods/TEST_DATA` for data with random, balance, or evolving behavior.
 - Avoid assertions that rely on probability, wall-clock time, locale, file order, or current global options unless the test pins them.
@@ -21,6 +23,8 @@ Use when adding or changing automated tests.
   the global observed-error flag or disable the test runner's error check.
 
 ## Cleanup
+
+- Locate cleanup helper declarations before adding includes; `on_out_of_scope` and `restore_on_out_of_scope` are declared in `cata_utility.h`. Do not invent a helper header.
 
 - Restore global state with `restore_on_out_of_scope` for calendar, options, globals, and singleton state.
 - Use `clear_map()` and explicit player placement when map contents matter.
