@@ -6,12 +6,15 @@ renderer loads these files at 3D renderer initialization and uses them when a
 matching installed part is present. Missing, malformed, or unsupported models
 fall back to the regular tileset and procedural geometry.
 
-The current custom-model path is for wheels. In the model, X runs along the
-vehicle's forward/rear axis, Y runs across its width, and Z is vertical. The
-renderer scales the model into the wheel's mount-space bounds, so the source
-model's proportions are normalized. Keep the wheel centered in the XY footprint
-and fill the model's Z height. The MagicaVoxel palette is used directly; palette
-index zero is transparent and occupied voxels should use nonzero indices.
+Models can replace wheels or non-wheel main vehicle parts when their file stem
+matches the native vehicle part ID. In the model, X runs along the vehicle's
+forward/rear axis, Y runs across its width, and Z is vertical. The renderer
+scales each model into its mount-space bounds, so source proportions are
+normalized. For wheels, center the model in the XY footprint and fill its Z
+height. The MagicaVoxel palette is used directly; palette index zero is
+transparent and occupied voxels should use nonzero indices. A custom model
+replaces the part's procedural body geometry while the vehicle's game state,
+mounts, parts, and separate wheel geometry remain game-driven.
 
 Before adding an asset, check that its source artwork and model license allow
 redistribution with Bright Nights 3D. Keep the `.vox` source file in the repo so

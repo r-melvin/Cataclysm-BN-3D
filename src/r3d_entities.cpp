@@ -441,33 +441,34 @@ auto emit_vehicle_wheel( const emit_vehicle_wheel_options &options ) -> void
     emit_cap( 1 );
 }
 
-struct emit_vox_wheel_options {
+struct emit_vox_model_options {
     quad_sink &sink;
     const vehicle_vox_asset &asset;
     const to_scene_transform &transform;
-    float center_forward;
+    float f_min;
+    float f_max;
     float r_min;
     float r_max;
-    float z_base;
-    float radius_forward;
-    float radius_z;
+    float z_min;
+    float z_max;
+    uint32_t color;
 };
 
-/// Draw an authored voxel wheel within the procedural wheel's mount-space bounds.
-auto emit_vox_wheel( const emit_vox_wheel_options &options ) -> void
+/// Draw an authored voxel model within its mount-space bounds.
+auto emit_vox_model( const emit_vox_model_options &options ) -> void
 {
     const auto &model = options.asset.model;
     if( !options.asset.palette.valid || model.size_x == 0 || model.size_y == 0 || model.size_z == 0 ) {
         return;
     }
     const auto point = [&options, &model]( const float x, const float y, const float z ) {
-        const auto local_f = options.center_forward - options.radius_forward +
-                             2.0f * options.radius_forward * x / static_cast<float>( model.size_x );
+        const auto local_f = options.f_min + ( options.f_max - options.f_min ) * x /
+                             static_cast<float>( model.size_x );
         const auto local_r = options.r_min + ( options.r_max - options.r_min ) * y /
                              static_cast<float>( model.size_y );
         const auto world = options.transform.apply( local_f, local_r );
         return std::array<float, 3> { world.x, world.y,
-                                      options.z_base + 2.0f * options.radius_z *z /
+                                      options.z_min + ( options.z_max - options.z_min ) *z /
                                       static_cast<float>( model.size_z )
                                     };
     };
@@ -536,7 +537,7 @@ auto emit_vox_wheel( const emit_vox_wheel_options &options ) -> void
         const auto brightness = static_cast<uint8_t>( std::clamp( shade * 255.0f, 0.0f, 255.0f ) );
         options.sink.add_colored( { .sprite = options.asset.palette, .corners = corners,
                                     .uvs = uvs, .ref = light_ref{},
-                                    .color = no_pull( pack_light( brightness, brightness, brightness ) ) } );
+                                    .color = no_pull( modulate_light( options.color, brightness / 255.0f ) ) } );
     }
 }
 
@@ -869,10 +870,18 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             const auto rel_right = static_cast<float>( cell.mount.y() - pivot_mnt.y() );
 
             auto main_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
+            const vehicle_vox_asset *main_vox = nullptr;
             if( cell.main_part_idx >= 0 ) {
                 auto modifier = char{ 0 };
                 const auto &id = veh.part_id_string( cell.main_part_idx, false, modifier );
                 if( !id.is_null() ) {
+                    if( modifier == 0 && !veh.part_flag( cell.main_part_idx, "WHEEL" ) &&
+                        view.vehicle_vox_parts ) {
+                        const auto vox_part = view.vehicle_vox_parts->find( id.str() );
+                        if( vox_part != view.vehicle_vox_parts->end() ) {
+                            main_vox = &vox_part->second;
+                        }
+                    }
                     const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
                     auto rota = 0;
                     if( veh.cpart( cell.main_part_idx ).direction != 0_degrees ) {
@@ -1097,7 +1106,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
 
             const auto shaped_panel = cell.corner != panel_corner::none && !cell.show_roof &&
                                       !cell.is_windshield;
-            if( shaped_panel && side_spr && side_spr->valid ) {
+            if( !main_vox && shaped_panel && side_spr && side_spr->valid ) {
                 const auto outline = panel_outline( { .corner = cell.corner, .front = f_top,
                                                       .rear = f_bot, .left = r_l, .right = r_r } );
                 const auto &spr = *side_spr;
@@ -1129,8 +1138,14 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 }
             }
 
-            // 1. Top Surface Geometry
-            if( shaped_panel ) {
+            // Authored VOX replaces all procedural body faces for its part.
+            if( main_vox ) {
+                emit_vox_model( { .sink = sink, .asset = *main_vox, .transform = transform,
+                                  .f_min = f_bot, .f_max = f_top, .r_min = r_l, .r_max = r_r,
+                                  .z_min = z_base, .z_max = z_base + cell.height,
+                                  .color = cell.light } );
+            } else if( shaped_panel ) {
+                // 1. Top Surface Geometry
                 // Native corner outline emitted above.
             } else if( is_fwd_windshield && main_sprite_opt.has_value() &&
                        main_sprite_opt->get().main().valid ) {
@@ -1348,7 +1363,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             }
 
             // 2. Vertical Side Walls with Directional Shading & Two-Band Cabin Sides
-            if( !shaped_panel && side_spr && side_spr->valid ) {
+            if( !main_vox && !shaped_panel && side_spr && side_spr->valid ) {
                 const auto &s = *side_spr;
                 const auto solid_uv = make_solid_uvs( s );
 
@@ -1572,11 +1587,12 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     }
                 }
                 if( wheel_vox ) {
-                    emit_vox_wheel( { .sink = sink, .asset = *wheel_vox, .transform = transform,
-                                      .center_forward = f_center, .r_min = r_min, .r_max = r_max,
-                                      .z_base = z_base + vehicle_wheel_h * 0.5f - wheel_radius_z,
-                                      .radius_forward = wheel_radius_f,
-                                      .radius_z = wheel_radius_z } );
+                    const auto wheel_z_min = z_base + vehicle_wheel_h * 0.5f - wheel_radius_z;
+                    emit_vox_model( { .sink = sink, .asset = *wheel_vox, .transform = transform,
+                                      .f_min = f_center - wheel_radius_f, .f_max = f_center + wheel_radius_f,
+                                      .r_min = r_min, .r_max = r_max, .z_min = wheel_z_min,
+                                      .z_max = wheel_z_min + 2.0f * wheel_radius_z,
+                                      .color = cell.light } );
                 } else {
                     const auto &s = *wheel_spr;
                     emit_vehicle_wheel( { .sink = sink, .sprite = s, .transform = transform,

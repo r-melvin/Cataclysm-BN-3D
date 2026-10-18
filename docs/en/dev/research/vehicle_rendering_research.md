@@ -78,24 +78,32 @@ authoring aid for an isolated wheel or other compact vehicle part, not a way to
 replace the live vehicle assembled from BN parts.
 
 The renderer now has a pure `.vox` reader and exposed-face extractor in
-[`r3d_vox.cpp`](../../../../src/r3d_vox.cpp), but it does not yet load voxel assets
-into vehicle meshes or draw their palette. The next useful trial is to author one
-wheel from the BN wheel sprite, export `.vox`, and add a renderer-owned per-part
-model path that preserves BN's part state, mount, yaw, lighting, and visibility.
-Keep the tileset sprite as the front-facing texture while using the authored
-volume for shape and the opposite face. Compare that result against the new
-faceted procedural wheel at the same camera angles before expanding to body
-panels. Kenney Shape's `.vox` output is a standard interchange format according
-to its documentation; source-art licensing still applies to the sprite used to
-author the model.
+[`r3d_vox.cpp`](../../../../src/r3d_vox.cpp), and can load palette-colored `.vox`
+models named by native part ID from `data/raw/r3d/vehicle_parts/`. That path is
+currently used for wheels, with procedural geometry as the fallback. No authored
+vehicle models are bundled yet. Matching main parts now replace their procedural
+body mesh with the authored model, scaled to that mount and modulated by the
+vehicle's current light; broken or open parts keep their state-specific sprite
+path. Kenney Shape's `.vox` output can exercise this path, but source-art
+licensing still applies to any tileset sprite used to author the model.
 
 Kenney Shape is a Unity application, so the [MelonLoader project](https://github.com/LavaGang/MelonLoader)
 is one possible automation route: it states that it supports Mono and Il2Cpp
 Unity games, including native Linux. Compatibility with Kenney Shape's particular
-Unity version and scripting backend is unverified. First check for a documented
-import/export API or command-line workflow; otherwise test a small optional
-plugin that imports sprite art, applies depth, and exports `.vox`. Avoid coupling
-the game renderer to private details of the authoring tool.
+Unity version and scripting backend is unverified. Its official workflow
+describes editing depth and exporting `.vox`, but not importing existing PNGs or
+a stable command-line API. Treat it as a manual authoring and cleanup tool unless
+an automation surface is verified; avoid coupling the renderer to private tool
+internals.
+
+The related [2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer)
+offers a complementary experiment: its documented quad mode accepts `[LEFT,
+FRONT, RIGHT, BACK]` sprite views and outputs OBJ. That could help create true
+four-way character geometry, while Kenney Shape's `.vox` output fits the current
+renderer ingestion path for compact vehicle parts. OBJ does not currently plug
+into this renderer, and neither tool replaces BN vehicle assembly or character
+equipment layering. Track a shared importer and asset-validation prototype in
+[`sprite_to_voxel_pipeline.md`](sprite_to_voxel_pipeline.md).
 
 ## Validation matrix
 

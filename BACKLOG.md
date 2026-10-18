@@ -16,23 +16,16 @@ the default game or the 2D renderer. Determine which parts can be safely
 controlled by data or Lua and which require core C++ hooks; a partial mod must
 not imply that all vehicle gameplay is disabled.
 
-## Evaluate Kenney Shape and Unity automation for vehicle voxels
+## Prototype sprite-to-voxel assets for vehicles and characters
 
-Try Kenney Shape as a source of authored per-part voxel models, beginning with
-a single wheel or body panel based on tileset art. The renderer can read
-MagicaVoxel files, extract exposed faces, and load optional `.vox` files from
-`data/raw/r3d/vehicle_parts/` keyed by native vehicle-part ID. No authored part
-models are bundled yet, so the procedural wheel remains the fallback. Compare
-an authored part with the existing geometry before deciding whether a full
-asset pipeline is worthwhile.
-
-Investigate whether Kenney Shape can be automated or extended through a
-documented import/export interface. If not, check whether its Unity version and
-scripting backend work with MelonLoader on native Linux, or whether a comparable
-Unity plugin can import a sprite, set per-pixel depth, and export `.vox`
-repeatably. Prefer a documented or stable automation surface over depending on
-private UI internals. Keep the workflow optional and out of the game runtime;
-verify the tool license and the source-art license separately.
+Use Kenney Shape to author a wheel `.vox` and one vehicle panel, then use
+2d-to-3d-voxelizer's four-view mode to prototype a character with left, front,
+right, and back views. Resolve the voxelizer's OBJ output into the renderer's
+asset path, while preserving game-driven vehicle assembly and character
+equipment layers. The detailed trial and success gates are in
+[`sprite_to_voxel_pipeline.md`](docs/en/dev/research/sprite_to_voxel_pipeline.md).
+No authored models are bundled yet; the current sprite and procedural fallbacks
+remain active until generated assets pass visual comparison.
 
 ## Add directional character models to the 3D renderer
 
@@ -43,6 +36,8 @@ correct directional poses. Define a direction convention from character travel
 relative to the camera, then provide 3D character geometry or authored four-way
 pixel-art views. Preserve the existing layered clothing and wielded-item look,
 and fall back to the current sprite when a tileset has no directional assets.
+The four-view voxel prototype is tracked in
+[`sprite_to_voxel_pipeline.md`](docs/en/dev/research/sprite_to_voxel_pipeline.md).
 
 ## Add fog of war and a time-of-day sky to the 3D renderer
 
