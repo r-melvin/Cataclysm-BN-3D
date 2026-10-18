@@ -443,7 +443,7 @@ auto emit_vehicle_wheel( const emit_vehicle_wheel_options &options ) -> void
 
 struct emit_vox_model_options {
     quad_sink &sink;
-    const vehicle_vox_asset &asset;
+    const vox_asset &asset;
     const to_scene_transform &transform;
     float f_min;
     float f_max;
@@ -870,7 +870,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             const auto rel_right = static_cast<float>( cell.mount.y() - pivot_mnt.y() );
 
             auto main_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
-            const vehicle_vox_asset *main_vox = nullptr;
+            const vox_asset *main_vox = nullptr;
             if( cell.main_part_idx >= 0 ) {
                 auto modifier = char{ 0 };
                 const auto &id = veh.part_id_string( cell.main_part_idx, false, modifier );
@@ -936,7 +936,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                    ? cell_spr
                                    : ( best_body_spr ? best_body_spr : cell_spr );
             auto wheel_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
-            const vehicle_vox_asset *wheel_vox = nullptr;
+            const vox_asset *wheel_vox = nullptr;
             const auto wheel_layer = std::ranges::find_if( cell.layers, []( const auto &layer ) {
                 return std::ranges::find( layer.roles, vehicle_render_role::wheel ) != layer.roles.end();
             } );
@@ -1782,7 +1782,26 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                 const auto id = std::string( ( *stack.begin() )->typeId().str() );
                 const tile_info &sprite = view.cache.named( { .category = C_ITEM, .id = id, .tiles = view.tiles } );
                 const auto profile = item_profile( id );
-                if( get_option<bool>( "R3D_VOXEL_ITEMS" ) &&
+                const vox_asset *vox_item = nullptr;
+                if( view.item_vox_models ) {
+                    const auto found = view.item_vox_models->find( id );
+                    if( found != view.item_vox_models->end() ) {
+                        vox_item = &found->second;
+                    }
+                }
+                if( get_option<bool>( "R3D_VOXEL_ITEMS" ) && vox_item ) {
+                    const auto &model = vox_item->model;
+                    const auto size = fit_vox_model_to_unit_cube( model );
+                    if( size.x > 0.0f && size.y > 0.0f && size.z > 0.0f ) {
+                        const auto z_base = frame_z( p ) + view.surface( p ) + 0.02f;
+                        emit_vox_model( { .sink = sink, .asset = *vox_item,
+                                          .transform = { .pivot_sx = frame_x( p ), .pivot_sy = frame_y( p ) },
+                                          .f_min = -size.x * 0.5f, .f_max = size.x * 0.5f,
+                                          .r_min = -size.y * 0.5f, .r_max = size.y * 0.5f,
+                                          .z_min = z_base, .z_max = z_base + size.z,
+                                          .color = light } );
+                    }
+                } else if( get_option<bool>( "R3D_VOXEL_ITEMS" ) &&
                     profile.geometry == item_geometry::repeated_sprite_volume && !sprite.backdrop.valid &&
                     sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),

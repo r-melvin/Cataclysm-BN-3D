@@ -20,7 +20,7 @@ class cata_tiles;
 namespace r3d
 {
 
-struct vehicle_vox_asset {
+struct vox_asset {
     vox_model model;
     vox_surface surface;
     sprite_ref palette;
@@ -58,8 +58,10 @@ struct entity_view {
 
     /// Height within its level of what stands on a tile: the floor, or a bench or counter top.
     std::function<float( const tripoint_bub_ms & )> surface;
-    /// Optional MagicaVoxel wheel models keyed by native vehicle part ID.
-    const std::unordered_map<std::string, vehicle_vox_asset> *vehicle_vox_parts = nullptr;
+    /// Optional MagicaVoxel models keyed by native vehicle part ID.
+    const std::unordered_map<std::string, vox_asset> *vehicle_vox_parts = nullptr;
+    /// Optional MagicaVoxel models keyed by item type ID.
+    const std::unordered_map<std::string, vox_asset> *item_vox_models = nullptr;
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.

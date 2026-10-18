@@ -117,7 +117,8 @@ struct shown_view {
 struct state {
     gpu device;
     tile_info_cache cache;
-    std::unordered_map<std::string, vehicle_vox_asset> vehicle_vox_parts;
+    std::unordered_map<std::string, vox_asset> vehicle_vox_parts;
+    std::unordered_map<std::string, vox_asset> item_vox_models;
     std::unordered_map<chunk_key, chunk_gpu, chunk_key_hash> chunks;
     camera cam;
     unsigned epoch = 0;
@@ -148,7 +149,7 @@ struct state {
     bool map_drawn = false; // the game's map view has been on screen (a game is running)
     vec3 pan; // free camera: offset of the camera target from the viewed tile, world space
     bool walls_on = false; // whether the cache was given the wall side rules and atlas
-    bool vox_parts_loaded = false;
+    bool voxel_assets_loaded = false;
     bool thin_walls = true;
     bool plaster_atlas = false; // whether painted walls take the atlas plaster (see the option)
     bool comparison_camera = false;
@@ -355,31 +356,30 @@ auto make_vox_palette_sprite( gpu &device, const vox_model &model ) -> sprite_re
     return sprite;
 }
 
-auto load_vehicle_vox_parts( gpu &device ) -> std::unordered_map<std::string, vehicle_vox_asset>
+auto load_vox_assets( gpu &device, const std::filesystem::path &directory ) -> std::unordered_map<std::string, vox_asset>
 {
-    const auto dir = std::filesystem::path( PATH_INFO::datadir() ) / "raw" / "r3d" / "vehicle_parts";
-    auto assets = std::unordered_map<std::string, vehicle_vox_asset> {};
+    auto assets = std::unordered_map<std::string, vox_asset> {};
     std::error_code error;
-    if( !std::filesystem::is_directory( dir, error ) ) { return assets; }
+    if( !std::filesystem::is_directory( directory, error ) ) { return assets; }
     try {
-        for( const auto &entry : std::filesystem::directory_iterator( dir ) ) {
+        for( const auto &entry : std::filesystem::directory_iterator( directory ) ) {
             if( !entry.is_regular_file() || entry.path().extension() != ".vox" ) { continue; }
             auto input = std::ifstream( entry.path(), std::ios::binary );
             const auto bytes = std::vector<uint8_t>( std::istreambuf_iterator<char>( input ), {} );
             const auto model = read_vox_model( bytes );
             if( !model ) {
-                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot load vehicle voxel model "
+                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot load voxel model "
                                                << entry.path() << ": " << model.error();
                 continue;
             }
             const auto surface = extract_vox_surface( *model );
             if( !surface ) {
-                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot mesh vehicle voxel model "
+                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot mesh voxel model "
                                                << entry.path() << ": " << surface.error();
                 continue;
             }
             if( surface->faces.empty() ) {
-                DebugLog( DL::Warn, DC::Main ) << "r3d: vehicle voxel model is empty: " << entry.path();
+                DebugLog( DL::Warn, DC::Main ) << "r3d: voxel model is empty: " << entry.path();
                 continue;
             }
             auto palette = make_vox_palette_sprite( device, *model );
@@ -388,11 +388,11 @@ auto load_vehicle_vox_parts( gpu &device ) -> std::unordered_map<std::string, ve
                 continue;
             }
             const auto id = entry.path().stem().string();
-            assets.emplace( id, vehicle_vox_asset{
+            assets.emplace( id, vox_asset{
                 .model = *model, .surface = *surface, .palette = std::move( palette )} );
         }
     } catch( const std::exception &e ) {
-        DebugLog( DL::Warn, DC::Main ) << "r3d: vehicle voxel models not loaded: " << e.what();
+        DebugLog( DL::Warn, DC::Main ) << "r3d: voxel models not loaded from " << directory << ": " << e.what();
     }
     return assets;
 }
@@ -1360,7 +1360,8 @@ auto shutdown() -> void
     s.cache.set_wall_sides( nullptr );
     s.walls_on = false;
     s.vehicle_vox_parts.clear();
-    s.vox_parts_loaded = false;
+    s.item_vox_models.clear();
+    s.voxel_assets_loaded = false;
     s.tileset_loads = 0;
     s.device.shutdown();
     s.epoch_valid = false;
@@ -1409,9 +1410,11 @@ auto draw( const draw_options &options ) -> bool
         s.epoch_valid = true;
     }
 
-    if( !s.vox_parts_loaded ) {
-        s.vehicle_vox_parts = load_vehicle_vox_parts( s.device );
-        s.vox_parts_loaded = true;
+    if( !s.voxel_assets_loaded ) {
+        const auto asset_root = std::filesystem::path( PATH_INFO::datadir() ) / "raw" / "r3d";
+        s.vehicle_vox_parts = load_vox_assets( s.device, asset_root / "vehicle_parts" );
+        s.item_vox_models = load_vox_assets( s.device, asset_root / "items" );
+        s.voxel_assets_loaded = true;
     }
 
     // The wall-side rules and atlas are always loaded (they name each wall's material); the
@@ -1603,7 +1606,7 @@ auto draw( const draw_options &options ) -> bool
     }, .markers = {}, .uprights = std::move( upright_list ), .surface = [&s, &here]( const tripoint_bub_ms & p )
     -> float {
         return surface_height( s, here, p );
-    }, .vehicle_vox_parts = &s.vehicle_vox_parts };
+    }, .vehicle_vox_parts = &s.vehicle_vox_parts, .item_vox_models = &s.item_vox_models };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
     {
         const auto queued = cata_tiles::frame_markers( tilecontext->get_frame_markers() );

@@ -90,6 +90,17 @@ TEST_CASE("r3d_vox_reader_uses_the_magica_voxel_default_palette", "[r3d][voxels]
     CHECK(model->palette[2].b == 204);
 }
 
+TEST_CASE("r3d_vox_models_fit_inside_a_unit_cube_without_losing_proportions", "[r3d][voxels]") {
+    const auto model = r3d::vox_model{
+        .size_x = 8, .size_y = 4, .size_z = 16, .palette = {}, .cells = {}};
+    const auto size = r3d::fit_vox_model_to_unit_cube(model);
+
+    CHECK(size.x == Approx(0.5f));
+    CHECK(size.y == Approx(0.25f));
+    CHECK(size.z == Approx(1.0f));
+    CHECK(r3d::fit_vox_model_to_unit_cube({}).x == 0.0f);
+}
+
 TEST_CASE("r3d_vox_reader_rejects_truncated_and_out_of_bounds_models", "[r3d][voxels]") {
     const auto file = make_vox_file();
     CHECK_FALSE(r3d::read_vox_model(std::span<const uint8_t>(file).first(14)));

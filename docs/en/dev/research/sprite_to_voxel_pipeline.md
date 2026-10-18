@@ -19,7 +19,10 @@ cleanup step.
 
 The two tools therefore cover two important gaps: multi-view sprite input for
 characters and manual per-pixel volume authoring in the renderer's existing
-`.vox` format for vehicle parts. Kenney Shape's sample character project in the
+`.vox` format for items and vehicle parts. The renderer loads authored item
+models named by item type ID from `data/raw/r3d/items/`, fitting each model
+proportionally into a one-tile cube while keeping sprite-based voxel profiles as
+the fallback. Kenney Shape's sample character project in the
 local tool package is a compressed JSON document, but its undocumented
 project schema should not become a runtime dependency; the documented VOX
 export is the clean integration boundary. The renderer can now load a `.vox`
@@ -32,12 +35,16 @@ command-line interface, and Kenney Shape's published limits are 64×64 pixels,
 
 ## Prototype plan
 
-1. **Vehicle wheel:** use the existing native wheel sprite as a reference, make a
+1. **Loose item:** choose a recognizable item with clean source art, author a
+   compact model in Kenney Shape, and place the exported `.vox` under
+   `data/raw/r3d/items/<item-type-id>.vox`. Confirm the face orientation and
+   compare it at all camera angles with the existing sprite-based fallback.
+2. **Vehicle wheel:** use the existing native wheel sprite as a reference, make a
    compact model in Kenney Shape, export `.vox`, and place it under
    `data/raw/r3d/vehicle_parts/<native-part-id>.vox`. Verify the palette,
    orientation, scale, wheel state fallback, and eight yaw views against the
    procedural wheel. This path is already supported by the renderer.
-2. **Vehicle body part:** try one panel or fender. Place its model beside the
+3. **Vehicle body part:** try one panel or fender. Place its model beside the
    wheel assets with the native part ID as the filename. The renderer scales it
    to that part's mount bounds and uses the existing procedural geometry when
    the asset is absent. Keep the BN part ID, mount,
@@ -46,17 +53,17 @@ command-line interface, and Kenney Shape's published limits are 64×64 pixels,
    voxelizer-generated OBJ from the available sprite views. Do not adopt the OBJ
    route until its geometry, texture/palette, pivot, and scale can be imported
    reproducibly.
-3. **Character:** prepare a centered four-view sheet for one representative
+4. **Character:** prepare a centered four-view sheet for one representative
    character in `[LEFT, FRONT, RIGHT, BACK]` order and test the voxelizer's quad
    mode. Inspect its OBJ and determine whether adapting its exporter to MagicaVoxel
    `.vox` is practical, or whether a small OBJ importer is the better boundary.
    Validate that view selection follows character travel relative to the camera.
-4. **Layering and variation:** preserve the current base-body, clothing, hair,
+5. **Layering and variation:** preserve the current base-body, clothing, hair,
    armor, and wielded-item layers. Test whether each layer can have compatible
    four-view geometry and combine at runtime. If a layer lacks directional art,
    retain the existing billboard for that layer. Avoid baking equipment
    combinations into a single model.
-5. **Package only proven assets:** record source sprite IDs, tool version,
+6. **Package only proven assets:** record source sprite IDs, tool version,
    conversion settings, palette, pivot, scale, and licenses beside each model.
    Keep the editor tools out of the game's runtime and preserve current
    sprite/procedural fallbacks for absent or invalid files.

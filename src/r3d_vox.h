@@ -34,6 +34,12 @@ struct vox_model {
     std::vector<vox_cell> cells;
 };
 
+struct vox_model_unit_size {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
 enum class vox_face_direction : uint8_t {
     negative_x,
     positive_x,
@@ -57,6 +63,9 @@ struct vox_surface {
 
 /// Read a single-model MagicaVoxel file; malformed chunks and scene-graph files are rejected.
 auto read_vox_model(std::span<const uint8_t> bytes) -> std::expected<vox_model, std::string>;
+
+/// Return model dimensions scaled proportionally to fit within a 1x1x1 unit cube.
+auto fit_vox_model_to_unit_cube(const vox_model& model) -> vox_model_unit_size;
 
 /// Build only exterior faces from a voxel grid, keeping each face's voxel palette index.
 auto extract_vox_surface(const vox_model& model) -> std::expected<vox_surface, std::string>;

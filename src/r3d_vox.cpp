@@ -199,6 +199,15 @@ auto read_vox_model(std::span<const uint8_t> bytes) -> std::expected<vox_model, 
     return model;
 }
 
+auto fit_vox_model_to_unit_cube(const vox_model& model) -> vox_model_unit_size {
+    const auto largest_dimension = static_cast<float>(
+                                      std::max({model.size_x, model.size_y, model.size_z}));
+    if (largest_dimension <= 0.0f) { return {}; }
+    return {.x = static_cast<float>(model.size_x) / largest_dimension,
+            .y = static_cast<float>(model.size_y) / largest_dimension,
+            .z = static_cast<float>(model.size_z) / largest_dimension};
+}
+
 auto extract_vox_surface(const vox_model& model) -> std::expected<vox_surface, std::string> {
     constexpr auto max_faces = static_cast<size_t>(1'000'000);
     if (model.size_x == 0 || model.size_y == 0 || model.size_z == 0 || model.size_x > 256
