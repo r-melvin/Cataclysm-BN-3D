@@ -11,6 +11,9 @@
 - Optional alpha-silhouette voxel models for selected gas tanks; enable them in
   **Options → Graphics** after enabling the 3D renderer. Sprite pixels shape the
   extruded volume, so transparent corners no longer fill a rectangular box.
+- Vehicle wheels use faceted 3D geometry.
+- Optional voxel-style models for selected loose items; enable them separately in
+  **Options → Graphics** after enabling the 3D renderer.
 - Automated comparisons while playing: a private save copy records a 2D reference,
   eight 3D angles, current saves, settings, and diagnostic logs. Reports are split
   into ZIPs below GitHub's attachment limit. The launcher checks executable/shader

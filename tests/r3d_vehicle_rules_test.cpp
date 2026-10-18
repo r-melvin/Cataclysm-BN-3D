@@ -70,6 +70,34 @@ TEST_CASE("r3d_native_panel_corner_shapes_clip_the_matching_corner", "[r3d][vehi
     }
 }
 
+TEST_CASE("r3d_vehicle_wheel_outline_is_round_and_faceted", "[r3d][vehicle]") {
+    const auto outline = r3d::wheel_outline(
+        {.segments = 12,
+         .center_forward = 0.25f,
+         .center_z = 0.4f,
+         .radius_forward = 0.29f,
+         .radius_z = 0.17f});
+    REQUIRE(outline.size() == 12);
+    CHECK(outline.front()[0] == Approx(0.54f));
+    CHECK(outline.front()[1] == Approx(0.4f));
+    CHECK(outline[3][0] == Approx(0.25f));
+    CHECK(outline[3][1] == Approx(0.57f));
+    for (const auto& point : outline) {
+        const auto f = (point[0] - 0.25f) / 0.29f;
+        const auto z = (point[1] - 0.4f) / 0.17f;
+        CHECK(f * f + z * z == Approx(1.0f));
+    }
+    CHECK(
+        r3d::wheel_outline(
+            {.segments = 2,
+             .center_forward = 0.0f,
+             .center_z = 0.0f,
+             .radius_forward = 1.0f,
+             .radius_z = 1.0f})
+            .size()
+        == 3);
+}
+
 #if defined(TILES)
 #    include "cata_tiles.h"
 #    include "cata_utility.h"
@@ -118,6 +146,12 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
     CHECK(partial.indices == full.indices);
     REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("roof"), true) >= 0);
     const auto roofed = r3d::build_vehicle_mesh(view);
+    const auto wheel_mount = tripoint_mnt_veh(1, 0, 0);
+    REQUIRE(veh->install_part(wheel_mount, vpart_id("wheel_mount_medium"), true) >= 0);
+    REQUIRE(veh->install_part(wheel_mount, vpart_id("wheel"), true) >= 0);
+    CHECK(r3d::vehicle_profile(*veh, wheel_mount).has_wheel);
+    const auto wheeled = r3d::build_vehicle_mesh(view);
+    CHECK(wheeled.vertices.size() > roofed.vertices.size() + 48);
     const auto& roof_art =
         cache.named({.category = C_VEHICLE_PART, .id = "vp_roof", .tiles = *tilecontext}).main();
     REQUIRE(roof_art.valid);

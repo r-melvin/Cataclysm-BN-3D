@@ -1,6 +1,8 @@
 #include "r3d_vehicle_rules.h"
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 #include <string>
 #include "r3d_shapes.h"
 #include "vehicle/vehicle.h"
@@ -84,6 +86,20 @@ auto panel_outline( const panel_outline_options &options ) -> std::vector<std::a
             result.push_back( { current[0] + ( next[0] > current[0] ? cut : next[0] < current[0] ? -cut : 0.0f ),
                                 current[1] + ( next[1] > current[1] ? cut : next[1] < current[1] ? -cut : 0.0f ) } );
         }
+    }
+    return result;
+}
+
+auto wheel_outline( const wheel_outline_options &options ) -> std::vector<std::array<float, 2>>
+{
+    const auto segments = std::max( options.segments, 3 );
+    auto result = std::vector<std::array<float, 2>>{};
+    result.reserve( static_cast<size_t>( segments ) );
+    for( auto index = 0; index < segments; ++index ) {
+        const auto angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>( index ) /
+                           static_cast<float>( segments );
+        result.push_back( { options.center_forward + std::cos( angle ) * options.radius_forward,
+                            options.center_z + std::sin( angle ) * options.radius_z } );
     }
     return result;
 }

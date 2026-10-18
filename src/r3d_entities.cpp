@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <map>
+#include <numbers>
 #include <optional>
 #include <set>
 #include <string>
@@ -337,6 +338,95 @@ auto make_solid_uvs( const sprite_ref &s ) -> uvs_t
     const auto u_mid = static_cast<float>( s.u0 + ( s.u1 - s.u0 ) * fx );
     const auto v_mid = static_cast<float>( s.v0 + ( s.v1 - s.v0 ) * fy );
     return uvs_t{{ { u_mid, v_mid }, { u_mid, v_mid }, { u_mid, v_mid }, { u_mid, v_mid } }};
+}
+
+struct emit_vehicle_wheel_options {
+    quad_sink &sink;
+    const sprite_ref &sprite;
+    const to_scene_transform &transform;
+    float center_forward;
+    float r_min;
+    float r_max;
+    float z_base;
+    float radius_forward;
+    float radius_z;
+    int outer_side;
+    float cos_th;
+    float sin_th;
+};
+
+/// Emit a faceted tire shell and a round hub on the visible side of the wheel.
+auto emit_vehicle_wheel( const emit_vehicle_wheel_options &options ) -> void
+{
+    constexpr auto segments = 12;
+    const auto tire_color = pack_light( 32, 31, 35 );
+    const auto hub_color = pack_light( 140, 145, 155 );
+    const auto center_z = static_cast<float>( options.z_base + options.radius_z );
+    const auto outline = wheel_outline( { .segments = segments,
+                                          .center_forward = options.center_forward,
+                                          .center_z = center_z,
+                                          .radius_forward = options.radius_forward,
+                                          .radius_z = options.radius_z } );
+    const auto solid_uv = make_solid_uvs( options.sprite );
+    for( auto index = size_t{ 0 }; index < outline.size(); ++index ) {
+        const auto next = ( index + 1 ) % outline.size();
+        const auto &a = outline[index];
+        const auto &b = outline[next];
+        const auto a_min = options.transform.apply( a[0], options.r_min );
+        const auto a_max = options.transform.apply( a[0], options.r_max );
+        const auto b_max = options.transform.apply( b[0], options.r_max );
+        const auto b_min = options.transform.apply( b[0], options.r_min );
+        const auto corners = corners_t{{ { a_min.x, a_min.y, a[1] }, { a_max.x, a_max.y, a[1] },
+                                         { b_max.x, b_max.y, b[1] }, { b_min.x, b_min.y, b[1] } }};
+        const auto mid_angle = 2.0f * std::numbers::pi_v<float> *
+                               ( static_cast<float>( index ) + 0.5f ) / static_cast<float>( segments );
+        const auto normal_f = std::cos( mid_angle );
+        const auto vertical_light = 0.86f + std::max( 0.0f, std::sin( mid_angle ) ) * 0.12f;
+        const auto shade = compute_side_shade( normal_f, 0.0f, options.cos_th,
+                            options.sin_th ) * vertical_light;
+        options.sink.add_colored( { .sprite = options.sprite, .corners = corners, .uvs = solid_uv,
+                                    .ref = light_ref{},
+                                    .color = no_pull( modulate_light( tire_color, shade ) ) } );
+    }
+
+    const auto emit_cap = [&]( const int side ) {
+        const auto r_face = static_cast<float>( side > 0 ? options.r_max + 0.003f :
+                                options.r_min - 0.003f );
+        const auto center = options.transform.apply( options.center_forward, r_face );
+        const auto shade = compute_side_shade( 0.0f, static_cast<float>( side ), options.cos_th,
+                            options.sin_th );
+        const auto tire_tint = no_pull( modulate_light( tire_color, shade ) );
+        const auto hub_tint = no_pull( modulate_light( hub_color, shade ) );
+        const auto hub_radius_forward = static_cast<float>( options.radius_forward * 0.46f );
+        const auto hub_radius_z = static_cast<float>( options.radius_z * 0.46f );
+        const auto emit_disk = [&]( const float radius_forward, const float radius_z,
+                                    const uint32_t tint, const float r_surface ) {
+            const auto disk = wheel_outline( { .segments = segments,
+                                               .center_forward = options.center_forward,
+                                               .center_z = center_z,
+                                               .radius_forward = radius_forward,
+                                               .radius_z = radius_z } );
+            for( auto index = size_t{ 0 }; index < disk.size(); ++index ) {
+                const auto next = ( index + 1 ) % disk.size();
+                const auto p0 = options.transform.apply( disk[index][0], r_surface );
+                const auto p1 = options.transform.apply( disk[next][0], r_surface );
+                const auto triangle = corners_t{{ { center.x, center.y, center_z },
+                                                  { p0.x, p0.y, disk[index][1] },
+                                                  { p1.x, p1.y, disk[next][1] },
+                                                  { p1.x, p1.y, disk[next][1] } }};
+                options.sink.add_colored( { .sprite = options.sprite, .corners = triangle,
+                                            .uvs = solid_uv, .ref = light_ref{}, .color = tint } );
+            }
+        };
+        emit_disk( options.radius_forward, options.radius_z, tire_tint, r_face );
+        if( options.outer_side == 0 || options.outer_side == side ) {
+            emit_disk( hub_radius_forward, hub_radius_z, hub_tint,
+                       static_cast<float>( r_face + static_cast<float>( side ) * 0.005f ) );
+        }
+    };
+
+    emit_cap( -1 );
+    emit_cap( 1 );
 }
 
 struct emit_sprite_volume_options {
@@ -1304,13 +1394,10 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             // 3. Distinct 3D Wheels
             if( cell.has_wheel && side_spr && side_spr->valid ) {
                 const auto &s = *side_spr;
-                const auto solid_uv = make_solid_uvs( s );
                 const auto f_center = ( f_top + f_bot ) * 0.5f;
-                const auto f_min = static_cast<float>( f_center - 0.375f );
-                const auto f_max = static_cast<float>( f_center + 0.375f );
-                const auto z_wheel_bot = static_cast<float>( z_base + 0.0f );
-                const auto z_wheel_top = static_cast<float>( z_base + vehicle_wheel_h );
                 constexpr auto wheel_w = 0.26f;
+                constexpr auto wheel_radius_f = 0.29f;
+                constexpr auto wheel_radius_z = vehicle_wheel_h * 0.5f;
 
                 auto r_min = 0.0f;
                 auto r_max = 0.0f;
@@ -1340,91 +1427,11 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         outer_side = 0;
                     }
                 }
-                const auto rubber_color = pack_light( 30, 30, 34 );
-
-                // Top face
-                {
-                    const auto p0 = transform.apply( f_max, r_min );
-                    const auto p1 = transform.apply( f_max, r_max );
-                    const auto p2 = transform.apply( f_min, r_max );
-                    const auto p3 = transform.apply( f_min, r_min );
-                    const auto c = corners_t{{
-                            { p0.x, p0.y, z_wheel_top }, { p1.x, p1.y, z_wheel_top },
-                            { p2.x, p2.y, z_wheel_top }, { p3.x, p3.y, z_wheel_top }
-                        }};
-                    sink.add_colored( { .sprite = s, .corners = c, .uvs = solid_uv, .ref = light_ref{},
-                                        .color = no_pull( modulate_light( rubber_color, 1.0f ) ) } );
-                }
-                // Front face
-                {
-                    const auto shade = compute_side_shade( 1.0f, 0.0f, cos_th, sin_th );
-                    const auto col = no_pull( modulate_light( rubber_color, shade ) );
-                    const auto p0 = transform.apply( f_max, r_max );
-                    const auto p1 = transform.apply( f_max, r_min );
-                    const auto c = corners_t{{
-                            { p0.x, p0.y, z_wheel_top }, { p1.x, p1.y, z_wheel_top },
-                            { p1.x, p1.y, z_wheel_bot }, { p0.x, p0.y, z_wheel_bot }
-                        }};
-                    sink.add_colored( { .sprite = s, .corners = c, .uvs = solid_uv, .ref = light_ref{}, .color = col } );
-                }
-                // Back face
-                {
-                    const auto shade = compute_side_shade( -1.0f, 0.0f, cos_th, sin_th );
-                    const auto col = no_pull( modulate_light( rubber_color, shade ) );
-                    const auto p0 = transform.apply( f_min, r_min );
-                    const auto p1 = transform.apply( f_min, r_max );
-                    const auto c = corners_t{{
-                            { p0.x, p0.y, z_wheel_top }, { p1.x, p1.y, z_wheel_top },
-                            { p1.x, p1.y, z_wheel_bot }, { p0.x, p0.y, z_wheel_bot }
-                        }};
-                    sink.add_colored( { .sprite = s, .corners = c, .uvs = solid_uv, .ref = light_ref{}, .color = col } );
-                }
-                // Outer face & Hubcap
-                if( outer_side != 0 ) {
-                    const auto r_outer = outer_side > 0 ? r_max : r_min;
-                    const auto local_r = outer_side > 0 ? 1.0f : -1.0f;
-                    const auto shade = compute_side_shade( 0.0f, local_r, cos_th, sin_th );
-                    const auto col = no_pull( modulate_light( rubber_color, shade ) );
-                    const auto p0 = outer_side > 0 ? transform.apply( f_min, r_outer ) : transform.apply( f_max,
-                                    r_outer );
-                    const auto p1 = outer_side > 0 ? transform.apply( f_max, r_outer ) : transform.apply( f_min,
-                                    r_outer );
-                    const auto c = corners_t{{
-                            { p0.x, p0.y, z_wheel_top }, { p1.x, p1.y, z_wheel_top },
-                            { p1.x, p1.y, z_wheel_bot }, { p0.x, p0.y, z_wheel_bot }
-                        }};
-                    sink.add_colored( { .sprite = s, .corners = c, .uvs = solid_uv, .ref = light_ref{}, .color = col } );
-
-                    // Hubcap center strip
-                    const auto f_hub_min = static_cast<float>( f_center - 0.18f );
-                    const auto f_hub_max = static_cast<float>( f_center + 0.18f );
-                    const auto z_hub_bot = static_cast<float>( z_base + 0.08f );
-                    const auto z_hub_top = static_cast<float>( z_base + 0.28f );
-                    const auto r_hub = static_cast<float>( r_outer + ( outer_side > 0 ? 0.005f : -0.005f ) );
-                    const auto hub_col = no_pull( modulate_light( pack_light( 140, 145, 155 ), shade ) );
-                    const auto hp0 = outer_side > 0 ? transform.apply( f_hub_min, r_hub ) : transform.apply( f_hub_max,
-                                     r_hub );
-                    const auto hp1 = outer_side > 0 ? transform.apply( f_hub_max, r_hub ) : transform.apply( f_hub_min,
-                                     r_hub );
-                    const auto hc = corners_t{{
-                            { hp0.x, hp0.y, z_hub_top }, { hp1.x, hp1.y, z_hub_top },
-                            { hp1.x, hp1.y, z_hub_bot }, { hp0.x, hp0.y, z_hub_bot }
-                        }};
-                    sink.add_colored( { .sprite = s, .corners = hc, .uvs = solid_uv, .ref = light_ref{}, .color = hub_col } );
-                } else {
-                    for( const auto sign : { 1.0f, -1.0f } ) {
-                        const auto r_outer = sign > 0.0f ? r_max : r_min;
-                        const auto shade = compute_side_shade( 0.0f, sign, cos_th, sin_th );
-                        const auto col = no_pull( modulate_light( rubber_color, shade ) );
-                        const auto p0 = sign > 0.0f ? transform.apply( f_min, r_outer ) : transform.apply( f_max, r_outer );
-                        const auto p1 = sign > 0.0f ? transform.apply( f_max, r_outer ) : transform.apply( f_min, r_outer );
-                        const auto c = corners_t{{
-                                { p0.x, p0.y, z_wheel_top }, { p1.x, p1.y, z_wheel_top },
-                                { p1.x, p1.y, z_wheel_bot }, { p0.x, p0.y, z_wheel_bot }
-                            }};
-                        sink.add_colored( { .sprite = s, .corners = c, .uvs = solid_uv, .ref = light_ref{}, .color = col } );
-                    }
-                }
+                emit_vehicle_wheel( { .sink = sink, .sprite = s, .transform = transform,
+                                      .center_forward = f_center, .r_min = r_min, .r_max = r_max,
+                                      .z_base = z_base, .radius_forward = wheel_radius_f,
+                                      .radius_z = wheel_radius_z, .outer_side = outer_side,
+                                      .cos_th = cos_th, .sin_th = sin_th } );
             }
 
             // 4. Cargo Highlight

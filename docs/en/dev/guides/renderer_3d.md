@@ -46,6 +46,8 @@ variants ending in `_nw`, `_ne`, `_sw`, or `_se` trim the corresponding body cor
 These are generated part IDs, not new map or vehicle rules. Once a vehicle has a
 lit or known mount, its remaining mounts use that light instead of disappearing
 individually; a model with no lit or known mounts remains hidden.
+Installed wheel parts now use faceted elliptical tire meshes with raised hubs,
+while BN remains authoritative for wheel damage, removal, and vehicle behavior.
 
 The optional **3D voxel-style item models** graphics setting extrudes selected
 gas-tank sprites from their alpha silhouettes. The renderer keeps the source art

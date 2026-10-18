@@ -44,5 +44,15 @@ struct panel_outline_options {
 };
 /// Clip the corner specified by the native vehicle-part shape, in mount space.
 auto panel_outline( const panel_outline_options &options ) -> std::vector<std::array<float, 2>>;
+
+struct wheel_outline_options {
+    int segments;
+    float center_forward;
+    float center_z;
+    float radius_forward;
+    float radius_z;
+};
+/// Sample the cross-section of a vehicle tire in its forward/vertical plane.
+auto wheel_outline( const wheel_outline_options &options ) -> std::vector<std::array<float, 2>>;
 }
 #endif
