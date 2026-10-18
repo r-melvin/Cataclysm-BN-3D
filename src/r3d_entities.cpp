@@ -1802,14 +1802,13 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                           .color = light } );
                     }
                 } else if( get_option<bool>( "R3D_VOXEL_ITEMS" ) &&
-                    profile.geometry == item_geometry::repeated_sprite_volume && !sprite.backdrop.valid &&
+                    profile.geometry == item_geometry::sprite_volume && !sprite.backdrop.valid &&
                     sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
                                           .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
                                           .color = light, .depth_fraction = profile.depth_fraction } );
                 } else {
-                    // Keep unprofiled items' illustrated profile visible at every camera angle,
-                    // like creature sprites, rather than projecting them onto the ground.
+                    // Items without a usable transparent sprite stay as camera-facing art.
                     emit_billboard( { .sink = sink, .layers = { &sprite }, .right_world = right, .up_world = up,
                                       .toward_world = toward, .z_scale = view.cam.z_scale,
                                       .cx = frame_x( p ), .cy = frame_y( p ),

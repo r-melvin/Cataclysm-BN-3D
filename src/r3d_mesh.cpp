@@ -3,7 +3,6 @@
 #include "r3d_mesh.h"
 #include "r3d_door_geometry.h"
 #include "r3d_sprite_voxels.h"
-#include "r3d_item_profiles.h"
 
 #include <algorithm>
 #include <array>
@@ -177,8 +176,7 @@ auto resolve_layers( const resolve_layers_options &options ) -> void
             out.sprite = to_sprite_ref( *unknown );
         }
     }
-    if( category == C_ITEM && item_profile( id ).geometry == item_geometry::repeated_sprite_volume &&
-        out.sprite.alpha_mask ) {
+    if( category == C_ITEM && out.sprite.alpha_mask ) {
         const auto geometry = voxelize_sprite_alpha( out.sprite.alpha_width, out.sprite.alpha_height,
                               *out.sprite.alpha_mask );
         out.sprite.voxel_surface = std::make_shared<const sprite_voxel_surface>( geometry );

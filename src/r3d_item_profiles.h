@@ -9,7 +9,7 @@ namespace r3d
 
 enum class item_geometry {
     billboard,
-    repeated_sprite_volume
+    sprite_volume
 };
 
 struct item_render_profile {
@@ -17,7 +17,7 @@ struct item_render_profile {
     float depth_fraction = 0.0f;
 };
 
-/// Presentation-only shape selection for loose items. Unknown items keep the sprite billboard.
+/// Presentation-only shape and depth selection for loose items.
 auto item_profile( std::string_view id ) -> item_render_profile;
 
 } // namespace r3d
