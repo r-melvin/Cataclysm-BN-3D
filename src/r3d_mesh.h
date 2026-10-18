@@ -16,6 +16,7 @@
 
 #include "coordinates.h"
 #include "r3d_gpu.h"
+#include "r3d_sprite_voxels.h"
 #include "r3d_shapes.h"
 #include "r3d_wall_rules.h"
 #include "type_id.h"
@@ -48,6 +49,10 @@ struct sprite_ref {
     bool flip = false;     // mirrored horizontally
     uint32_t top_color = 0;  // average colours from the tileset loader (see sprite_scan)
     uint32_t body_color = 0;
+    std::shared_ptr<const std::vector<uint8_t>> alpha_mask;
+    int alpha_width = 0;
+    int alpha_height = 0;
+    std::shared_ptr<const sprite_voxel_surface> voxel_surface;
     // opaque part of the sprite as fractions of it (whole sprite when unknown)
     float opaque_x0 = 0.0f;
     float opaque_y0 = 0.0f;

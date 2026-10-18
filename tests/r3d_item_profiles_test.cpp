@@ -61,11 +61,15 @@ TEST_CASE("r3d_voxel_item_menu_option_switches_tank_geometry", "[r3d][items][til
         {.category = C_ITEM, .id = "carbondioxide_tank", .tiles = *tilecontext});
     REQUIRE(art.main().valid);
     REQUIRE_FALSE(art.backdrop.valid);
+    REQUIRE(art.main().alpha_mask);
+    REQUIRE(art.main().alpha_width > 0);
+    REQUIRE(art.main().alpha_height > 0);
+    REQUIRE(art.main().voxel_surface);
 
     const auto voxelized = r3d::build_entity_mesh(view);
     get_options().get_option("R3D_VOXEL_ITEMS").setValue("false");
     const auto billboard = r3d::build_entity_mesh(view);
-    CHECK(voxelized.vertices.size() == billboard.vertices.size() + 16);
-    CHECK(voxelized.indices.size() == billboard.indices.size() + 24);
+    CHECK(voxelized.vertices.size() > billboard.vertices.size() + 16);
+    CHECK(voxelized.indices.size() > billboard.indices.size() + 24);
 }
 #endif

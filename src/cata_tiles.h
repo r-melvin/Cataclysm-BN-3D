@@ -685,6 +685,8 @@ struct texture_draw_data {
     bool flip = false;
     // bounding box of the sprite's opaque pixels, relative to dimensions (empty when unknown)
     SDL_Rect opaque = { 0, 0, 0, 0 };
+    // Pixel opacity retained for presentation-only sprite extrusion. One byte per source pixel.
+    std::shared_ptr<const std::vector<uint8_t>> alpha_mask;
     // average colours of its top and the rest (see sprite_scan)
     uint32_t top_color = 0;
     uint32_t body_color = 0;

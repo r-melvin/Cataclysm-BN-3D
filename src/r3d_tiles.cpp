@@ -46,6 +46,8 @@ auto scan_sprite( texture_draw_data &data ) -> void
     auto min_y = surface->h;
     auto max_x = -1;
     auto max_y = -1;
+    auto alpha_mask = std::make_shared<std::vector<uint8_t>>(
+                          static_cast<size_t>( surface->w * surface->h ), uint8_t{} );
     for( auto y = 0; y < surface->h; ++y ) {
         for( auto x = 0; x < surface->w; ++x ) {
             auto r = Uint8{};
@@ -53,6 +55,7 @@ auto scan_sprite( texture_draw_data &data ) -> void
             auto b = Uint8{};
             auto a = Uint8{};
             if( SDL_ReadSurfacePixel( surface.get(), x, y, &r, &g, &b, &a ) && a > 32 ) {
+                ( *alpha_mask )[static_cast<size_t>( y * surface->w + x )] = 1;
                 min_x = std::min( min_x, x );
                 min_y = std::min( min_y, y );
                 max_x = std::max( max_x, x );
@@ -61,6 +64,7 @@ auto scan_sprite( texture_draw_data &data ) -> void
         }
     }
     if( max_x < min_x ) { return; }
+    data.alpha_mask = std::move( alpha_mask );
     data.opaque = { .x = min_x, .y = min_y, .w = max_x - min_x + 1, .h = max_y - min_y + 1 };
     auto colors = std::array<std::array<uint64_t, 4>, 2> {};
     for( auto y = min_y; y <= max_y; ++y ) {
@@ -153,6 +157,7 @@ std::optional<texture_draw_data>
         .size_y = rect.h / std::max( 1, tileset_ptr->get_tile_height() ),
         .quarter_turns = indices->size() == 1 && !request.background ? std::max( rotation, 0 ) % 4 : 0,
         .flip = !request.background && rotation == -1,
+        .alpha_mask = {},
         .facing = std::max( rotation, 0 ) % 4,
         .offset_x = picked->offset.x,
         .offset_y = picked->offset.y

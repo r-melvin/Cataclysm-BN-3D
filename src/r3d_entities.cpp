@@ -30,6 +30,7 @@
 #include "r3d_decals.h"
 #include "r3d_item_profiles.h"
 #include "r3d_scene_rules.h"
+#include "r3d_sprite_voxels.h"
 #include "r3d_shapes.h"
 #include "r3d_vehicle_rules.h"
 #include "enums.h"
@@ -348,34 +349,80 @@ struct emit_sprite_volume_options {
     float depth_fraction;
 };
 
-/// Repeats a pixel-art sprite around a shallow four-sided volume for selected upright items.
+auto map_sprite_uv( const sprite_ref &s, float gx, float gy ) -> std::array<float, 2>;
+
+/// Extrudes opaque sprite pixels and builds side faces only along their silhouette boundary.
 auto emit_sprite_volume( const emit_sprite_volume_options &options ) -> void
 {
     const auto &sprite = options.sprite;
+    if( !sprite.voxel_surface || sprite.alpha_width <= 0 || sprite.alpha_height <= 0 ) {
+        return;
+    }
+    const auto &surface = *sprite.voxel_surface;
+    if( surface.faces.empty() ) {
+        return;
+    }
     const auto width = static_cast<float>( std::clamp( sprite.size_x, 0.25f, 1.0f ) );
     const auto height = static_cast<float>( std::clamp( sprite.size_y, 0.25f, 1.5f ) );
     const auto depth = static_cast<float>( width * options.depth_fraction );
-    const auto x0 = static_cast<float>( options.cx - width * 0.5f );
-    const auto x1 = static_cast<float>( options.cx + width * 0.5f );
-    const auto y0 = static_cast<float>( options.cy - depth * 0.5f );
-    const auto y1 = static_cast<float>( options.cy + depth * 0.5f );
-    const auto z1 = static_cast<float>( options.z_base + height );
-    const auto faces = std::array<corners_t, 4> {{
-            {{ { x0, y0, z1 }, { x1, y0, z1 }, { x1, y0, options.z_base }, { x0, y0, options.z_base } }},
-            {{ { x1, y1, z1 }, { x0, y1, z1 }, { x0, y1, options.z_base }, { x1, y1, options.z_base } }},
-            {{ { x0, y1, z1 }, { x0, y0, z1 }, { x0, y0, options.z_base }, { x0, y1, options.z_base } }},
-            {{ { x1, y0, z1 }, { x1, y1, z1 }, { x1, y1, options.z_base }, { x1, y0, options.z_base } }}
-        }
+    const auto x_origin = static_cast<float>( options.cx - width * 0.5f );
+    const auto y_front = static_cast<float>( options.cy - depth * 0.5f );
+    const auto y_back = static_cast<float>( options.cy + depth * 0.5f );
+    const auto point_x = [width, x_origin, &surface]( float x ) {
+        return x_origin + width * x / static_cast<float>( surface.width );
     };
-    const auto shades = std::array<float, 4> {{ 0.65f, 0.83f, 0.59f, 0.73f }};
-    const auto uvs = make_sprite_uvs( sprite );
-    for( auto i = size_t{ 0 }; i < faces.size(); ++i ) {
-        options.sink.add_colored( { .sprite = sprite, .corners = faces[i], .uvs = uvs, .ref = light_ref{},
-                                    .color = no_pull( modulate_light( options.color, shades[i] ) ) } );
+    const auto point_z = [height, &options, &surface]( float y ) {
+        return options.z_base + height * ( 1.0f - y / static_cast<float>( surface.height ) );
+    };
+    for( const auto &face : surface.faces ) {
+        const auto x0 = point_x( face.x0 );
+        const auto x1 = point_x( face.x1 );
+        const auto z0 = point_z( face.z0 );
+        const auto z1 = point_z( face.z1 );
+        auto corners = corners_t{};
+        auto uvs = uvs_t{};
+        auto shade = 0.65f;
+        if( face.face == sprite_voxel_face::front || face.face == sprite_voxel_face::back ) {
+            const auto y = face.face == sprite_voxel_face::front ? y_front : y_back;
+            corners = {{ { x0, y, z0 }, { x1, y, z0 }, { x1, y, z1 }, { x0, y, z1 } }};
+            const auto uv_top_left = map_sprite_uv( sprite, face.x0 / surface.width, face.z0 / surface.height );
+            const auto uv_top_right = map_sprite_uv( sprite, face.x1 / surface.width, face.z0 / surface.height );
+            const auto uv_bottom_right = map_sprite_uv( sprite, face.x1 / surface.width, face.z1 / surface.height );
+            const auto uv_bottom_left = map_sprite_uv( sprite, face.x0 / surface.width, face.z1 / surface.height );
+            uvs = {{ uv_top_left, uv_top_right, uv_bottom_right, uv_bottom_left }};
+            shade = face.face == sprite_voxel_face::front ? 0.82f : 0.65f;
+        } else {
+            const auto sample_x = ( static_cast<float>( face.sample_x ) + 0.5f ) /
+                                  static_cast<float>( surface.width );
+            const auto sample_y = ( static_cast<float>( face.sample_y ) + 0.5f ) /
+                                  static_cast<float>( surface.height );
+            const auto sample_uv = map_sprite_uv( sprite, sample_x, sample_y );
+            uvs = {{ sample_uv, sample_uv, sample_uv, sample_uv }};
+            switch( face.face ) {
+                case sprite_voxel_face::left:
+                    corners = {{ { x0, y_back, z1 }, { x0, y_front, z1 }, { x0, y_front, z0 }, { x0, y_back, z0 } }};
+                    shade = 0.59f;
+                    break;
+                case sprite_voxel_face::right:
+                    corners = {{ { x0, y_front, z1 }, { x0, y_back, z1 }, { x0, y_back, z0 }, { x0, y_front, z0 } }};
+                    shade = 0.73f;
+                    break;
+                case sprite_voxel_face::top:
+                    corners = {{ { x0, y_front, z0 }, { x1, y_front, z0 }, { x1, y_back, z0 }, { x0, y_back, z0 } }};
+                    shade = 0.95f;
+                    break;
+                case sprite_voxel_face::bottom:
+                    corners = {{ { x0, y_back, z0 }, { x1, y_back, z0 }, { x1, y_front, z0 }, { x0, y_front, z0 } }};
+                    shade = 0.45f;
+                    break;
+                case sprite_voxel_face::front:
+                case sprite_voxel_face::back:
+                    break;
+            }
+        }
+        options.sink.add_colored( { .sprite = sprite, .corners = corners, .uvs = uvs, .ref = light_ref{},
+                                    .color = no_pull( modulate_light( options.color, shade ) ) } );
     }
-    const auto cap = corners_t {{ { x0, y0, z1 }, { x1, y0, z1 }, { x1, y1, z1 }, { x0, y1, z1 } }};
-    options.sink.add_colored( { .sprite = sprite, .corners = cap, .uvs = make_solid_uvs( sprite ),
-                                .ref = light_ref{}, .color = no_pull( modulate_light( options.color, 0.95f ) ) } );
 }
 
 auto map_sprite_uv( const sprite_ref &s, float gx, float gy ) -> std::array<float, 2>
@@ -1560,7 +1607,8 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                 const tile_info &sprite = view.cache.named( { .category = C_ITEM, .id = id, .tiles = view.tiles } );
                 const auto profile = item_profile( id );
                 if( get_option<bool>( "R3D_VOXEL_ITEMS" ) &&
-                    profile.geometry == item_geometry::repeated_sprite_volume && !sprite.backdrop.valid ) {
+                    profile.geometry == item_geometry::repeated_sprite_volume && !sprite.backdrop.valid &&
+                    sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
                                           .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
                                           .color = light, .depth_fraction = profile.depth_fraction } );

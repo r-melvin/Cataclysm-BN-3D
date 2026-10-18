@@ -2,6 +2,8 @@
 
 #include "r3d_mesh.h"
 #include "r3d_door_geometry.h"
+#include "r3d_sprite_voxels.h"
+#include "r3d_item_profiles.h"
 
 #include <algorithm>
 #include <array>
@@ -108,6 +110,16 @@ auto to_sprite_ref( const texture_draw_data &data ) -> sprite_ref
     ref.size_y = data.size_y;
     ref.top_color = data.top_color;
     ref.body_color = data.body_color;
+    if( data.alpha_mask ) {
+        auto alpha = orient_sprite_alpha( { .width = data.dimensions.w, .height = data.dimensions.h,
+                                            .alpha = *data.alpha_mask, .quarter_turns = data.quarter_turns,
+                                            .flip = data.flip } );
+        if( alpha.width > 0 && alpha.height > 0 ) {
+            ref.alpha_width = alpha.width;
+            ref.alpha_height = alpha.height;
+            ref.alpha_mask = std::make_shared<const std::vector<uint8_t>>( std::move( alpha.pixels ) );
+        }
+    }
     ref.quarter_turns = data.quarter_turns;
     ref.facing = data.facing;
     // size is in tiles and dimensions in pixels, so a tile is dimensions / size pixels.
@@ -164,6 +176,12 @@ auto resolve_layers( const resolve_layers_options &options ) -> void
         if( const auto unknown = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = std::string( "unknown" ), .category = C_NONE, .pos = origin } ) ) ) {
             out.sprite = to_sprite_ref( *unknown );
         }
+    }
+    if( category == C_ITEM && item_profile( id ).geometry == item_geometry::repeated_sprite_volume &&
+        out.sprite.alpha_mask ) {
+        const auto geometry = voxelize_sprite_alpha( out.sprite.alpha_width, out.sprite.alpha_height,
+                              *out.sprite.alpha_mask );
+        out.sprite.voxel_surface = std::make_shared<const sprite_voxel_surface>( geometry );
     }
 }
 

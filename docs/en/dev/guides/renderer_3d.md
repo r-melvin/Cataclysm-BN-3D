@@ -47,10 +47,12 @@ These are generated part IDs, not new map or vehicle rules. Once a vehicle has a
 lit or known mount, its remaining mounts use that light instead of disappearing
 individually; a model with no lit or known mounts remains hidden.
 
-The optional **3D voxel-style item models** graphics setting repeats selected
-gas-tank item sprites around shallow four-sided volumes with sampled top caps.
-It is off by default; other items keep the upright sprite fallback. This adapts
-the general single-sprite extrusion idea from
+The optional **3D voxel-style item models** graphics setting extrudes selected
+gas-tank sprites from their alpha silhouettes. The renderer keeps the source art
+on the front and back, then adds shaded faces only along opaque-pixel boundaries;
+transparent corners and notches remain open. Sprite rotation and mirroring are
+applied to the silhouette as well. It is off by default; other items keep the
+upright sprite fallback. This adapts the general single-sprite extrusion idea from
 [2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer) to the
 renderer; no external code or art is included.
 
