@@ -78,4 +78,55 @@ TEST_CASE("r3d_voxel_item_menu_option_switches_tank_geometry", "[r3d][items][til
     CHECK(voxelized.vertices.size() > billboard.vertices.size() + 16);
     CHECK(voxelized.indices.size() > billboard.indices.size() + 24);
 }
+
+TEST_CASE("r3d_authored_voxel_item_uses_voxel_mesh_and_respects_menu_option", "[r3d][items][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto voxel_items = override_option("R3D_VOXEL_ITEMS", "true");
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+
+    auto& here = get_map();
+    auto& you = get_avatar();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    you.setpos(origin);
+    here.add_item(origin, item::spawn("carbondioxide_tank", calendar::turn));
+
+    auto model = r3d::vox_model{
+        .size_x = 2,
+        .size_y = 2,
+        .size_z = 4,
+        .palette = {},
+        .cells = {{.x = 0, .y = 0, .z = 0, .color_index = 1}}};
+    const auto surface = r3d::extract_vox_surface(model);
+    REQUIRE(surface.has_value());
+    auto palette = r3d::sprite_ref{};
+    palette.valid = true;
+    const auto assets = std::unordered_map<std::string, r3d::vox_asset>{
+        {"carbondioxide_tank",
+         {.model = std::move(model),
+          .surface = *surface,
+          .palette = palette}}};
+
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = [](const tripoint_bub_ms& /*p*/) { return r3d::floor_height; },
+        .item_vox_models = &assets};
+
+    const auto authored = r3d::build_entity_mesh(view);
+    get_options().get_option("R3D_VOXEL_ITEMS").setValue("false");
+    const auto fallback = r3d::build_entity_mesh(view);
+    CHECK(authored.vertices.size() == fallback.vertices.size() + 20);
+    CHECK(authored.indices.size() == fallback.indices.size() + 30);
+}
 #endif
