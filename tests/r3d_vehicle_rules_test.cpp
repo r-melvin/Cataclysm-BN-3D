@@ -104,7 +104,10 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
         .cache = cache,
         .cam = cam,
         .center = origin,
-        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); }};
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
     const auto full = r3d::build_vehicle_mesh(view);
     REQUIRE_FALSE(full.empty());
     view.light = [&origin](const tripoint_bub_ms& p) {
