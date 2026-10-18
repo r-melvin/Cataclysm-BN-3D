@@ -340,6 +340,8 @@ auto make_solid_uvs( const sprite_ref &s ) -> uvs_t
     return uvs_t{{ { u_mid, v_mid }, { u_mid, v_mid }, { u_mid, v_mid }, { u_mid, v_mid } }};
 }
 
+auto map_sprite_uv( const sprite_ref &s, float gx, float gy ) -> std::array<float, 2>;
+
 struct emit_vehicle_wheel_options {
     quad_sink &sink;
     const sprite_ref &sprite;
@@ -410,12 +412,22 @@ auto emit_vehicle_wheel( const emit_vehicle_wheel_options &options ) -> void
                 const auto next = ( index + 1 ) % disk.size();
                 const auto p0 = options.transform.apply( disk[index][0], r_surface );
                 const auto p1 = options.transform.apply( disk[next][0], r_surface );
+                const auto uv_at = [&]( const float forward, const float z ) {
+                    return map_sprite_uv( options.sprite,
+                                          ( forward - options.center_forward + radius_forward ) /
+                                          ( 2.0f * radius_forward ),
+                                          ( center_z + radius_z - z ) / ( 2.0f * radius_z ) );
+                };
                 const auto triangle = corners_t{{ { center.x, center.y, center_z },
                                                   { p0.x, p0.y, disk[index][1] },
                                                   { p1.x, p1.y, disk[next][1] },
                                                   { p1.x, p1.y, disk[next][1] } }};
+                const auto triangle_uv = uvs_t{{ map_sprite_uv( options.sprite, 0.5f, 0.5f ),
+                                                 uv_at( disk[index][0], disk[index][1] ),
+                                                 uv_at( disk[next][0], disk[next][1] ),
+                                                 uv_at( disk[next][0], disk[next][1] ) }};
                 options.sink.add_colored( { .sprite = options.sprite, .corners = triangle,
-                                            .uvs = solid_uv, .ref = light_ref{}, .color = tint } );
+                                            .uvs = triangle_uv, .ref = light_ref{}, .color = tint } );
             }
         };
         emit_disk( options.radius_forward, options.radius_z, tire_tint, r_face );
@@ -438,8 +450,6 @@ struct emit_sprite_volume_options {
     uint32_t color;
     float depth_fraction;
 };
-
-auto map_sprite_uv( const sprite_ref &s, float gx, float gy ) -> std::array<float, 2>;
 
 /// Extrudes opaque sprite pixels and builds side faces only along their silhouette boundary.
 auto emit_sprite_volume( const emit_sprite_volume_options &options ) -> void
@@ -817,6 +827,35 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             const auto *side_spr = ( cell_spr && !cell.is_interior )
                                    ? cell_spr
                                    : ( best_body_spr ? best_body_spr : cell_spr );
+            auto wheel_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
+            const auto wheel_layer = std::ranges::find_if( cell.layers, []( const auto &layer ) {
+                return std::ranges::find( layer.roles, vehicle_render_role::wheel ) != layer.roles.end();
+            } );
+            if( wheel_layer != cell.layers.end() ) {
+                auto modifier = char{ 0 };
+                const auto &id = veh.part_id_string( wheel_layer->part_idx, false, modifier );
+                if( !id.is_null() ) {
+                    const auto &wheel_part = veh.cpart( wheel_layer->part_idx );
+                    const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
+                    const auto dir_deg = static_cast<int>( std::lround( units::to_degrees(
+                                              wheel_part.direction ) ) );
+                    const auto rota = ( ( dir_deg / 90 ) % 4 + 4 ) % 4;
+                    const auto &info = view.cache.named( {
+                        .category = C_VEHICLE_PART,
+                        .id = "vp_" + id.str(),
+                        .tiles = view.tiles,
+                        .subtile = subtile,
+                        .rota = rota,
+                        .allow_unknown = false
+                    } );
+                    if( info.sprite.valid || info.backdrop.valid ) {
+                        wheel_sprite_opt = info;
+                    }
+                }
+            }
+            const auto *wheel_spr = wheel_sprite_opt.has_value()
+                                    ? &wheel_sprite_opt->get().main()
+                                    : side_spr;
 
             // Neighbor heights in local mount space
             auto h_fwd = 0.0f;
@@ -1392,8 +1431,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             }
 
             // 3. Distinct 3D Wheels
-            if( cell.has_wheel && side_spr && side_spr->valid ) {
-                const auto &s = *side_spr;
+            if( cell.has_wheel && wheel_spr && wheel_spr->valid ) {
+                const auto &s = *wheel_spr;
                 const auto f_center = ( f_top + f_bot ) * 0.5f;
                 constexpr auto wheel_w = 0.26f;
                 constexpr auto wheel_radius_f = 0.29f;

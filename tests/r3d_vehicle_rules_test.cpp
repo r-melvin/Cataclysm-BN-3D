@@ -180,6 +180,17 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
     CHECK(r3d::vehicle_profile(*veh, wheel_mount).has_wheel);
     const auto wheeled = r3d::build_vehicle_mesh(view);
     CHECK(wheeled.vertices.size() > roofed.vertices.size() + 48);
+    const auto& wheel_art =
+        cache.named({.category = C_VEHICLE_PART, .id = "vp_wheel", .tiles = *tilecontext}).main();
+    REQUIRE(wheel_art.valid);
+    CHECK(
+        std::ranges::count_if(
+            wheeled.vertices,
+            [&wheel_art](const auto& vertex) {
+                return vertex.u >= wheel_art.u0 && vertex.u <= wheel_art.u1
+                    && vertex.v >= wheel_art.v0 && vertex.v <= wheel_art.v1;
+            })
+        >= 100);
     const auto& roof_art =
         cache.named({.category = C_VEHICLE_PART, .id = "vp_roof", .tiles = *tilecontext}).main();
     REQUIRE(roof_art.valid);

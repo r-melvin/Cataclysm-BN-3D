@@ -66,6 +66,27 @@ For vehicles, treat the tool as a way to test whether a deliberately prepared fr
 
 The license and content provenance of every input image and exported texture must be checked independently. Review the voxelizer at the named release/commit before deciding whether to execute or incorporate its code; this research did not run it or inspect its implementation.
 
+### Kenney Shape as a per-part authoring tool
+
+Kenney Shape is available locally at `/tmp/Kenney Shape (Linux).zip`. Its official
+documentation describes authoring per-pixel depth and exporting OBJ, glTF, or
+MagicaVoxel `.vox` files. The documented workflow focuses on drawing and depth
+editing; it does not describe an automatic conversion of an existing PNG sprite.
+The current tool page also limits art to 64×64 and 16 colors, and notes that the
+extruded art looks the same from both sides. Those constraints make it a possible
+authoring aid for an isolated wheel or other compact vehicle part, not a way to
+replace the live vehicle assembled from BN parts.
+
+The renderer currently has no `.vox`/glTF model importer. The next useful trial is
+to author one wheel from the BN wheel sprite, export `.vox`, and add a small
+renderer-owned per-part model path that preserves BN's part state, mount, yaw,
+lighting, and visibility. Keep the tileset sprite as the front-facing texture while
+using the authored volume for shape and the opposite face. Compare that result
+against the new faceted procedural wheel at the same camera angles before
+expanding to body panels. Kenney Shape's `.vox` output is a standard interchange
+format according to its documentation; source-art licensing still applies to the
+sprite used to author the model.
+
 ## Validation matrix
 
 | Dimension | Cases | Pass condition |
@@ -87,3 +108,5 @@ Use geometry tests for profile resolution, mount transforms, corner clipping, wi
 - [GazPrash 2D-to-3D voxelizer README](https://github.com/GazPrash/2d-to-3d-voxelizer/blob/main/README.md)
 - [GazPrash voxelizer v1.0.4, commit `c30cb82`](https://github.com/GazPrash/2d-to-3d-voxelizer/releases/tag/v1.0.4)
 - [Voxelizer tool license](https://github.com/GazPrash/2d-to-3d-voxelizer/blob/main/LICENSE)
+- [Kenney Shape documentation](https://kenney.nl/knowledge-base/tools/kenney-shape-documentation)
+- [Kenney Shape tool and export formats](https://kenney.nl/tools/kenney-shape)
