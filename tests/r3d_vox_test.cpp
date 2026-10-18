@@ -91,8 +91,8 @@ TEST_CASE("r3d_vox_reader_uses_the_magica_voxel_default_palette", "[r3d][voxels]
 }
 
 TEST_CASE("r3d_vox_models_fit_inside_a_unit_cube_without_losing_proportions", "[r3d][voxels]") {
-    const auto model = r3d::vox_model{
-        .size_x = 8, .size_y = 4, .size_z = 16, .palette = {}, .cells = {}};
+    const auto model =
+        r3d::vox_model{.size_x = 8, .size_y = 4, .size_z = 16, .palette = {}, .cells = {}};
     const auto size = r3d::fit_vox_model_to_unit_cube(model);
 
     CHECK(size.x == Approx(0.5f));
@@ -131,4 +131,26 @@ TEST_CASE("r3d_vox_surface_omits_internal_faces_and_keeps_palette_indices", "[r3
     CHECK(
         std::ranges::count_if(surface->faces, [](const auto& face) { return face.color_index == 9; })
         == 5);
+}
+
+TEST_CASE("r3d_vox_surface_merges_solid_coplanar_faces", "[r3d][voxels]") {
+    auto model = r3d::vox_model{.size_x = 8, .size_y = 8, .size_z = 8, .palette = {}, .cells = {}};
+    for (auto z = 0; z < model.size_z; ++z) {
+        for (auto y = 0; y < model.size_y; ++y) {
+            for (auto x = 0; x < model.size_x; ++x) {
+                model.cells.push_back(
+                    {.x = static_cast<uint8_t>(x),
+                     .y = static_cast<uint8_t>(y),
+                     .z = static_cast<uint8_t>(z),
+                     .color_index = 3});
+            }
+        }
+    }
+    const auto surface = r3d::extract_vox_surface(model);
+
+    REQUIRE(surface.has_value());
+    REQUIRE(surface->faces.size() == 6);
+    CHECK(std::ranges::all_of(surface->faces, [](const auto& face) {
+        return face.span_u == 8 && face.span_v == 8 && face.color_index == 3;
+    }));
 }

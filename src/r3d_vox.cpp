@@ -237,38 +237,97 @@ auto extract_vox_surface(const vox_model& model) -> std::expected<vox_surface, s
             + static_cast<size_t>(x);
         return occupied[index] != 0;
     };
-    struct neighbor {
-        int x;
-        int y;
-        int z;
-        vox_face_direction direction;
-    };
-    constexpr auto neighbors = std::array<neighbor, 6>{
-        {{.x = -1, .y = 0, .z = 0, .direction = vox_face_direction::negative_x},
-         {.x = 1, .y = 0, .z = 0, .direction = vox_face_direction::positive_x},
-         {.x = 0, .y = -1, .z = 0, .direction = vox_face_direction::negative_y},
-         {.x = 0, .y = 1, .z = 0, .direction = vox_face_direction::positive_y},
-         {.x = 0, .y = 0, .z = -1, .direction = vox_face_direction::negative_z},
-         {.x = 0, .y = 0, .z = 1, .direction = vox_face_direction::positive_z}}};
-
     auto surface = vox_surface{};
     surface.faces.reserve(std::min(model.cells.size() * 3, max_faces));
-    for (const auto& cell : model.cells) {
-        for (const auto& neighbor : neighbors) {
-            if (is_occupied(
-                    static_cast<int>(cell.x) + neighbor.x, static_cast<int>(cell.y) + neighbor.y,
-                    static_cast<int>(cell.z) + neighbor.z)) {
-                continue;
+    const auto add_merged_faces = [&](int axis, vox_face_direction direction) -> bool {
+        const auto positive = direction == vox_face_direction::positive_x
+                              || direction == vox_face_direction::positive_y
+                              || direction == vox_face_direction::positive_z;
+        const auto plane_count = axis == 0 ? static_cast<int>(model.size_x)
+                               : axis == 1 ? static_cast<int>(model.size_y)
+                               : static_cast<int>(model.size_z);
+        const auto width = axis == 0 ? static_cast<int>(model.size_y)
+                          : static_cast<int>(model.size_x);
+        const auto height = axis == 2 ? static_cast<int>(model.size_y)
+                           : static_cast<int>(model.size_z);
+        for (auto plane = 0; plane <= plane_count; ++plane) {
+            auto colors = std::vector<uint8_t>(static_cast<size_t>(width * height));
+            for (auto v = 0; v < height; ++v) {
+                for (auto u = 0; u < width; ++u) {
+                    const auto source_axis = positive ? plane - 1 : plane;
+                    const auto neighbor_axis = source_axis + ( positive ? 1 : -1 );
+                    const auto x = axis == 0 ? source_axis : u;
+                    const auto y = axis == 1 ? source_axis : axis == 0 ? u : v;
+                    const auto z = axis == 2 ? source_axis : v;
+                    const auto neighbor_x = axis == 0 ? neighbor_axis : x;
+                    const auto neighbor_y = axis == 1 ? neighbor_axis : y;
+                    const auto neighbor_z = axis == 2 ? neighbor_axis : z;
+                    if (is_occupied(x, y, z) && !is_occupied(neighbor_x, neighbor_y, neighbor_z)) {
+                        colors[static_cast<size_t>(v * width + u)] = occupied[
+                            (static_cast<size_t>(z) * model.size_y + static_cast<size_t>(y))
+                            * model.size_x + static_cast<size_t>(x)];
+                    }
+                }
             }
-            if (surface.faces.size() == max_faces) {
+            for (auto v = 0; v < height; ++v) {
+                for (auto u = 0; u < width;) {
+                    const auto color = colors[static_cast<size_t>(v * width + u)];
+                    if (color == 0) {
+                        ++u;
+                        continue;
+                    }
+                    auto span_u = 1;
+                    while (u + span_u < width
+                           && colors[static_cast<size_t>(v * width + u + span_u)] == color) {
+                        ++span_u;
+                    }
+                    auto span_v = 1;
+                    auto can_extend = true;
+                    while (v + span_v < height && can_extend) {
+                        for (auto du = 0; du < span_u; ++du) {
+                            if (colors[static_cast<size_t>((v + span_v) * width + u + du)] != color) {
+                                can_extend = false;
+                                break;
+                            }
+                        }
+                        if (can_extend) {
+                            ++span_v;
+                        }
+                    }
+                    for (auto dv = 0; dv < span_v; ++dv) {
+                        for (auto du = 0; du < span_u; ++du) {
+                            colors[static_cast<size_t>((v + dv) * width + u + du)] = 0;
+                        }
+                    }
+                    if (surface.faces.size() == max_faces) {
+                        return false;
+                    }
+                    const auto source_axis = positive ? plane - 1 : plane;
+                    const auto x = axis == 0 ? source_axis : u;
+                    const auto y = axis == 1 ? source_axis : axis == 0 ? u : v;
+                    const auto z = axis == 2 ? source_axis : v;
+                    surface.faces.push_back({.direction = direction,
+                                             .x = static_cast<uint8_t>(x),
+                                             .y = static_cast<uint8_t>(y),
+                                             .z = static_cast<uint8_t>(z),
+                                             .span_u = static_cast<uint16_t>(span_u),
+                                             .span_v = static_cast<uint16_t>(span_v),
+                                             .color_index = color});
+                    u += span_u;
+                }
+            }
+        }
+        return true;
+    };
+    constexpr auto directions = std::array<vox_face_direction, 6>{
+        vox_face_direction::negative_x, vox_face_direction::positive_x,
+        vox_face_direction::negative_y, vox_face_direction::positive_y,
+        vox_face_direction::negative_z, vox_face_direction::positive_z};
+    for (auto axis = 0; axis < 3; ++axis) {
+        for (const auto direction : std::span(directions).subspan(static_cast<size_t>(axis * 2), 2)) {
+            if (!add_merged_faces(axis, direction)) {
                 return std::unexpected("voxel model exposes too many faces");
             }
-            surface.faces.push_back(
-                {.direction = neighbor.direction,
-                 .x = cell.x,
-                 .y = cell.y,
-                 .z = cell.z,
-                 .color_index = cell.color_index});
         }
     }
     return surface;

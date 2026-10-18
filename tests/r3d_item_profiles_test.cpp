@@ -1,6 +1,8 @@
 #include "catch/catch.hpp"
 #include "r3d_item_profiles.h"
 
+#include <cstdint>
+
 TEST_CASE("r3d_cylinder_items_use_repeated_sprite_geometry", "[r3d][items]") {
     for (const auto id :
          {"carbondioxide_tank", "hydrogen_tank", "nitrogen_tank", "oxygen_cylinder", "oxygen_tank",
@@ -117,7 +119,8 @@ TEST_CASE("r3d_voxel_item_option_extrudes_generic_item_sprites", "[r3d][items][t
     CHECK(voxelized.indices.size() > billboard.indices.size() + 24);
 }
 
-TEST_CASE("r3d_authored_voxel_item_uses_voxel_mesh_and_respects_menu_option", "[r3d][items][tiles]") {
+TEST_CASE(
+    "r3d_authored_voxel_item_uses_voxel_mesh_and_respects_menu_option", "[r3d][items][tiles]") {
     const auto cleanup = on_out_of_scope([] { clear_all_state(); });
     clear_all_state();
     clear_map();
@@ -132,21 +135,25 @@ TEST_CASE("r3d_authored_voxel_item_uses_voxel_mesh_and_respects_menu_option", "[
     you.setpos(origin);
     here.add_item(origin, item::spawn("carbondioxide_tank", calendar::turn));
 
-    auto model = r3d::vox_model{
-        .size_x = 2,
-        .size_y = 2,
-        .size_z = 4,
-        .palette = {},
-        .cells = {{.x = 0, .y = 0, .z = 0, .color_index = 1}}};
+    auto model = r3d::vox_model{.size_x = 8, .size_y = 8, .size_z = 8, .palette = {}, .cells = {}};
+    for (auto z = 0; z < model.size_z; ++z) {
+        for (auto y = 0; y < model.size_y; ++y) {
+            for (auto x = 0; x < model.size_x; ++x) {
+                model.cells.push_back(
+                    {.x = static_cast<uint8_t>(x),
+                     .y = static_cast<uint8_t>(y),
+                     .z = static_cast<uint8_t>(z),
+                     .color_index = 1});
+            }
+        }
+    }
     const auto surface = r3d::extract_vox_surface(model);
     REQUIRE(surface.has_value());
     auto palette = r3d::sprite_ref{};
     palette.valid = true;
     const auto assets = std::unordered_map<std::string, r3d::vox_asset>{
         {"carbondioxide_tank",
-         {.model = std::move(model),
-          .surface = *surface,
-          .palette = palette}}};
+         {.model = std::move(model), .surface = *surface, .palette = palette}}};
 
     auto cache = r3d::tile_info_cache{};
     const auto cam = r3d::camera{};

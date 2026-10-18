@@ -54,6 +54,8 @@ struct vox_surface_face {
     uint8_t x;
     uint8_t y;
     uint8_t z;
+    uint16_t span_u = 1;
+    uint16_t span_v = 1;
     uint8_t color_index;
 };
 
@@ -67,7 +69,7 @@ auto read_vox_model(std::span<const uint8_t> bytes) -> std::expected<vox_model, 
 /// Return model dimensions scaled proportionally to fit within a 1x1x1 unit cube.
 auto fit_vox_model_to_unit_cube(const vox_model& model) -> vox_model_unit_size;
 
-/// Build only exterior faces from a voxel grid, keeping each face's voxel palette index.
+/// Build a greedy surface mesh, merging adjacent exterior faces with matching direction and color.
 auto extract_vox_surface(const vox_model& model) -> std::expected<vox_surface, std::string>;
 
 } // namespace r3d

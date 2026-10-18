@@ -474,11 +474,28 @@ auto emit_vox_model( const emit_vox_model_options &options ) -> void
     };
     for( const auto &face : options.asset.surface.faces ) {
         const auto x0 = static_cast<float>( face.x );
-        const auto x1 = x0 + 1.0f;
         const auto y0 = static_cast<float>( face.y );
-        const auto y1 = y0 + 1.0f;
         const auto z0 = static_cast<float>( face.z );
-        const auto z1 = z0 + 1.0f;
+        auto x1 = x0 + 1.0f;
+        auto y1 = y0 + 1.0f;
+        auto z1 = z0 + 1.0f;
+        switch( face.direction ) {
+            case vox_face_direction::negative_x:
+            case vox_face_direction::positive_x:
+                y1 = y0 + static_cast<float>( face.span_u );
+                z1 = z0 + static_cast<float>( face.span_v );
+                break;
+            case vox_face_direction::negative_y:
+            case vox_face_direction::positive_y:
+                x1 = x0 + static_cast<float>( face.span_u );
+                z1 = z0 + static_cast<float>( face.span_v );
+                break;
+            case vox_face_direction::negative_z:
+            case vox_face_direction::positive_z:
+                x1 = x0 + static_cast<float>( face.span_u );
+                y1 = y0 + static_cast<float>( face.span_v );
+                break;
+        }
         auto shade = 0.75f;
         auto corners = corners_t{};
         switch( face.direction ) {
