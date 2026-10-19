@@ -931,7 +931,7 @@ int main( int argc, char *argv[] )
         while( !g->do_turn() );
     }
 
-    exit_handler( -999 );
+    exit_handler( 0 );
     return 0;
 }
 
