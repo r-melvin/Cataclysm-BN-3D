@@ -32,13 +32,10 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
         if( info.has_flag( "HALF_BOARD" ) || info.has_flag( "FULL_BOARD" ) ) {
             layer.roles.push_back( vehicle_render_role::body_panel );
         }
-        const auto is_glass_part = info.has_flag( "WINDSHIELD" ) || info.has_flag( "WINDOW" ) ||
-                                   info.id.str().find( "windshield" ) != std::string::npos ||
-                                   info.id.str().find( "window" ) != std::string::npos;
-        if( is_glass_part ) {
+        if( info.has_flag( "WINDSHIELD" ) ) {
             layer.roles.push_back( vehicle_render_role::glass );
         }
-        if( info.has_flag( "OPAQUE" ) && !is_glass_part &&
+        if( info.has_flag( "OPAQUE" ) && !info.has_flag( "WINDSHIELD" ) &&
             !openable ) {
             layer.roles.push_back( vehicle_render_role::opaque_structure );
         }
@@ -115,8 +112,8 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
         data.is_openable |= has_role( vehicle_render_role::openable );
         data.is_door |= has_role( vehicle_render_role::door );
         data.is_opaque_wall |= has_role( vehicle_render_role::opaque_structure );
-        data.is_tall_cabin |= !open && ( info.has_flag( "WINDSHIELD" ) || info.has_flag( "WINDOW" ) ||
-                                         info.has_flag( "OPAQUE" ) || ( info.has_flag( "OBSTACLE" ) && !half_panel ) );
+        data.is_tall_cabin |= !open && ( info.has_flag( "WINDSHIELD" ) || info.has_flag( "OPAQUE" ) ||
+                                         ( info.has_flag( "OBSTACLE" ) && !half_panel ) );
         data.is_interior |= has_role( vehicle_render_role::interior );
         data.is_cargo |= info.has_flag( "CARGO" );
     }

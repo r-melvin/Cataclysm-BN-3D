@@ -910,15 +910,6 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
     const auto &view = options.view;
     auto &here = options.here;
 
-    const auto &glass_info = view.cache.named( { .category = C_TERRAIN, .id = "t_wall_glass", .tiles = view.tiles } );
-    const auto *glass_spr = glass_info.main().valid ? &glass_info.main() : nullptr;
-    if( !glass_spr ) {
-        const auto &win_info = view.cache.named( { .category = C_TERRAIN, .id = "t_window", .tiles = view.tiles } );
-        if( win_info.main().valid ) {
-            glass_spr = &win_info.main();
-        }
-    }
-
     for( const wrapped_vehicle &wrapped : here.get_vehicles() ) {
         auto &veh = *wrapped.v;
         const auto veh_bub = veh.bub_ms_location();
@@ -1429,12 +1420,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         { glass_high_l.x, glass_high_l.y, z_high }, { glass_high_r.x, glass_high_r.y, z_high },
                         { glass_low_r.x, glass_low_r.y, z_low }, { glass_low_l.x, glass_low_l.y, z_low }
                     }};
-                if( glass_spr ) {
-                    sink.add_colored( { .sprite = *glass_spr, .corners = c_glass, .uvs = make_sprite_uvs( *glass_spr ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
-                } else {
-                    const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
-                    sink.add_colored( { .sprite = spr, .corners = c_glass, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
-                }
+                const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
+                sink.add_colored( { .sprite = spr, .corners = c_glass, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
 
                 // Solid cowl deck under the windshield at z = body_h (0.55f)
                 const auto p0_cowl = transform.apply( f_top, r_l );
@@ -1584,12 +1571,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             { win_top_l.x, win_top_l.y, z_high }, { win_top_r.x, win_top_r.y, z_high },
                             { win_mid_r.x, win_mid_r.y, z_mid }, { win_mid_l.x, win_mid_l.y, z_mid }
                         }};
-                    if( glass_spr ) {
-                        sink.add_colored( { .sprite = *glass_spr, .corners = c_window, .uvs = make_sprite_uvs( *glass_spr ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
-                    } else {
-                        const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
-                        sink.add_colored( { .sprite = s, .corners = c_window, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
-                    }
+                    const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
+                    sink.add_colored( { .sprite = s, .corners = c_window, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
 
                     // Lower hatch lid (painted metal)
                     const auto p_mid_l = transform.apply( f_mid, r_l_mid );
@@ -1881,11 +1864,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                     { pane_p0_top.x, pane_p0_top.y, z_top }, { pane_p1_top.x, pane_p1_top.y, z_top },
                                     { pane_p1_mid.x, pane_p1_mid.y, z_mid }, { pane_p0_mid.x, pane_p0_mid.y, z_mid }
                                 }};
-                            if( glass_spr ) {
-                                sink.add_colored( { .sprite = *glass_spr, .corners = c_pane, .uvs = make_sprite_uvs( *glass_spr ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
-                            } else {
-                                sink.add_colored( { .sprite = s, .corners = c_pane, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
-                            }
+                            sink.add_colored( { .sprite = s, .corners = c_pane, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
                         } else {
                             // Front/rear upper wall
                             const auto f_outer = f_center;

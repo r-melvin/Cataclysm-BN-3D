@@ -508,10 +508,6 @@ auto column_height( state &s, const map &here, const tripoint_bub_ms &p ) -> flo
     if( !here.inbounds( p ) ) {
         return 0.0f;
     }
-    if( const auto vp = here.veh_at( p ) ) {
-        const auto prof = vehicle_profile( vp->vehicle(), vp->mount() );
-        return std::clamp( prof.height, floor_height, 1.0f );
-    }
     const auto &t_info = s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } );
     if( t_info.open_door ) {
         const auto furn_h = s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh.height;
@@ -2778,6 +2774,7 @@ auto draw( const draw_options &options ) -> bool
         uniforms.pull[1] = 0.0f;
         uniforms.pull[2] = 0.0f;
         uniforms.pull[3] = 0.0f;
+        uniforms.flags[0] = 0.0f;
         set_cutaway( { .u = uniforms, .view_proj = view_proj, .aspect = aspect, .cam = s.cam, .center = center } );
         if( is_controlling ) {
             uniforms.cut[3] = 0.0f;
