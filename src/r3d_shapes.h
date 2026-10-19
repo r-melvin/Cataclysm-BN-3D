@@ -56,6 +56,7 @@ struct tile_traits {
     bool flat_surface = false;
     bool panel = false;     // complete front elevation, such as a notice board
     bool container = false; // furniture that holds items inside (cabinets): solid, not on legs
+    bool seat = false;      // passable furniture with a sitting surface, e.g. chairs and sofas
     bool window = false;
     bool door = false;      // a door in a wall line, open or closed
     bool open_door = false; // an open door or empty doorframe where the doorway opening is passable
