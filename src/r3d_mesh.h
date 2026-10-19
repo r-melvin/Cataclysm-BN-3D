@@ -35,7 +35,7 @@ struct sprite_ref {
     SDL_Texture *sheet = nullptr;
     // Holds the sheet alive while it is cached, so a tileset reload can never leave a dangling
     // pointer here or in a chunk's mesh_batch (chunks are dropped whenever the cache is cleared).
-    std::shared_ptr<SDL_Texture> owner;
+    std::shared_ptr<SDL_Texture> owner{};
     float u0 = 0.0f;
     float v0 = 0.0f;
     float u1 = 0.0f;
@@ -51,10 +51,10 @@ struct sprite_ref {
     bool flip = false;     // mirrored horizontally
     uint32_t top_color = 0;  // average colours from the tileset loader (see sprite_scan)
     uint32_t body_color = 0;
-    std::shared_ptr<const std::vector<uint8_t>> alpha_mask;
+    std::shared_ptr<const std::vector<uint8_t>> alpha_mask{};
     int alpha_width = 0;
     int alpha_height = 0;
-    std::shared_ptr<const sprite_voxel_surface> voxel_surface;
+    std::shared_ptr<const sprite_voxel_surface> voxel_surface{};
     // opaque part of the sprite as fractions of it (whole sprite when unknown)
     float opaque_x0 = 0.0f;
     float opaque_y0 = 0.0f;
@@ -304,7 +304,7 @@ struct build_chunk_mesh_options {
     const submap_lookup &lookup;
     tile_info_cache &cache;
     cata_tiles &tiles;
-    mesh_options config;
+    mesh_options config{};
 };
 
 auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh;

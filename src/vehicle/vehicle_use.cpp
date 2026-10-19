@@ -2119,7 +2119,8 @@ void vehicle::interact_with(const tripoint_bub_ms& pos, int interact_part) {
             return;
         }
         case RELOAD_TURRET: {
-            auto opt = reload_ui::select_ammo(you, turret.base(), {.prompt = true});
+            auto opt =
+                reload_ui::select_ammo(you, turret.base(), {.prompt = true, .discovery = {}});
             if (opt) {
                 you.assign_activity(ACT_RELOAD, opt.moves(), opt.qty());
                 you.activity->targets.emplace_back(turret.base());

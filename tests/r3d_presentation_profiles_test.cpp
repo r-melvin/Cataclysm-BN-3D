@@ -480,7 +480,7 @@ TEST_CASE("r3d_missing_wall_art_uses_material_instead_of_unknown_glyph", "[r3d][
     REQUIRE(contexts.valid());
     tilecontext->load_tileset("hoder", {}, false, true, false);
     REQUIRE_FALSE(tilecontext->get_sprite_draw_data(
-        {.id = "t_wall_w", .category = C_TERRAIN, .pos = tripoint_bub_ms(0, 0, 0)}));
+        {.id = "t_wall_w", .category = C_TERRAIN, .pos = tripoint_bub_ms(0, 0, 0), .variant = ""}));
     auto cache = r3d::tile_info_cache{};
     const auto generic = cache.terrain({.id = t_wall, .tiles = *tilecontext});
     const auto missing = cache.terrain({.id = ter_str_id("t_wall_w").id(), .tiles = *tilecontext});
@@ -523,7 +523,8 @@ TEST_CASE("r3d_wall_elevation_uses_horizontal_edge_art", "[r3d][profiles][tiles]
          .category = C_TERRAIN,
          .pos = tripoint_bub_ms(0, 0, 0),
          .subtile = 2,
-         .rotation = 1});
+         .rotation = 1,
+         .variant = ""});
     REQUIRE(expected);
     REQUIRE(art.elevation.valid);
     auto width = 0.0f;

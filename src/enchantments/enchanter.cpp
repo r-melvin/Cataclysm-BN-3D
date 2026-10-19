@@ -156,7 +156,6 @@ auto enchantment_selector_menu(std::vector<enchant_info> options, Character& use
     auto crafting_inv = user.crafting_inventory(true);
     int width = 0;
     int height = 0;
-    int item_info_width = 0;
     catacurses::window w_ench;
     catacurses::window w_info;
     ui_adaptor ui;
@@ -216,7 +215,6 @@ auto enchantment_selector_menu(std::vector<enchant_info> options, Character& use
             calcStartPos(info_scroll_min, info_scroll, height, total_lines);
             info_scroll_max = std::min(total_lines, info_scroll_min + height);
             for (int i = info_scroll_min; i < info_scroll_max; ++i) {
-                auto dummy = c_white;
                 trim_and_print(w_info, point(2, i - info_scroll_min + 1), width, c_white, info[i]);
             }
 
@@ -369,11 +367,6 @@ void iexamine::enchanter(player& p, const tripoint_bub_ms& pos) {
     int index = enchanter::enchantment_selector_menu(infos, p, *to_ench);
     if (index != -1) {
         auto info = infos[index];
-        int moves =
-            to_moves<int>(info.time_to_enchant)
-            * std::max(
-                1,
-                (info.volume_time_effect ? int(to_ench->base_volume() / info.volume_per_time) : 1));
         p.assign_activity(
             std::make_unique<player_activity>(std::make_unique<enchant_activity_actor>(
                 *to_ench, furn_id.id(), info.id, to_moves<int>(info.time_to_enchant))));

@@ -72,7 +72,6 @@
 #       include "mingw.thread.h"
 #   endif
 
-#   define dbg(x) DebugLogFL((x),DC::SDL)
 #endif
 
 weather_type_id previous_weather;
@@ -2745,7 +2744,6 @@ void sounds::process_sound_markers( Character *who )
             // Noise past +40 dB should automatically wake up heavy sleepers.
             // Noise past +60 dB will cause pain and should automatically wake up heavy sleeper 2.
             if( who->has_effect( effect_sleep ) ) {
-                const int diff_db_vol = mdBspl_to_dBspl( tile_vol - passive_sound_dampening - tile_vol );
                 int wake_up_vol = 10;
                 wake_up_vol += who->bonus_from_enchantments( wake_up_vol, ench_val_SLEEP_DB_RESIST );
 

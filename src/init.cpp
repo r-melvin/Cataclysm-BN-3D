@@ -1151,10 +1151,10 @@ auto init::check_mods_for_errors( loading_ui &ui, const std::vector<mod_id> &opt
 
         try {
             load_and_finalize_packs( ui, _( "Checking mods" ), mods_list );
-        } catch( const std::exception &err ) {
-            std::cerr << "Error loading data: " << err.what() << '\n';
         } catch( const JsonError &err ) {
             debugmsg( "(json-error)\n%s", err.what() );
+        } catch( const std::exception &err ) {
+            std::cerr << "Error loading data: " << err.what() << '\n';
         }
 
         std::string world_name = world_generator->active_world->info->world_name;

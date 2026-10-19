@@ -855,7 +855,6 @@ float npc::character_danger( const Character &u ) const
 void npc::regen_ai_cache()
 {
     ZoneScoped;
-    map &here = get_map();
     auto i = std::begin( ai_cache.sound_alerts );
     while( i != std::end( ai_cache.sound_alerts ) ) {
         if( sees( abs_to_bub( i->abs_pos ) ) ) {
@@ -992,7 +991,6 @@ void npc::move()
         ai_cache.target = g->shared_from( player_character );
     }
 
-    map &here = get_map();
     if( !ai_cache.dangerous_explosives.empty() ) {
         ZoneScopedN( "npc_escape_explode_selector" );
         action = npc_escape_explosion;
@@ -3786,10 +3784,8 @@ bool npc::do_player_activity()
     const auto moves_before = moves;
     {
         ZoneScopedN( "npc_do_player_activity_loop" );
-        auto activity_turns = 0;
         while( moves > 0 && activity && *activity ) {
             activity->do_turn( *this );
-            activity_turns++;
             if( !is_active() ) {
                 ZoneValue( activity_turns );
                 return true;
@@ -4520,7 +4516,6 @@ void npc::reach_omt_destination()
     if( !omt_path.empty() ) {
         omt_path.clear();
     }
-    map &here = get_map();
     if( is_travelling() ) {
         guard_pos = abs_pos();
         goal = no_goal_point;

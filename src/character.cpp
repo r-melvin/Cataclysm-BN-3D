@@ -2037,8 +2037,8 @@ float Character::night_vision_sight_range() const
     float best = 0;
     if( worn_with_flag( flag_GNVE_EFFECT ) ) {
         best = 18.0;
-    } else if( worn_with_flag( flag_RECON_VISION ) || is_mounted() &&
-               mounted_creature->has_flag( MF_MECH_RECON_VISION ) ||
+    } else if( worn_with_flag( flag_RECON_VISION ) || ( is_mounted() &&
+               mounted_creature->has_flag( MF_MECH_RECON_VISION ) ) ||
                worn_with_flag( flag_GNV_EFFECT ) || has_effect_with_flag( flag_EFFECT_NIGHT_VISION ) ) {
         best = 10.0;
     }
@@ -6337,8 +6337,7 @@ std::map<bodypart_id, int> get_wind_resistance( const Character &chr,
     return wind_res_per_bp;
 }
 
-
-void warn_temp_change( Character &chr, const bodypart_id &bp, units::temperature temp_before,
+void warn_temp_change( Character &/*chr*/, const bodypart_id &bp, units::temperature temp_before,
                        units::temperature temp_after )
 {
     // Warn the player if condition worsens
@@ -12076,7 +12075,7 @@ void Character::place_corpse( const tripoint_abs_omt &om_target )
     detached_ptr<item> body = item::make_corpse( mtype_id::NULL_ID(), calendar::turn, name );
     for( auto &itm : tmp ) {
         get_mapbuffer().add_item_or_charges( fin, std::move( itm ), {
-            .lookup = mapbuffer_lookup_mode::load_or_generate,
+            .lookup = { .mode = mapbuffer_lookup_mode::load_or_generate },
         } );
     }
     for( const bionic &bio : get_bionic_collection() ) {
@@ -12085,7 +12084,7 @@ void Character::place_corpse( const tripoint_abs_omt &om_target )
         }
     }
     get_mapbuffer().add_item_or_charges( fin, std::move( body ), {
-        .lookup = mapbuffer_lookup_mode::load_or_generate,
+        .lookup = { .mode = mapbuffer_lookup_mode::load_or_generate },
     } );
 }
 

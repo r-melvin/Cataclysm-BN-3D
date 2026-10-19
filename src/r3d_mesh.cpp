@@ -169,7 +169,7 @@ auto apply_profile_materials( const apply_profile_materials_options &options ) -
             if( !foreground || foreground->empty() ) { continue; }
             const auto data = options.tiles.get_sprite_draw_data( {
                 .id = source.sprite, .category = C_NONE, .pos = tripoint_bub_ms( 0, 0, 0 ),
-                            .rotation = source.rotation
+                            .rotation = source.rotation, .variant = ""
             } );
             if( !data ) { continue; }
             const auto sprite = to_sprite_ref( *data );
@@ -220,7 +220,7 @@ auto resolve_layers( const resolve_layers_options &options ) -> void
         out.sprite = to_sprite_ref( *fg, with_alpha );
     }
     if( options.allow_unknown && !out.backdrop.valid && !out.sprite.valid ) {
-        if( const auto unknown = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = std::string( "unknown" ), .category = C_NONE, .pos = origin } ) ) ) {
+        if( const auto unknown = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = std::string( "unknown" ), .category = C_NONE, .pos = origin, .variant = "" } ) ) ) {
             out.sprite = to_sprite_ref( *unknown );
         }
     }
@@ -1112,7 +1112,7 @@ auto emit_ceiling( const emit_ceiling_options &options ) -> void
     // Wound the other way round from a top face, so it faces down.
     const auto c = corners_t{{ { x0, y0, z }, { x0, y0 + 1, z }, { x0 + 1, y0 + 1, z }, { x0 + 1, y0, z } }};
     const auto uv = uvs_t{{ { s.u0, s.v0 }, { s.u0, s.v1 }, { s.u1, s.v1 }, { s.u1, s.v0 } }};
-    auto ref = light_ref( make_ref( { .lx = x, .ly = y, .shade = plaster.valid ? ceiling_shade : floor_ceiling_shade } ) );
+    auto ref = light_ref( make_ref( { .lx = x, .ly = y, .dx = 0, .dy = 0, .dz = 0, .shade = plaster.valid ? ceiling_shade : floor_ceiling_shade } ) );
     if( plaster.valid ) {
         ref = tinted( ref, tint );
     }
@@ -1399,7 +1399,7 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
         constexpr auto cavity_rows = static_cast<float>( 0.125f );
         if( !missing_wall_art && !patterned_material && !plaster_atlas_ && info.sprite.valid ) {
             info.elevation = info.sprite;
-            if( const auto edge = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = t.id.str(), .category = C_TERRAIN, .pos = tripoint_bub_ms( 0, 0, 0 ), .subtile = edge_subtile, .rotation = edge_east_west } ) ) ) {
+            if( const auto edge = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = t.id.str(), .category = C_TERRAIN, .pos = tripoint_bub_ms( 0, 0, 0 ), .subtile = edge_subtile, .rotation = edge_east_west, .variant = "" } ) ) ) {
                 info.elevation = to_sprite_ref( *edge );
             }
             const auto &art = info.elevation;

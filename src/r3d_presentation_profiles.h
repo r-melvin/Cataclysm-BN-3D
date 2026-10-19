@@ -27,7 +27,7 @@ struct presentation_profile {
     std::array<float, 3> size{}; // forward, right, up in map-tile units; zero means infer
     std::array<float, 3> support_anchor{ 0.5f, 0.5f, 0.0f }; // normalized model coordinates
     float depth_fraction = 0.0f; // sprite extrusion depth as a fraction of its width
-    std::vector<profile_face_source> face_sources;
+    std::vector<profile_face_source> face_sources{};
 };
 
 using presentation_profile_map = std::unordered_map<std::string, presentation_profile>;

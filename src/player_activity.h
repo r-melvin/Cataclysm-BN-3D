@@ -167,11 +167,11 @@ class player_activity
             return type->verb();
         }
 
-        const float get_rest_amount() const {
+        auto get_rest_amount() const -> float {
             return type->rest_amount();
         }
 
-        const bool get_suppress_comfort() const {
+        auto get_suppress_comfort() const -> bool {
             return type->suppress_comfort();
         }
 

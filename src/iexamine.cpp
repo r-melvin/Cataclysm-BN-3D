@@ -1803,7 +1803,6 @@ static void apply_lock_picking_tool( player &p, item *it, const tripoint_bub_ms 
 
 static bool pick_lock( player &p, const tripoint_bub_ms &examp )
 {
-    map &here = get_map();
 
     if( p.has_bionic( bio_lockpick ) ) {
         if( p.get_power_level() >= bio_lockpick->power_activate ) {
@@ -5926,7 +5925,7 @@ auto jump_over_tile_can_land_on_ledge( mapbuffer &buffer,
     }
 
     return buffer.valid_move( landing_tile, landing_tile + tripoint_rel_ms::below(),
-    { .flying = true } );
+    { .flying = true, .lookup = {} } );
 }
 
 auto bash_window_for_jump( map &here, const player &p,
@@ -6096,7 +6095,7 @@ auto can_jump_over_tile_impl( const player &p, const tripoint_bub_ms &examp_bub 
         return false;
     }
 
-    if( const auto blocking_creature = buffer.creature_at( jump_state.dest ) ) {
+    if( buffer.creature_at( jump_state.dest ) ) {
         return false;
     }
 
@@ -6235,7 +6234,7 @@ void iexamine::ledge( player &p, const tripoint_bub_ms &examp_bub )
         while( true ) {
             const auto below_tile = tile_reader.get_tile( below );
             if( !below_tile || below_tile->get_ter() != t_open_air ||
-                !buffer.valid_move( where, below, { .flying = true } ) ) {
+                !buffer.valid_move( where, below, { .flying = true, .lookup = {} } ) ) {
                 break;
             }
             where += tripoint_rel_ms::below();
@@ -6277,7 +6276,7 @@ void iexamine::ledge( player &p, const tripoint_bub_ms &examp_bub )
         case ledge_action::climb_down: {
             auto where = examp;
             auto below = where + tripoint_rel_ms::below();
-            while( buffer.valid_move( where, below, { .flying = true } ) ) {
+            while( buffer.valid_move( where, below, { .flying = true, .lookup = {} } ) ) {
                 where += tripoint_rel_ms::below();
                 below += tripoint_rel_ms::below();
             }

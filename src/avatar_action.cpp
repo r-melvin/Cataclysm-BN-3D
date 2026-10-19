@@ -1716,7 +1716,7 @@ void avatar_action::reload_weapon( bool try_everything )
     vehicle *veh = veh_pointer_or_null( here.veh_at( u.bub_pos() ) );
     turret_data turret;
     if( veh && ( turret = veh->turret_query( u.abs_pos() ) ) && turret.can_reload() ) {
-        auto opt = reload_ui::select_ammo( u, turret.base(), { .prompt = true } );
+        auto opt = reload_ui::select_ammo( u, turret.base(), { .prompt = true, .discovery = {} } );
         if( opt ) {
             u.assign_activity( std::make_unique<player_activity>( activity_id( "ACT_RELOAD" ), opt.moves(),
                                opt.qty() ) );

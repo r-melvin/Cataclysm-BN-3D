@@ -3263,7 +3263,7 @@ int ammobelt_actor::use( player &p, item &, bool, const tripoint_bub_ms & ) cons
         return 0;
     }
 
-    auto opt = reload_ui::select_ammo( p, *mag, { .prompt = true } );
+    auto opt = reload_ui::select_ammo( p, *mag, { .prompt = true, .discovery = {} } );
     if( opt ) {
         p.assign_activity( ACT_RELOAD, opt.moves(), opt.qty() );
         p.activity->targets.emplace_back( &*mag );

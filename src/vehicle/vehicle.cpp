@@ -545,7 +545,7 @@ auto vehicle::player_in_control(const Character& who) const -> bool {
     return remote_controlled(who);
 }
 
-auto vehicle::remote_controlled(const Character& who) const -> bool {
+auto vehicle::remote_controlled(const Character& /*who*/) const -> bool {
     vehicle* veh = g->remoteveh();
     if (veh != this) { return false; }
 
@@ -5177,7 +5177,6 @@ auto vehicle::total_solar_epower_w() const -> int {
 }
 
 auto vehicle::total_wind_epower_w() const -> int {
-    map& here = get_map();
     const oter_id& cur_om_ter =
         get_overmapbuffer(dimension_id_).ter(project_to<coords::omt>(abs_ms_location()));
     const weather_manager& weather = get_weather();

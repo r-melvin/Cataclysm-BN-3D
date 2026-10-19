@@ -39,6 +39,14 @@ tokens, preventing reindentation from changing embedded help, Lua, JSON or art.
 Five tokenizer regressions pass; real formatter CLI output is idempotent and
 compiled C++ emits the same help text before and after formatting (`69fd98c`).
 
+Compiler warning cleanup (2026-10-19): the affected game/test translation units
+build without warning suppression. Aggregate defaults, unused scaffolding and
+parameters, redundant return qualifiers, explicit nested option initializers and
+exception-handler order are corrected. Both targets build; 339 selected renderer,
+onboarding, Lua, activity, magic, enchantment, reload, aiming and corpse cases
+pass (56,152 assertions). This is evidence for the affected rebuild, not a claim
+that every untouched upstream translation unit is warning-free.
+
 Sources: [agent guidelines](AGENTS.md),
 [wrapper](tools/r3d_spike/astyle_347.py).
 
@@ -104,7 +112,15 @@ run confirms solid wall faces replace the magenta pattern; evidence is under
 `/tmp/bn-wall-regression/`. A second private Ultica run shows the intended grey
 wall elevation (`/tmp/bn-wall-ultica/after.png`). The newer shelter screenshot
 also reports bench seams, corner/row locker differences, and unreadable extruded
-items; those remain active R3D-03/05/07 follow-ups. Broader cross-tileset
+items; those remain active R3D-03/05/07 follow-ups. Dan Guzman's Meredith world is
+backed up privately under `/tmp/bn-meredith-regression/`, using SQLite's backup API
+for consistent database snapshots. His actual shelter has `f_bench_flipped`
+interruptions and `f_wreckage` beside lockers; preserve these native states.
+The apparent voxel character is a loose `talking_doll`, whose authored proportions
+need correction. The marked stairwell, black patches, disconnected trashcan faces,
+bench-state readability and locker corner/row proportions need native mesh and
+visual regressions. The outdoor screenshot adds unknown-art cubes/creatures and
+vehicle panel/state problems; identify exact native IDs before choosing fallbacks. Broader cross-tileset
 furniture/material acceptance remains in R3D-07.
 
 ## R3D-04: Finish vehicle layer, material and state presentation

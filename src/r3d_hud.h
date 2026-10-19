@@ -23,9 +23,9 @@ struct hud_frame {
     float y = 0.0f;
     float w = 0.0f;
     float h = 0.0f;
-    camera cam;
-    mat4 view_proj;
-    tripoint_bub_ms center; // the viewed tile: the origin of the scene frame
+    camera cam{};
+    mat4 view_proj{};
+    tripoint_bub_ms center{}; // the viewed tile: the origin of the scene frame
     bool sct = false;       // the game queued its scrolling combat text for this frame
     int view_z = 0;         // level of the viewed tile
     const sky_sprites *sky = nullptr; // sun and moon sprites, when loaded

@@ -34,11 +34,11 @@ struct entity_view {
     cata_tiles &tiles;
     tile_info_cache &cache;
     const camera &cam;
-    tripoint_bub_ms center; // the viewed tile, which is the origin of the scene frame
+    tripoint_bub_ms center{}; // the viewed tile, which is the origin of the scene frame
     int z_lo = 0;
     int z_hi = 0;
     /// Presentation colour (RGBA8); may include remembered or unexplored terrain tints.
-    std::function<uint32_t( const tripoint_bub_ms & )> light;
+    std::function<uint32_t( const tripoint_bub_ms & )> light{};
 
     /// UI marker (cursor, highlight, line) laid on top of a tile's surface, always unlit.
     struct marker {
@@ -52,7 +52,7 @@ struct entity_view {
         // depth (walls and creatures in front hide it; the compass points at hidden ones).
         bool heard = false;
     };
-    std::vector<marker> markers;
+    std::vector<marker> markers{};
 
     /// Upright sprites of the visible chunks (trees, lockers), at a tile of the map.
     struct standing {
@@ -60,7 +60,7 @@ struct entity_view {
         float z_base = 0.0f; // above the tile's level
         const tile_info *info = nullptr;
     };
-    std::vector<standing> uprights;
+    std::vector<standing> uprights{};
 
     /// Height within its level of what stands on a tile: the floor, or a bench or counter top.
 
@@ -73,10 +73,10 @@ struct entity_view {
         const sprite_ref *sprite = nullptr;
         uint32_t color = 0;
     };
-    std::vector<particle> particles;
+    std::vector<particle> particles{};
 
     /// Height within its level of what stands on a tile: the floor, or a bench or counter top.
-    std::function<float( const tripoint_bub_ms & )> surface;
+    std::function<float( const tripoint_bub_ms & )> surface{};
     /// Optional MagicaVoxel models keyed by native vehicle part ID.
     const std::unordered_map<std::string, vox_asset> *vehicle_vox_parts = nullptr;
     /// Optional MagicaVoxel models keyed by item type ID.
