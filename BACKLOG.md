@@ -34,6 +34,10 @@ pins the 3.4.7 engine and reports setup failures; incompatible system versions
 are never used. Nested C++ and tests retain clang-format. Verified routing,
 trailing-return indentation and repeated-format idempotence on representative
 files, plus the missing-package diagnostic. No paid CI was added.
+Both native and packaged engines use Python 3 protection for raw literal
+tokens, preventing reindentation from changing embedded help, Lua, JSON or art.
+Five tokenizer regressions pass; real formatter CLI output is idempotent and
+compiled C++ emits the same help text before and after formatting (`69fd98c`).
 
 Sources: [agent guidelines](AGENTS.md),
 [wrapper](tools/r3d_spike/astyle_347.py).
@@ -129,24 +133,34 @@ normal-refresh-path tests where useful. Retain real saves/captures for visual
 judgment; fingerprints alone do not establish appearance or visibility. Run
 locally; paid GitHub CI is explicitly out of scope.
 
-2026-10-19 Linux virtual-window check: direct saved-world loading exposed a
-loading-screen framebuffer initialization crash, fixed in `84fd8ea`. The paired
-one-shot capture now succeeds with software Vulkan and malformed-asset fallback.
-The full eight-angle session subsequently faults in a Lavapipe 26.2.4 worker after
-two yaw views. Reproduce with a stable software driver and native GPU, distinguish
-driver failure from invalid renderer submissions, and complete view-restoration
-validation before closing this item. Current private evidence is under
-`/tmp/bn-assets-live/` (temporary, not a durable/shared fixture).
+2026-10-19 Linux virtual-window validation delivered these fixes:
 
-Validation-layer follow-up found and fixed a depth-clamping request on devices
-that disable that feature, plus three HLSL uniform blocks whose vector padding
-violated Vulkan's required alignment. Scalar padding preserves the existing CPU
-offsets. The local `validate-shaders` target now checks all 25 SPIR-V artifacts;
-all pass. The three revised compute shaders also cross-compile to MSL/DXIL, and
-all 104 renderer tests pass with CPU and real software GPU compute. These checks
-do not establish native Metal/Direct3D behavior. The eight-angle crash persists
-without standard/synchronization validation errors on both Lavapipe 26.2.4 and
-official 26.2.5 with matching LLVM; GPU-assisted graphics isolation is still open.
+- Direct saved-world loading exposed a framebuffer initialization crash, fixed
+  in `84fd8ea`; malformed VOX assets also retain valid neighbors.
+- Vulkan conformance fixes in `10b9b34` enable required depth clipping and replace
+  misaligned vector uniform padding with scalars at the existing CPU offsets.
+  All 25 SPIR-V modules validate, all three revised shaders cross-compile to
+  MSL/DXIL, and all 104 renderer tests pass with CPU and software GPU compute.
+- The eight-angle crash was reproduced on Lavapipe 26.2.4 and official 26.2.5.
+  It exhausted the process's 1,048,576 kernel mappings (8.35 GB RSS): capture
+  settling queued draws without completing normal presentation, and direct
+  `SDL_RenderPresent` failed while a texture target was active. Capture now uses
+  BN's real `refresh_display()` path (`7ee9db2`). A complete eight-angle run plus restored
+  view held about 39,225 mappings during the sweep and 46,008 after restoration,
+  with no standard/synchronization validation errors.
+- The supported launcher then completed two eight-angle checkpoints in one
+  session, quit normally and produced a 17.3 MB ZIP. Extraction, both SQLite
+  saves, galleries, images and logs passed integrity checks. It now passes an
+  explicit private `--configdir` on XDG builds; `--configdir` can also select
+  source settings outside the source user directory. Backend/font/panel settings
+  are preserved per checkpoint. The normal quit sentinel previously returned
+  status 25; the corrected menu exit (`923b619`) was verified to return 0.
+
+These are Linux/software-Vulkan checks, not the complete vehicle/prop fixture
+matrix or native Metal/Direct3D acceptance. Current private evidence is in
+`/tmp/bn-assets-live/` and `/tmp/bn-capture-e2e-20261019/` (temporary, not durable
+shared fixtures). The extracted report is under the latter directory's
+`extracted/` subdirectory. Five formatter and nine capture-tool tests pass.
 
 Sources: [comparison guide](tools/r3d_spike/COMPARE.md),
 [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md),
