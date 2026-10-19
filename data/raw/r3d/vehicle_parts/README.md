@@ -19,3 +19,8 @@ mounts, parts, and separate wheel geometry remain game-driven.
 Before adding an asset, check that its source artwork and model license allow
 redistribution with Bright Nights 3D. Keep the `.vox` source file in the repo so
 the asset remains editable.
+
+`wheel_wide.vox` is an original low-poly tire with separate tread, sidewall,
+hub, and rim colors. The native `wheel_wide` part ID selects it automatically;
+other wheel types keep their existing renderer geometry unless a matching model
+is added.

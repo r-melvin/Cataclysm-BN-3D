@@ -114,6 +114,27 @@ TEST_CASE("r3d_authored_co2_tank_asset_is_a_valid_supported_vox_model", "[r3d][v
     CHECK_FALSE(surface->faces.empty());
 }
 
+TEST_CASE("r3d_authored_wide_wheel_asset_has_tire_and_hub_materials", "[r3d][voxels]") {
+    const auto path = PATH_INFO::datadir() + "raw/r3d/vehicle_parts/wheel_wide.vox";
+    auto input = std::ifstream(path, std::ios::binary);
+    REQUIRE(input.good());
+    const auto bytes = std::vector<uint8_t>(std::istreambuf_iterator<char>(input), {});
+    const auto model = r3d::read_vox_model(bytes);
+
+    REQUIRE(model.has_value());
+    CHECK(model->size_x == 24);
+    CHECK(model->size_y == 10);
+    CHECK(model->size_z == 24);
+    CHECK(std::ranges::any_of(model->cells, [](const auto& cell) {
+        return cell.color_index == 4;
+    }));
+    CHECK(model->palette[1].r == 28);
+    CHECK(model->palette[4].r == 174);
+    const auto surface = r3d::extract_vox_surface(*model);
+    REQUIRE(surface.has_value());
+    CHECK_FALSE(surface->faces.empty());
+}
+
 TEST_CASE("r3d_vox_models_fit_inside_a_unit_cube_without_losing_proportions", "[r3d][voxels]") {
     const auto model =
         r3d::vox_model{.size_x = 8, .size_y = 4, .size_z = 16, .palette = {}, .cells = {}};
