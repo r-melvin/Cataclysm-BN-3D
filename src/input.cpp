@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "action.h"
+#include "avatar.h"
 #include "catacharset.h"
 #include "cursesdef.h"
 #include "debug.h"
@@ -997,9 +998,9 @@ auto r3d_key_action( const input_event &ev,
         case 'd':
             return w_held ? &right_up : ( s_held ? &right_down : &right );
         case 'q':
-            return &rotate_left;
+            return ( g && g->u.controlling_vehicle ) ? nullptr : &rotate_left;
         case 'e':
-            return &rotate_right;
+            return ( g && g->u.controlling_vehicle ) ? nullptr : &rotate_right;
         case KEY_LEFT:
             return &rotate_left;
         case KEY_RIGHT:

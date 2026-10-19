@@ -39,6 +39,7 @@
 #include "game_constants.h"
 
 #include "json.h"
+#include "line.h"
 #include "map/map.h"
 #include "game_constants.h"
 #include "map/mapbuffer.h"
@@ -506,6 +507,10 @@ auto column_height( state &s, const map &here, const tripoint_bub_ms &p ) -> flo
 {
     if( !here.inbounds( p ) ) {
         return 0.0f;
+    }
+    if( const auto vp = here.veh_at( p ) ) {
+        const auto prof = vehicle_profile( vp->vehicle(), vp->mount() );
+        return std::clamp( prof.height, floor_height, 1.0f );
     }
     const auto &t_info = s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } );
     if( t_info.open_door ) {
@@ -1135,6 +1140,64 @@ auto picking_column_height( const picking_column_height_options &options ) -> fl
         h = std::max( h, static_cast<float>( surface_height( s, here, p ) + 0.55f ) );
     }
     return h;
+}
+
+struct player_raycast_options {
+    state &s;
+    const map &here;
+    const avatar &you;
+    const tripoint_bub_ms &from;
+    const tripoint_bub_ms &to;
+};
+
+auto raycast_from_player( const player_raycast_options &options ) -> std::optional<tripoint_bub_ms>
+{
+    auto &s = options.s;
+    const auto &here = options.here;
+    const auto &you = options.you;
+    const auto &from = options.from;
+    const auto &to = options.to;
+
+    if( from == to ) {
+        return to;
+    }
+
+    const auto total_dist = std::hypot( static_cast<float>( to.x() - from.x() ),
+                                        static_cast<float>( to.y() - from.y() ) );
+    if( total_dist <= 0.001f ) {
+        return to;
+    }
+
+    const auto eye_z = static_cast<float>( from.z() ) + surface_height( s, here, from ) + 0.65f;
+    const auto target_z = static_cast<float>( to.z() ) + surface_height( s, here, to ) +
+                          ( here.has_items( to ) ? 0.25f : 0.1f );
+
+    const auto steps = line_to( from, to );
+    for( const auto &step : steps ) {
+        if( !here.inbounds( step ) ) {
+            break;
+        }
+        if( step == to ) {
+            return to;
+        }
+        const auto step_dist = std::hypot( static_cast<float>( step.x() - from.x() ),
+                                           static_cast<float>( step.y() - from.y() ) );
+        const auto frac = std::clamp( step_dist / total_dist, 0.0f, 1.0f );
+        const auto ray_z = eye_z + frac * ( target_z - eye_z );
+
+        auto obs_col = static_cast<float>( step.z() ) + column_height( s, here, step );
+        if( const Creature *critter = g->critter_at( step, true ) ) {
+            if( !critter->is_avatar() && you.sees( *critter ) ) {
+                obs_col = std::max( obs_col, static_cast<float>( step.z() ) + 1.0f );
+            }
+        }
+
+        const auto tile_surf = static_cast<float>( step.z() ) + surface_height( s, here, step );
+        if( obs_col >= tile_surf + 0.45f && ray_z <= obs_col ) {
+            return step;
+        }
+    }
+    return to;
 }
 
 struct loaded_submap_at_options {
@@ -2019,6 +2082,9 @@ auto pick( float x, float y ) -> std::optional<tripoint_bub_ms>
     if( !here.inbounds( p ) ) {
         return std::nullopt;
     }
+    if( v.cam.first_person() ) {
+        return raycast_from_player( { .s = s, .here = here, .you = you, .from = you.bub_pos(), .to = p } );
+    }
     return p;
 }
 
@@ -2225,76 +2291,6 @@ auto draw_fp_hud( const draw_fp_hud_options &options ) -> void
     }
 }
 
-struct draw_first_person_weapon_options {
-    SDL_Renderer *renderer = nullptr;
-    float view_x = 0.0f;
-    float view_y = 0.0f;
-    float view_w = 0.0f;
-    float view_h = 0.0f;
-    const camera &cam;
-};
-
-auto draw_first_person_weapon( const draw_first_person_weapon_options &options ) -> void
-{
-    auto *const renderer = options.renderer;
-    const auto view_x = options.view_x;
-    const auto view_y = options.view_y;
-    const auto view_w = options.view_w;
-    const auto view_h = options.view_h;
-    const auto &cam = options.cam;
-
-    if( !cam.first_person() || !tilecontext ) {
-        return;
-    }
-    const auto &you = get_avatar();
-    if( !you.is_armed() ) {
-        return;
-    }
-    const auto &weapon = you.primary_weapon();
-    const auto item_id = std::string( weapon.typeId().str() );
-    const auto data = tilecontext->get_sprite_draw_data( {
-        .id = item_id,
-        .category = C_ITEM,
-        .pos = you.bub_pos()
-    } );
-    if( !data || !data->texture ) {
-        return;
-    }
-    auto src = SDL_FRect{
-        .x = static_cast<float>( data->dimensions.x ),
-        .y = static_cast<float>( data->dimensions.y ),
-        .w = static_cast<float>( data->dimensions.w ),
-        .h = static_cast<float>( data->dimensions.h )
-    };
-    if( data->opaque.w > 0 && data->opaque.h > 0 ) {
-        src.x = static_cast<float>( data->dimensions.x + data->opaque.x );
-        src.y = static_cast<float>( data->dimensions.y + data->opaque.y );
-        src.w = static_cast<float>( data->opaque.w );
-        src.h = static_cast<float>( data->opaque.h );
-    }
-    if( src.w <= 0.0f || src.h <= 0.0f ) {
-        return;
-    }
-
-    const auto target_h = view_h * 0.32f;
-    const auto aspect = src.w / src.h;
-    const auto target_w = std::clamp( target_h * aspect, view_h * 0.18f, view_w * 0.38f );
-
-    const auto p = you.bub_pos();
-    const auto phase = static_cast<float>( p.x() * 3 + p.y() * 5 ) * 0.8f + cam.fp_yaw() * 2.0f;
-    const auto bob_x = std::sin( phase ) * ( view_w * 0.008f );
-    const auto bob_y = std::abs( std::cos( phase ) ) * ( view_h * 0.012f );
-
-    const auto dst = SDL_FRect{
-        .x = view_x + view_w * 0.62f - target_w * 0.5f + bob_x,
-        .y = view_y + view_h - target_h * 0.88f + bob_y,
-        .w = target_w,
-        .h = target_h
-    };
-    SDL_SetTextureScaleMode( data->texture, SDL_SCALEMODE_NEAREST );
-    SDL_RenderTexture( renderer, data->texture, &src, &dst );
-}
-
 } // namespace
 
 auto draw( const draw_options &options ) -> bool
@@ -2478,6 +2474,13 @@ auto draw( const draw_options &options ) -> bool
     if( !s.comparison_camera && is_controlling ) {
         const auto veh_face = vp->vehicle().face.dir();
         const auto veh_yaw = vehicle_heading_to_yaw( veh_face );
+        if( fp ) {
+            const auto veh_heading = ( ( static_cast<int>( std::round( ( units::to_degrees(
+                                             veh_face ) + 90.0 ) / 45.0 ) ) % 8 ) + 8 ) % 8;
+            s.cam.heading = veh_heading;
+            s.cam.tween_yaw = 0.0f;
+            remember_heading( s );
+        }
         if( !s.was_controlling_vehicle ) {
             s.cam.yaw = veh_yaw;
             s.was_controlling_vehicle = true;
@@ -2841,7 +2844,6 @@ auto draw( const draw_options &options ) -> bool
     }
     const auto dst = SDL_FRect{ .x = x, .y = y, .w = w, .h = h };
     SDL_RenderTexture( renderer, result, nullptr, &dst );
-    draw_first_person_weapon( { .renderer = renderer, .view_x = x, .view_y = y, .view_w = w, .view_h = h, .cam = s.cam } );
     s.texts.clear();
     auto frame = hud_frame{};
     frame.x = x;
