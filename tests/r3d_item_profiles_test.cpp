@@ -41,6 +41,43 @@ TEST_CASE("r3d_unprofiled_items_use_shallow_sprite_volume", "[r3d][items]") {
 #    include "state_helpers.h"
 #    include "tile_helpers.h"
 
+TEST_CASE( "r3d_avatar_only_mesh_excludes_loose_items", "[r3d][entities][tiles]" )
+{
+    const auto cleanup = on_out_of_scope( [] { clear_all_state(); } );
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture( true );
+    REQUIRE( contexts.valid() );
+    tilecontext->load_tileset( "UltimateCataclysm", {}, false, true, false );
+
+    auto &here = get_map();
+    auto &you = get_avatar();
+    const auto origin = tripoint_bub_ms( 60, 60, 0 );
+    you.setpos( origin );
+    here.add_item( origin, item::spawn( "rock", calendar::turn ) );
+
+    auto cache = r3d::tile_info_cache{};
+    auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = r3d::camera{},
+        .center = origin,
+        .light = []( const tripoint_bub_ms & /*p*/ ) { return r3d::pack_light( 255, 255, 255 ); },
+        .markers = {},
+        .uprights = {},
+        .surface = []( const tripoint_bub_ms & /*p*/ ) { return r3d::floor_height; }};
+    const auto full = r3d::build_entity_mesh( view );
+    view.avatar_only = true;
+    const auto with_item = r3d::build_entity_mesh( view );
+    here.i_clear( origin );
+    const auto without_item = r3d::build_entity_mesh( view );
+
+    CHECK_FALSE( with_item.empty() );
+    CHECK( full.indices.size() > with_item.indices.size() );
+    CHECK( with_item.vertices.size() == without_item.vertices.size() );
+    CHECK( with_item.indices.size() == without_item.indices.size() );
+}
+
 TEST_CASE("r3d_voxel_item_menu_option_switches_tank_geometry", "[r3d][items][tiles]") {
     const auto cleanup = on_out_of_scope([] { clear_all_state(); });
     clear_all_state();

@@ -116,12 +116,16 @@ auto gpu::init( SDL_Renderer *renderer ) -> bool
 
     SDL_GPUShader *vs = load_shader( { .basename = "r3d_block_vertex", .stage = SDL_GPU_SHADERSTAGE_VERTEX, .samplers = 0, .uniform_buffers = 1 } );
     SDL_GPUShader *fs = load_shader( { .basename = "r3d_block_fragment", .stage = SDL_GPU_SHADERSTAGE_FRAGMENT, .samplers = 1, .uniform_buffers = 0 } );
-    if( !vs || !fs ) {
+    SDL_GPUShader *silhouette_fs = load_shader( { .basename = "r3d_silhouette_fragment", .stage = SDL_GPU_SHADERSTAGE_FRAGMENT, .samplers = 1, .uniform_buffers = 0 } );
+    if( !vs || !fs || !silhouette_fs ) {
         if( vs ) {
             SDL_ReleaseGPUShader( device_, vs );
         }
         if( fs ) {
             SDL_ReleaseGPUShader( device_, fs );
+        }
+        if( silhouette_fs ) {
+            SDL_ReleaseGPUShader( device_, silhouette_fs );
         }
         shutdown();
         return false;
@@ -175,9 +179,21 @@ auto gpu::init( SDL_Renderer *renderer ) -> bool
     // Billboards and flat sprites are seen from either side.
     pci.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
     entity_pipeline_ = SDL_CreateGPUGraphicsPipeline( device_, &pci );
+    pci.fragment_shader = silhouette_fs;
+    pci.depth_stencil_state.enable_depth_write = false;
+    pci.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_GREATER;
+    color_target.blend_state.enable_blend = true;
+    color_target.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+    color_target.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    color_target.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    color_target.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+    color_target.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    color_target.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+    avatar_silhouette_pipeline_ = SDL_CreateGPUGraphicsPipeline( device_, &pci );
     SDL_ReleaseGPUShader( device_, vs );
     SDL_ReleaseGPUShader( device_, fs );
-    if( !block_pipeline_ || !entity_pipeline_ ) {
+    SDL_ReleaseGPUShader( device_, silhouette_fs );
+    if( !block_pipeline_ || !entity_pipeline_ || !avatar_silhouette_pipeline_ ) {
         DebugLog( DL::Error, DC::Main ) << "r3d: SDL_CreateGPUGraphicsPipeline failed: " << SDL_GetError();
         shutdown();
         return false;
@@ -261,12 +277,16 @@ auto gpu::shutdown() -> void
         if( entity_pipeline_ ) {
             SDL_ReleaseGPUGraphicsPipeline( device_, entity_pipeline_ );
         }
+        if( avatar_silhouette_pipeline_ ) {
+            SDL_ReleaseGPUGraphicsPipeline( device_, avatar_silhouette_pipeline_ );
+        }
         if( sampler_ ) {
             SDL_ReleaseGPUSampler( device_, sampler_ );
         }
     }
     block_pipeline_ = nullptr;
     entity_pipeline_ = nullptr;
+    avatar_silhouette_pipeline_ = nullptr;
     sampler_ = nullptr;
     device_ = nullptr;
     renderer_ = nullptr;
@@ -532,6 +552,13 @@ auto gpu::bind_entity_pipeline() -> void
 {
     if( pass_ && entity_pipeline_ ) {
         SDL_BindGPUGraphicsPipeline( pass_, entity_pipeline_ );
+    }
+}
+
+auto gpu::bind_avatar_silhouette_pipeline() -> void
+{
+    if( pass_ && avatar_silhouette_pipeline_ ) {
+        SDL_BindGPUGraphicsPipeline( pass_, avatar_silhouette_pipeline_ );
     }
 }
 

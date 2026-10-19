@@ -65,6 +65,8 @@ struct entity_view {
     const std::unordered_map<std::string, vox_asset> *item_vox_models = nullptr;
     /// Optional shared proportions, support anchors, and material-region annotations.
     const presentation_profile_map *presentation_profiles = nullptr;
+    /// Build only the avatar's existing sprite layers for the occlusion-silhouette pass.
+    bool avatar_only = false;
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.

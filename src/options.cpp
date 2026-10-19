@@ -2616,6 +2616,13 @@ void options_manager::add_options_graphics()
 
     get_option( "R3D_CUTAWAY" ).setPrerequisite( "RENDERER_3D" );
 
+    add( "R3D_AVATAR_SILHOUETTE", graphics, translate_marker( "3D avatar occlusion silhouette" ),
+         translate_marker( "Show a translucent cyan silhouette of the player through geometry that hides them in the 3D view." ),
+         false, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_AVATAR_SILHOUETTE" ).setPrerequisite( "RENDERER_3D" );
+
     add( "R3D_VOXEL_ITEMS", graphics, translate_marker( "3D voxel-style item models (experimental)" ),
          translate_marker( "Give selected loose items four-sided sprite volumes in the 3D view.  "
                            "Other items keep their upright sprite appearance." ),

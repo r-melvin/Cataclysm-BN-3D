@@ -1768,7 +1768,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
     };
 
     // Fields and items change independently of the terrain mesh, including between turns.
-    for( auto z = static_cast<int>( view.z_lo ); z <= view.z_hi; ++z ) {
+    for( auto z = static_cast<int>( view.z_lo ); z <= view.z_hi && !view.avatar_only; ++z ) {
         for( auto dy = -creature_radius; dy <= creature_radius; ++dy ) {
             for( auto dx = -creature_radius; dx <= creature_radius; ++dx ) {
                 const auto p = tripoint_bub_ms( view.center.x() + dx, view.center.y() + dy, z );
@@ -1874,7 +1874,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
 
     // Trees and tall furniture of the visible chunks; unseen ones are drawn like their tile.
     for( const entity_view::standing &u : view.uprights ) {
-        if( !u.info ) {
+        if( view.avatar_only || !u.info ) {
             continue;
         }
         emit_billboard( { .sink = sink, .layers = { u.info }, .right_world = right, .up_world = up, .toward_world = toward, .z_scale = view.cam.z_scale, .cx = frame_x( u.pos ),
@@ -1886,6 +1886,9 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
     for( Creature &critter : g->all_creatures() ) {
         const auto p = tripoint_bub_ms( critter.bub_pos() );
         if( !in_range( p, creature_radius ) ) {
+            continue;
+        }
+        if( view.avatar_only && !critter.is_avatar() ) {
             continue;
         }
         if( !critter.is_avatar() && !you.sees( critter ) ) {
@@ -1925,6 +1928,9 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
         emit_billboard( { .sink = sink, .layers = layers, .right_world = right, .up_world = up, .toward_world = toward, .z_scale = view.cam.z_scale, .cx = frame_x( p ), .cy = frame_y( p ),
                           .z_base = frame_z( p ) + view.surface( p ), .color = color == pack_light( 0, 0, 0 ) ? white : color,
                           .mirrored = mirrored } );
+    }
+    if( view.avatar_only ) {
+        return sink.finish();
     }
     // Markers last; they sit just above the surface so the depth test keeps them in front of it.
     for( const entity_view::marker &m : view.markers ) {

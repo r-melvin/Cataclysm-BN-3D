@@ -39,6 +39,11 @@ wall-mounted boards, shallower lockers fitted against walls, upright loose items
 solid natural objects, and visible vehicles. Movement, combat, vehicle physics,
 and item behavior remain BN's own.
 
+The optional **3D avatar occlusion silhouette** graphics setting shows a faint
+cyan silhouette of the avatar where world geometry hides them. It uses the same
+visible player sprite layers and does not reveal other creatures or items. It can
+be used alongside the cutaway setting.
+
 Vehicle quarterpanels (`HALF_BOARD`) stay at body height even beneath a roof;
 full panels and windshields keep cabin height. Roof caps take the exterior panel
 material, while rooftop equipment keeps its own sprite. Native `shapes` direction

@@ -98,6 +98,8 @@ class gpu
         auto bind_block_pipeline() -> void;
         /// Binds the entity pipeline: same shaders, no face culling (billboards, flat items).
         auto bind_entity_pipeline() -> void;
+        /// Draws the avatar's sprite alpha only where it is behind the existing depth buffer.
+        auto bind_avatar_silhouette_pipeline() -> void;
         /// Draws indexed triangles from the given buffers with one sheet texture bound.
         /// @param sheet an SDL_Texture of the GPU renderer holding the tileset sprites.
         struct draw_block_options {
@@ -135,6 +137,7 @@ class gpu
         // Same shaders without back-face culling, for billboards and flat sprites that are seen
         // from either side.
         SDL_GPUGraphicsPipeline *entity_pipeline_ = nullptr;
+        SDL_GPUGraphicsPipeline *avatar_silhouette_pipeline_ = nullptr;
         SDL_GPUSampler *sampler_ = nullptr;
 
         SDL_GPUTexture *color_ = nullptr;

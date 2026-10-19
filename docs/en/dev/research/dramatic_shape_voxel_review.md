@@ -98,10 +98,11 @@ defaults here.
    later moved off-thread; never read live mutable map state unsafely.
 
 5. **Offer an avatar-only occlusion silhouette (medium impact, low-to-medium
-   effort).** Reuse the avatar's exact rendered layers/transforms with reversed
-   depth comparison and no depth writes. Keep it optional alongside the existing
-   cutaway. Test clothing layers, overhead levels and camera pitch. This improves
-   orientation when geometry hides the player without changing world visibility.
+   effort).** The optional `R3D_AVATAR_SILHOUETTE` setting now redraws only the
+   avatar's existing sprite layers with reversed depth comparison and no depth
+   writes. It sits alongside the existing cutaway without changing world
+   visibility. Capture and review clothing layers, overhead levels and camera
+   pitches in game before treating its visual result as complete.
 
 6. **Add selected solid props and vehicle surface detail (medium impact,
    medium-to-high effort).** Use cached templates for hollow bins, chair legs,

@@ -161,6 +161,12 @@ struct state {
     uint32_t veh_position_bytes = 0;
     uint32_t veh_light_bytes = 0;
     uint32_t veh_index_bytes = 0;
+    SDL_GPUBuffer *silhouette_positions = nullptr;
+    SDL_GPUBuffer *silhouette_lights = nullptr;
+    SDL_GPUBuffer *silhouette_indices = nullptr;
+    uint32_t silhouette_position_bytes = 0;
+    uint32_t silhouette_light_bytes = 0;
+    uint32_t silhouette_index_bytes = 0;
     shown_view shown;
     bool map_drawn = false; // the game's map view has been on screen (a game is running)
     vec3 pan; // free camera: offset of the camera target from the viewed tile, world space
@@ -200,6 +206,15 @@ auto release_dynamic( state &s ) -> void
     s.veh_position_bytes = 0;
     s.veh_light_bytes = 0;
     s.veh_index_bytes = 0;
+    s.device.release_buffer( s.silhouette_positions );
+    s.device.release_buffer( s.silhouette_lights );
+    s.device.release_buffer( s.silhouette_indices );
+    s.silhouette_positions = nullptr;
+    s.silhouette_lights = nullptr;
+    s.silhouette_indices = nullptr;
+    s.silhouette_position_bytes = 0;
+    s.silhouette_light_bytes = 0;
+    s.silhouette_index_bytes = 0;
 }
 
 // Makes sure a dynamic buffer holds at least bytes, then queues the data for upload.
@@ -1740,6 +1755,24 @@ auto draw( const draw_options &options ) -> bool
                           .data = entities.indices.data(),
                           .bytes = static_cast<uint32_t>( entities.indices.size() * sizeof( uint32_t ) ) } ) );
 
+    auto avatar_silhouette = chunk_mesh{};
+    auto draw_avatar_silhouette = static_cast<bool>( false );
+    if( get_option<bool>( "R3D_AVATAR_SILHOUETTE" ) ) {
+        auto silhouette_view = entities_view;
+        silhouette_view.avatar_only = true;
+        avatar_silhouette = build_entity_mesh( silhouette_view );
+        draw_avatar_silhouette = static_cast<bool>( !avatar_silhouette.empty() &&
+            upload_dynamic( { .s = s, .buffer = s.silhouette_positions, .capacity = s.silhouette_position_bytes,
+                              .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.vertices.data(),
+                              .bytes = static_cast<uint32_t>( avatar_silhouette.vertices.size() * sizeof( vertex ) ) } ) &&
+            upload_dynamic( { .s = s, .buffer = s.silhouette_lights, .capacity = s.silhouette_light_bytes,
+                              .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.light.data(),
+                              .bytes = static_cast<uint32_t>( avatar_silhouette.light.size() * sizeof( uint32_t ) ) } ) &&
+            upload_dynamic( { .s = s, .buffer = s.silhouette_indices, .capacity = s.silhouette_index_bytes,
+                              .usage = SDL_GPU_BUFFERUSAGE_INDEX, .data = avatar_silhouette.indices.data(),
+                              .bytes = static_cast<uint32_t>( avatar_silhouette.indices.size() * sizeof( uint32_t ) ) } ) );
+    }
+
     if( !s.device.begin_pass( 0.05f, 0.05f, 0.07f ) ) {
         s.device.abort_frame();
         // This frame's uploads may not have happened, so no chunk's buffers can be trusted.
@@ -1795,6 +1828,23 @@ auto draw( const draw_options &options ) -> bool
         for( const mesh_batch &b : entities.batches ) {
             s.device.draw_block( { .positions = s.dyn_positions, .lights = s.dyn_lights, .indices = s.dyn_indices, .first_index = b.first_index, .index_count = b.index_count,
                                    .sheet = b.sheet, .uniforms = uniforms } );
+        }
+    }
+    if( draw_avatar_silhouette ) {
+        s.device.bind_avatar_silhouette_pipeline();
+        const auto silhouette_toward = vec3( normalize( s.cam.eye() - s.cam.stretched_target() ) );
+        uniforms.offset[0] = 0.0f;
+        uniforms.offset[1] = 0.0f;
+        uniforms.offset[2] = 0.0f;
+        uniforms.pull[0] = silhouette_toward.x;
+        uniforms.pull[1] = silhouette_toward.y;
+        uniforms.pull[2] = silhouette_toward.z / s.cam.z_scale;
+        uniforms.pull[3] = max_billboard_pull;
+        uniforms.cut[3] = 0.0f;
+        for( const mesh_batch &b : avatar_silhouette.batches ) {
+            s.device.draw_block( { .positions = s.silhouette_positions, .lights = s.silhouette_lights,
+                                   .indices = s.silhouette_indices, .first_index = b.first_index,
+                                   .index_count = b.index_count, .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
     SDL_Texture *const result = s.device.end_frame();
