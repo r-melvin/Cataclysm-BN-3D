@@ -737,7 +737,86 @@ TEST_CASE(
     CHECK(hidden_cargo.indices == partial.indices);
     const auto cargo_pos = veh->mount_to_bubble(tripoint_mnt_veh(2, 0, 0));
     perception.visibility_cache[perception.idx(cargo_pos.x(), cargo_pos.y())] = lit_level::LOW;
-    CHECK(r3d::build_vehicle_mesh(view).vertices.size() > hidden_cargo.vertices.size());
+    // Without cargo highlight overlay, items in cargo do not add extra quads to the vehicle mesh.
+    CHECK(r3d::build_vehicle_mesh(view).vertices.size() == hidden_cargo.vertices.size());
+}
+
+TEST_CASE("r3d_car_hatch_blueprint_rules", "[r3d][vehicle][tiles][car_hatch]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto& here = get_map();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    g->place_player(origin + point_west);
+    auto* const veh = here.add_vehicle(vproto_id("car_hatch"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh != nullptr);
+
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {},
+        .vehicle_mount_visible = [](const tripoint_bub_ms& /*p*/) { return true; }};
+
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    REQUIRE_FALSE(mesh.empty());
+    REQUIRE(mesh.vertices.size() >= 4);
+
+    // Verify presence of sloped quads (both z_low ~0.55f and z_high ~0.85f on same quad)
+    auto has_sloped_windshield = false;
+    auto has_sloped_hatch = false;
+    auto has_hood_deck = false;
+    auto has_rear_deck = false;
+    auto front_wall_max_z = 0.0f;
+    for (auto q = size_t{0}; q + 3 < mesh.vertices.size(); q += 4) {
+        auto min_z = std::numeric_limits<float>::max();
+        auto max_z = std::numeric_limits<float>::lowest();
+        auto min_x = std::numeric_limits<float>::max();
+        auto max_x = std::numeric_limits<float>::lowest();
+        for (auto i = q; i < q + 4; ++i) {
+            min_z = std::min(min_z, mesh.vertices[i].z);
+            max_z = std::max(max_z, mesh.vertices[i].z);
+            min_x = std::min(min_x, mesh.vertices[i].x);
+            max_x = std::max(max_x, mesh.vertices[i].x);
+        }
+        const auto rel_min_x = min_x - 0.5f;
+        const auto rel_max_x = max_x - 0.5f;
+        // Sloped surface rising ~0.30f longitudinally between body_h and cabin_h
+        if (std::abs(max_z - min_z - (r3d::vehicle_cabin_h - r3d::vehicle_body_h)) < 0.05f) {
+            if (rel_min_x > 0.0f) {
+                has_sloped_windshield = true;
+            } else if (rel_max_x < 0.0f) {
+                has_sloped_hatch = true;
+            }
+        }
+        // Horizontal deck at body_h
+        const auto expected_deck_z = r3d::floor_height + 0.02f + r3d::vehicle_body_h;
+        if (std::abs(max_z - min_z) < 0.01f && std::abs(min_z - expected_deck_z) < 0.05f) {
+            if (rel_min_x > 1.0f) {
+                has_hood_deck = true;
+            } else if (rel_max_x < -1.0f) {
+                has_rear_deck = true;
+            }
+        }
+        // Vertical front bumper wall
+        if (std::abs(max_x - min_x) < 0.02f && rel_max_x > 2.0f && max_z > min_z) {
+            front_wall_max_z = std::max(front_wall_max_z, max_z);
+        }
+    }
+    CHECK(has_sloped_windshield);
+    CHECK(has_sloped_hatch);
+    CHECK(has_hood_deck);
+    CHECK(has_rear_deck);
+    CHECK(front_wall_max_z >= (r3d::floor_height + 0.02f + r3d::vehicle_body_h) - 0.02f);
 }
 TEST_CASE("r3d_vehicle_solid_faces_sample_opaque_pixels", "[r3d][vehicle][tiles]") {
     const auto cleanup = on_out_of_scope([] { clear_all_state(); });
