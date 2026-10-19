@@ -14,6 +14,12 @@ only in the [project backlog](../../../../BACKLOG.md).
 Use BN's Clang/CMake build instructions. Renderer shaders use BN's existing HLSL
 and shadercross build pipeline; backend artifacts are generated in `data/shaders`
 for the requested `SHADER_TARGETS`. No separate GLSL compiler is required.
+When editing HLSL, enable `BUILD_SHADERCROSS` or set `SHADERCROSS_EXE` to an
+available compiler; the precompiled fallback does not rebuild shader sources.
+For Vulkan builds, install SPIRV-Tools and build the `validate-shaders` target
+after compiling. It checks every shipped SPIR-V module against Vulkan 1.0 rules,
+including uniform-buffer layout. Native Metal/Direct3D execution remains a
+separate platform check.
 
 ```sh
 cmake --preset linux-slim

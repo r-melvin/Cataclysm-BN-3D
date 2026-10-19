@@ -531,6 +531,18 @@ if (CATA_SDL)
         message(STATUS "BUILD_SHADERCROSS disabled; using precompiled shaders from data/shaders")
         add_custom_target(cata_shaders DEPENDS ${CATA_PRECOMPILED_SHADER_OUTPUTS})
     endif ()
+
+    if ("spirv" IN_LIST SHADER_TARGETS OR "spv" IN_LIST SHADER_TARGETS)
+        find_program(SPIRV_VAL_EXECUTABLE NAMES spirv-val)
+        add_custom_target(validate-shaders
+            COMMAND "${CMAKE_COMMAND}"
+                "-DSHADER_VALIDATOR=${SPIRV_VAL_EXECUTABLE}"
+                "-DSHADER_DIRECTORY=${CMAKE_SOURCE_DIR}/data/shaders"
+                -P "${CMAKE_SOURCE_DIR}/build-scripts/ValidateShaders.cmake"
+            DEPENDS cata_shaders
+            COMMENT "Validating compiled SPIR-V shaders against Vulkan 1.0"
+            VERBATIM)
+    endif ()
 endif ()
 
 if (WIN32 AND CATA_SDL)

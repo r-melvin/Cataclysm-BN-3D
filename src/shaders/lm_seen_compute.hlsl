@@ -43,7 +43,10 @@ cbuffer Constants : register(b0, space2)
     int   dispatch_z_count;
     uint  trigdist;
     uint  vision_block_mask;
-    uint3 _pad;
+    // Scalars preserve the CPU layout without requiring relaxed Vulkan block layout.
+    uint _pad_x;
+    uint _pad_y;
+    uint _pad_z;
 };
 
 StructuredBuffer<float> transparency_all  : register(t0, space0);

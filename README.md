@@ -49,6 +49,13 @@ Run interactive game smoke tests in a virtual window (`xvfb-run -a` on Linux),
 with a private `--userdir` and `--configdir`. A software Vulkan installation and
 `--gpu-backend software` allow GPU image checks without a physical display.
 
+For HLSL changes, configure with `-DBUILD_SHADERCROSS=ON` or provide
+`-DSHADERCROSS_EXE=/path/to/shadercross` so the build regenerates shaders.
+The precompiled fallback does not compile changed HLSL. With `SHADER_TARGETS=spirv`
+and SPIRV-Tools installed, run
+`cmake --build --preset linux-full --target validate-shaders -j8` to check all
+compiled SPIR-V against the minimum Vulkan layout rules.
+
 The renderer tests include 17 seeded geometry snapshots. For an intentional
 geometry change, regenerate them with `R3D_UPDATE_GEOMETRY_SNAPSHOT=1` on the test
 command, review the differences and name the affected scenes in the commit.

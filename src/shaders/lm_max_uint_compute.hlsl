@@ -3,7 +3,10 @@
 cbuffer Constants : register(b0, space2)
 {
     uint total_tiles;
-    uint3 _pad;
+    // Scalars preserve the CPU layout without requiring relaxed Vulkan block layout.
+    uint _pad_x;
+    uint _pad_y;
+    uint _pad_z;
 };
 
 StructuredBuffer<uint> source_values : register(t0, space0);

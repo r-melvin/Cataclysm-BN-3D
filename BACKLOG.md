@@ -138,6 +138,16 @@ driver failure from invalid renderer submissions, and complete view-restoration
 validation before closing this item. Current private evidence is under
 `/tmp/bn-assets-live/` (temporary, not a durable/shared fixture).
 
+Validation-layer follow-up found and fixed a depth-clamping request on devices
+that disable that feature, plus three HLSL uniform blocks whose vector padding
+violated Vulkan's required alignment. Scalar padding preserves the existing CPU
+offsets. The local `validate-shaders` target now checks all 25 SPIR-V artifacts;
+all pass. The three revised compute shaders also cross-compile to MSL/DXIL, and
+all 104 renderer tests pass with CPU and real software GPU compute. These checks
+do not establish native Metal/Direct3D behavior. The eight-angle crash persists
+without standard/synchronization validation errors on both Lavapipe 26.2.4 and
+official 26.2.5 with matching LLVM; GPU-assisted graphics isolation is still open.
+
 Sources: [comparison guide](tools/r3d_spike/COMPARE.md),
 [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md),
 [vehicle validation matrix](docs/en/dev/research/vehicle_rendering_research.md).

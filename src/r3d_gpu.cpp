@@ -168,6 +168,8 @@ auto gpu::init( SDL_Renderer *renderer ) -> bool
     // the cutaway then shows the floor and wall ends rather than the insides of what it cut.
     pci.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
     pci.rasterizer_state.front_face = SDL_GPU_FRONTFACE_CLOCKWISE;
+    // Devices created for broad compatibility disable depth clamping; clipping is required.
+    pci.rasterizer_state.enable_depth_clip = true;
     pci.depth_stencil_state.enable_depth_test = true;
     pci.depth_stencil_state.enable_depth_write = true;
     pci.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;

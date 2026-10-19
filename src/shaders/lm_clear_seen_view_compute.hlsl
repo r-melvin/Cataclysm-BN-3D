@@ -13,7 +13,10 @@ cbuffer Constants : register(b0, space2)
     int view_radius;
     int z_start_idx;
     int dispatch_z_count;
-    uint3 _pad0;
+    // Scalars preserve the CPU layout without requiring relaxed Vulkan block layout.
+    uint _pad_x;
+    uint _pad_y;
+    uint _pad_z;
 };
 
 RWStructuredBuffer<float> seen_raw_all : register(u0, space1);
