@@ -2055,8 +2055,6 @@ void editmap::edit_mapgen()
     } );
     restore_on_out_of_scope<std::string> info_txt_prev( info_txt_curr );
     restore_on_out_of_scope<std::string> info_title_prev( info_title_curr );
-    map &here = get_map();
-
     do {
         auto abs_pos = bub_to_abs( target.xy() );
         auto omt_lpos = abs_to_bub( project_to<coords::ms>( project_to<coords::omt>( abs_pos ) ) );

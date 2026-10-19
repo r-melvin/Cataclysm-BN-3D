@@ -1627,3 +1627,12 @@ TEST_CASE("flammable_fields_can_be_ignited", "[map][field][fire]") {
     CHECK(fire->get_field_intensity() == std::max(2, intensity));
     CHECK(fire->get_field_age() == -10_minutes * intensity);
 }
+
+TEST_CASE("map_cache_query_rejects_out_of_bounds_levels", "[map][cache][regression]") {
+    auto& here = get_map();
+    for (const auto z : {-OVERMAP_DEPTH - 1, OVERMAP_HEIGHT + 1}) {
+        CAPTURE(z);
+        REQUIRE_FALSE(here.inbounds_z(z));
+        CHECK_FALSE(here.is_map_cache_valid(z));
+    }
+}

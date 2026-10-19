@@ -16,13 +16,17 @@
 
 using ui_stack_t = std::vector<std::reference_wrapper<ui_adaptor>>;
 
-static bool redraw_in_progress = false;
-static bool showing_debug_message = false;
-static bool restart_redrawing = false;
+namespace
+{
+auto redraw_in_progress = false;
+// Read only by assertions, which are omitted in release builds.
+[[maybe_unused]] auto showing_debug_message = false;
+auto restart_redrawing = false;
 #if defined( TILES )
-static std::optional<SDL_Rect> prev_clip_rect;
+auto prev_clip_rect = std::optional<SDL_Rect> {};
 #endif
-static ui_stack_t ui_stack;
+auto ui_stack = ui_stack_t {};
+} // namespace
 
 ui_adaptor::ui_adaptor() : disabling_uis_below( false ), is_debug_message_ui( false ),
     invalidated( false ), deferred_resize( false )

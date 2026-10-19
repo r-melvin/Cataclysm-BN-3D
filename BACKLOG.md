@@ -47,6 +47,20 @@ onboarding, Lua, activity, magic, enchantment, reload, aiming and corpse cases
 pass (56,152 assertions). This is evidence for the affected rebuild, not a claim
 that every untouched upstream translation unit is warning-free.
 
+Follow-up after rebasing `2f73690`: the newly reported warnings are cleared
+without disabling compiler diagnostics. Constructor initializers follow member
+order; unused spell/editor/vehicle-mapgen scaffolding and disabled stair-link
+helpers are removed. The map-cache query now returns false for an out-of-range
+level rather than falling off a non-void function. Both binaries build without
+warnings in all nine affected translation units. The combined renderer,
+onboarding, input, map/mapgen, vision, inventory, magic and recipe run passes
+275 of 279 cases (60,523 passing assertions). Four vision cases fail 14 assertions;
+rebuilding the pre-cleanup source and running the same command reproduces all
+four with identical complete diagnostics (274 of 278 cases pass). These are
+existing vision failures, not acceptance established by this cleanup. Evidence:
+`out/validation/warning-{cleanup,baseline}-suite.log`; the bounds regression also
+runs independently. No full-project clean-build claim is implied.
+
 Sources: [agent guidelines](AGENTS.md),
 [wrapper](tools/r3d_spike/astyle_347.py).
 

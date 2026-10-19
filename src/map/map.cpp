@@ -2687,7 +2687,7 @@ auto map::valid_move(
     const bool via_ramp) const -> bool {
     return get_mapbuffer().valid_move(
         map_local_to_abs(*this, from), map_local_to_abs(*this, to),
-        {.bash = bash, .flying = flying, .via_ramp = via_ramp});
+        {.bash = bash, .flying = flying, .via_ramp = via_ramp, .lookup = {}});
 }
 
 // End of move cost
@@ -7588,15 +7588,15 @@ void map::shift(const point_rel_sm& sp) {
 
         auto const mark_floor = [&](const tripoint_bub_sm& smp) {
             gc.floor_cache_dirty.set(static_cast<size_t>(gc.bidx(smp.x(), smp.y())));
-            mark_submap_dirty(smp, {.floor = true});
+            mark_submap_dirty(smp, {.begin = {}, .end = {}, .floor = true});
         };
         auto const mark_outside = [&](const tripoint_bub_sm& smp) {
             gc.outside_cache_dirty.set(static_cast<size_t>(gc.bidx(smp.x(), smp.y())));
-            mark_submap_dirty(smp, {.outside = true});
+            mark_submap_dirty(smp, {.begin = {}, .end = {}, .outside = true});
         };
         auto const mark_transparency = [&](const tripoint_bub_sm& smp) {
             gc.transparency_cache_dirty.set(static_cast<size_t>(gc.bidx(smp.x(), smp.y())));
-            mark_submap_dirty(smp, {.transparency = true});
+            mark_submap_dirty(smp, {.begin = {}, .end = {}, .transparency = true});
         };
 
         mark_shifted_submap_bands(gridz, 1, mark_floor);
@@ -7761,8 +7761,6 @@ void map::loadn(const tripoint_bub_sm& grid, const bool update_vehicles, const b
     ZoneValue(static_cast<uint64_t>(grid.z() + OVERMAP_DEPTH));
 
     const auto grid_abs_sub = map_local_to_abs(*this, tripoint_bub_sm(grid));
-    auto& dim_buf = MAPBUFFER_REGISTRY.get(bound_dimension_);
-
     // For out-of-bounds areas in bounded dimensions, use uniform boundary terrain
     // submaps instead of nullptr.  We check in-memory only (no DB lookup) because
     // most pocket-dimension submaps are out-of-bounds.
@@ -8566,10 +8564,6 @@ void map::build_map_cache(const int zlev, bool skip_lightmap) {
     auto normalize_gpu_dirty_levels = [](auto& levels) {
         std::ranges::sort(levels);
         levels.erase(std::ranges::unique(levels).begin(), levels.end());
-    };
-    auto level_has_vehicle_floor = [](const level_cache& ch) {
-        ZoneScopedN("Level_Has_Vehicle_Floor");
-        return ch.has_any_vehicle_floor;
     };
 
     // Refresh the shared weather-transparency lookup table once, serially,
@@ -9494,6 +9488,7 @@ auto map::is_map_cache_valid(const int zlev) -> bool {
             || ch.seen_cache_dirty || ch.lightmap_dirty || ch.outside_cache_dirty.any()
             || ch.suspension_cache_dirty;
     }
+    return false;
 }
 
 void map::invalidate_map_cache(const int zlev) {

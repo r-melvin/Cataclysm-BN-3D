@@ -238,7 +238,7 @@ std::vector<const recipe *> recipe_subset::search( const search_type key, const 
                 if( cond ) {
                     const auto &skills = r->required_skills;
                     match = std::any_of( skills.begin(), skills.end(), [&]( const auto pair ) { return lcmatch( pair.first->name(), txt ) && ( *cond )( pair.second ); } )
-                    || lcmatch( r->skill_used->name(), txt ) &&( *cond )( r->difficulty );
+                    || ( lcmatch( r->skill_used->name(), txt ) && ( *cond )( r->difficulty ) );
                 } else {
                     match = lcmatch( r->required_skills_string( nullptr, true, false ), txt );
                 }

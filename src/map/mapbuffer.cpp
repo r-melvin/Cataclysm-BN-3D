@@ -582,71 +582,6 @@ auto omt_submap_index(const point_omt_sm& local) -> std::optional<std::size_t> {
     return static_cast<std::size_t>(local.x() + local.y() * 2);
 }
 
-auto vertical_transition_target_below(const ter_id& source) -> std::optional<ter_id> {
-    static const auto t_stairs_down_no_roof = ter_id("t_stairs_down_no_roof");
-    static const auto t_stairs_down_underwater = ter_id("t_stairs_down_underwater");
-    static const auto t_stairs_up_underwater = ter_id("t_stairs_up_underwater");
-    static const auto t_wood_stairs_down = ter_id("t_wood_stairs_down");
-    static const auto t_wood_stairs_up = ter_id("t_wood_stairs_up");
-    static const auto t_ladder_up_down = ter_id("t_ladder_up_down");
-    static const auto t_slope_down_underground = ter_id("t_slope_down_underground");
-    static const auto t_triffid_slope_down = ter_id("t_triffid_slope_down");
-    static const auto t_triffid_slope_up = ter_id("t_triffid_slope_up");
-
-    if (source == t_stairs_down || source == t_stairs_down_no_roof) { return t_stairs_up; }
-    if (source == t_stairs_down_underwater) { return t_stairs_up_underwater; }
-    if (source == t_wood_stairs_down) { return t_wood_stairs_up; }
-    if (source == t_ladder_down || source == t_ladder_up_down) { return t_ladder_up; }
-    if (source == t_slope_down || source == t_slope_down_underground) { return t_slope_up; }
-    if (source == t_triffid_slope_down) { return t_triffid_slope_up; }
-    return std::nullopt;
-}
-
-auto vertical_transition_target_above(const ter_id& source) -> std::optional<ter_id> {
-    static const auto t_stairs_down = ter_id("t_stairs_down");
-    static const auto t_stairs_up_underwater = ter_id("t_stairs_up_underwater");
-    static const auto t_stairs_down_underwater = ter_id("t_stairs_down_underwater");
-    static const auto t_wood_stairs_down = ter_id("t_wood_stairs_down");
-    static const auto t_wood_stairs_up = ter_id("t_wood_stairs_up");
-    static const auto t_ladder_up_down = ter_id("t_ladder_up_down");
-    static const auto t_triffid_slope_down = ter_id("t_triffid_slope_down");
-    static const auto t_triffid_slope_up = ter_id("t_triffid_slope_up");
-
-    if (source == t_stairs_up) { return t_stairs_down; }
-    if (source == t_stairs_up_underwater) { return t_stairs_down_underwater; }
-    if (source == t_wood_stairs_up) { return t_wood_stairs_down; }
-    if (source == t_ladder_up || source == t_ladder_up_down) { return t_ladder_down; }
-    if (source == t_slope_up) { return t_slope_down; }
-    if (source == t_triffid_slope_up) { return t_triffid_slope_down; }
-    return std::nullopt;
-}
-
-auto terrain_has_vertical_transition_direction(const ter_t& terrain, const ter_id& desired)
-    -> bool {
-    const auto& desired_terrain = desired.obj();
-    return (desired_terrain.has_flag(TFLAG_GOES_UP) && terrain.has_flag(TFLAG_GOES_UP))
-        || (desired_terrain.has_flag(TFLAG_GOES_DOWN) && terrain.has_flag(TFLAG_GOES_DOWN));
-}
-
-auto can_replace_with_vertical_transition(
-    const submap& sm, const point_sm_ms& local, const ter_id& desired) -> bool {
-    const auto current = sm.get_ter(local);
-    const auto& current_terrain = current.obj();
-    if (terrain_has_vertical_transition_direction(current_terrain, desired)) { return false; }
-    if (current_terrain.has_flag(TFLAG_GOES_UP) || current_terrain.has_flag(TFLAG_GOES_DOWN)) {
-        return false;
-    }
-    if (sm.get_furn(local) != f_null || sm.get_trap(local) != tr_null
-        || !sm.get_items(local).empty()) {
-        return false;
-    }
-    if (current_terrain.has_flag(TFLAG_WALL) || current_terrain.has_flag(TFLAG_LIQUID)) {
-        return false;
-    }
-    return current_terrain.has_flag(TFLAG_NO_FLOOR) || current_terrain.has_flag(TFLAG_SUPPORTS_ROOF)
-        || current_terrain.has_flag(TFLAG_FLAT) || current_terrain.has_flag("ROOF");
-}
-
 auto mark_post_pass_changed(submap& sm) -> void {
     sm.transparency_dirty = true;
     sm.floor_dirty = true;
@@ -3422,23 +3357,6 @@ auto mapbuffer::run_omt_pillar_post_pass(const point_abs_omt& omt_pos) -> void {
     });
 
     auto lk = std::lock_guard<std::recursive_mutex>(submaps_mutex_);
-    struct vertical_transition_link_request {
-        tripoint_abs_sm target_pos;
-        point_sm_ms local;
-        ter_id desired;
-    };
-    const auto ensure_vertical_transition_link =
-        [&](const vertical_transition_link_request& request) {
-            auto* const target_sm = lookup_submap_in_memory(request.target_pos);
-            if (target_sm == nullptr
-                || !can_replace_with_vertical_transition(
-                    *target_sm, request.local, request.desired)) {
-                return;
-            }
-            target_sm->set_ter(request.local, request.desired);
-            mark_post_pass_changed(*target_sm);
-        };
-
     for (const auto zlev : std::views::iota(-OVERMAP_DEPTH, OVERMAP_HEIGHT + 1)) {
         const auto omt_addr = tripoint_abs_omt(omt_pos, zlev);
         const auto base = project_to<coords::sm>(omt_addr);
@@ -3453,25 +3371,8 @@ auto mapbuffer::run_omt_pillar_post_pass(const point_abs_omt& omt_pos) -> void {
             auto changed = false;
             for (const auto local : submap_tiles()) {
                 const auto terrain_here = sub_here->get_ter(local);
-                /* DO NOT UNCOMMENT THIS UNTIL IT IS MADE TOGGLEABLE BY OMT OR TILE
-                   BADLY EFFECTED MAPGENS INCLUDE: REF CENTER, LMOE SHELTER, and multiple modded
-                OMTs if( const auto target = vertical_transition_target_below( terrain_here );
-                    target && zlev > -OVERMAP_DEPTH ) {
-                    ensure_vertical_transition_link( {
-                        .target_pos = sm_pos + tripoint_below,
-                        .local = local,
-                        .desired = *target,
-                    } );
-                }
-                if( const auto target = vertical_transition_target_above( terrain_here );
-                    target && zlev < OVERMAP_HEIGHT ) {
-                    ensure_vertical_transition_link( {
-                        .target_pos = sm_pos + tripoint_above,
-                        .local = local,
-                        .desired = *target,
-                    } );
-                }
-                */
+                // Automatic stair/ladder pairing remains disabled: it damages native
+                // mapgen layouts (including refugee centres and LMOE shelters).
                 if (terrain_here != t_open_air) { continue; }
                 if (zlev <= -OVERMAP_DEPTH) {
                     sub_here->set_ter(local, t_rock_floor);
