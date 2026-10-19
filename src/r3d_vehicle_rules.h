@@ -58,6 +58,10 @@ struct vehicle_render_profile {
 /// Classify actual installed parts; roofs do not turn quarterpanels into full walls.
 auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> vehicle_render_profile;
 
+/// Height above the ground at which things rest on a vehicle mount: only parts that form a
+/// walkable or sittable floor (boardable, aisle, seat, bed) raise it; frames and wheels do not.
+auto vehicle_surface_height( const vehicle &veh, const tripoint_mnt_veh &mount ) -> float;
+
 /// The wheel layer to draw for a mount: an intact wheel wins over a broken one.
 auto preferred_wheel_layer( std::span<const vehicle_render_layer> layers ) -> const vehicle_render_layer *; // *NOPAD*
 

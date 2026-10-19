@@ -193,6 +193,21 @@ TEST_CASE("r3d_shaped_panel_outline_edges_are_classified_by_cell_side", "[r3d][v
     }
 }
 
+TEST_CASE("r3d_only_floored_vehicle_tiles_raise_the_item_surface", "[r3d][vehicle]") {
+    const auto height_with = [](const std::vector<const char*>& ids) {
+        auto veh = vehicle(vproto_id("none"), 0, 0);
+        const auto mount = tripoint_mnt_veh::zero();
+        for (const auto id : ids) {
+            REQUIRE(veh.install_part(mount, vpart_id(id), true) >= 0);
+        }
+        return r3d::vehicle_surface_height(veh, mount);
+    };
+    CHECK(height_with({"frame_horizontal"}) == Approx(0.0f));
+    CHECK(height_with({"frame_horizontal", "wheel_mount_medium", "wheel"}) == Approx(0.0f));
+    CHECK(height_with({"frame_horizontal", "seat"}) == Approx(r3d::chassis_floor_h));
+    CHECK(height_with({"frame_horizontal", "aisle_horizontal"}) == Approx(r3d::chassis_floor_h));
+}
+
 #if defined(TILES)
 #    include "cata_tiles.h"
 #    include "cata_utility.h"

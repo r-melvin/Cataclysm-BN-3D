@@ -51,6 +51,7 @@
 #include "r3d_vox.h"
 #include "r3d_scene_rules.h"
 #include "r3d_shapes.h"
+#include "r3d_vehicle_rules.h"
 #include "vehicle/vehicle.h"
 #include "vehicle/vpart_position.h"
 #include "r3d_gpu.h"
@@ -473,8 +474,8 @@ auto surface_height( state &s, const map &here, const tripoint_bub_ms &p ) -> fl
     if( !here.inbounds( p ) ) {
         return floor_height;
     }
-    if( here.veh_at( p ) ) {
-        return floor_height + chassis_floor_h;
+    if( const auto vp = here.veh_at( p ) ) {
+        return floor_height + vehicle_surface_height( vp->vehicle(), vp->mount() );
     }
     const auto t = shape( s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } ).sh );
     if( t.kind != shape_kind::floor ) {
