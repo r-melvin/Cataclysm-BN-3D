@@ -36,8 +36,14 @@ struct block_uniforms {
     // view's forward direction on the ground, z the hole's half-length along it.
     float cut[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     float cut2[4] = { 1.0f, 0.0f, 0.0f, 0.0f };
+
+    // Distance fog (weather): rgb its colour, w its density (0: off). fog2 xy is the point in the
+    // drawn frame the distance is measured from, on the ground (see fog_amount in r3d_hud_math.h);
+    // fog2 z is 1 to draw translucent texels dithered instead of leaving them out (particles).
+    float fog[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    float fog2[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 };
-static_assert( sizeof( block_uniforms ) == 128, "block_uniforms is mirrored by r3d_block.vert" );
+static_assert( sizeof( block_uniforms ) == 160, "block_uniforms is mirrored by r3d_block.vert" );
 
 /// Owns the GPU objects of the 3D renderer: pipelines, sampler, and the offscreen colour+depth
 /// target that gets composited into the SDL_Renderer scene. It shares the SDL_Renderer's own
@@ -76,7 +82,8 @@ class gpu
         /// an SDL_Texture of the renderer like the tileset sheets; empty on failure. The GPU
         /// texture is released with it, so it must go before shutdown().
         auto create_sheet( SDL_Surface *rgba ) -> std::shared_ptr<SDL_Texture>;
-        auto create_buffer( SDL_GPUBufferUsageFlags usage, uint32_t size ) -> SDL_GPUBuffer *; // *NOPAD*
+        auto create_buffer( SDL_GPUBufferUsageFlags usage,
+                            uint32_t size ) -> SDL_GPUBuffer *; // *NOPAD*
         auto release_buffer( SDL_GPUBuffer *buffer ) -> void;
 
         /// Starts a frame: flushes the renderer and acquires a command buffer.

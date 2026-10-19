@@ -209,6 +209,7 @@ std::string io::enum_to_string<action_id>( action_id data )
             PAIR( ACTION_R3D_ZOOM_IN )
             PAIR( ACTION_R3D_ZOOM_OUT )
             PAIR( ACTION_R3D_RESET )
+            PAIR( ACTION_STATUS_REPORT )
 
             PAIR( ACTION_ACTIONMENU )
             PAIR( ACTION_ITEMACTION )
@@ -531,6 +532,8 @@ std::string action_ident( action_id act )
             return "r3d_zoom_out";
         case ACTION_R3D_RESET:
             return "r3d_reset";
+        case ACTION_STATUS_REPORT:
+            return "status_report";
         case ACTION_TOGGLE_FULLSCREEN:
             return "toggle_fullscreen";
         case ACTION_TOGGLE_PIXEL_MINIMAP:
@@ -1243,7 +1246,7 @@ action_id handle_action_menu()
             } );
 #if defined(TILES)
             if( use_tiles ) {
-                register_actions( { ACTION_ZOOM_OUT, ACTION_ZOOM_IN, ACTION_R3D_TOGGLE, ACTION_R3D_ROTATE_LEFT, ACTION_R3D_ROTATE_RIGHT, ACTION_R3D_PITCH_UP, ACTION_R3D_PITCH_DOWN, ACTION_R3D_ZOOM_IN, ACTION_R3D_ZOOM_OUT, ACTION_R3D_RESET } );
+                register_actions( { ACTION_ZOOM_OUT, ACTION_ZOOM_IN, ACTION_R3D_TOGGLE, ACTION_R3D_ROTATE_LEFT, ACTION_R3D_ROTATE_RIGHT, ACTION_R3D_PITCH_UP, ACTION_R3D_PITCH_DOWN, ACTION_R3D_ZOOM_IN, ACTION_R3D_ZOOM_OUT, ACTION_R3D_RESET, ACTION_STATUS_REPORT } );
             }
 #endif
             register_lua_action_entries( category_id );

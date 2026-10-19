@@ -1,4 +1,5 @@
 #include "main_menu.h"
+#include "ui_theme.h"
 
 #include "auto_pickup.h"
 #include "avatar.h"
@@ -496,14 +497,14 @@ void main_menu::init_strings()
 
     // new game menu items
     vNewGameSubItems.clear();
-    vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "C<u|U>stom Character" ) );
-    vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "<P|p>reset Character" ) );
-    vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "<R|r>andom Character" ) );
+    vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "C<u|U>stom character" ) );
+    vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "<P|p>reset: a saved template" ) );
+    vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "<R|r>andom, review first" ) );
     if( !MAP_SHARING::isSharing() ) {
         // "Play Now" function doesn't play well together with shared maps
         vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game",
-                                       "Play Now!  (<D|d>efault Scenario)" ) );
-        vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "Play N<o|O>w!" ) );
+                                       "Play now as an evacuee (<D|d>efault scenario)" ) );
+        vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "Play n<o|O>w, random scenario" ) );
 
         // Special games don't play well together with shared maps
         vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "<T|t>utorial" ) );

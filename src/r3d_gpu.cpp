@@ -44,7 +44,7 @@ gpu::~gpu()
     shutdown();
 }
 
-auto gpu::load_shader( const load_shader_options &options ) -> SDL_GPUShader *
+auto gpu::load_shader( const load_shader_options &options ) -> SDL_GPUShader * // *NOPAD*
 {
     const auto basename = options.basename;
     auto stage = options.stage;
@@ -434,7 +434,8 @@ auto gpu::ensure_target( int width, int height ) -> bool
     return true;
 }
 
-auto gpu::create_buffer( SDL_GPUBufferUsageFlags usage, uint32_t size ) -> SDL_GPUBuffer *
+auto gpu::create_buffer( SDL_GPUBufferUsageFlags usage,
+                         uint32_t size ) -> SDL_GPUBuffer * // *NOPAD*
 {
     auto info = SDL_GPUBufferCreateInfo{};
     info.usage = usage;
@@ -593,7 +594,7 @@ auto gpu::draw_block( const draw_block_options &options ) -> void
     SDL_DrawGPUIndexedPrimitives( pass_, index_count, 1, first_index, 0, 0 );
 }
 
-auto gpu::end_frame() -> SDL_Texture *
+auto gpu::end_frame() -> SDL_Texture * // *NOPAD*
 {
     if( !cmd_ ) {
         return nullptr;

@@ -1873,6 +1873,47 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
     return sink.finish();
 }
 
+auto build_particle_mesh( const entity_view &view ) -> chunk_mesh
+{
+    auto sink = quad_sink{};
+    const auto right = vec3( view.cam.ground_right() );
+    const auto toward = vec3( normalize( view.cam.eye() - view.cam.stretched_target() ) );
+    const auto up = vec3( cross( right, vec3{ 0.0f, 0.0f, 0.0f } - toward ) );
+    // Weather particles: plain quads facing the camera, centred on their point.
+    for( const entity_view::particle &pt : view.particles ) {
+        if( !pt.sprite || !pt.sprite->valid ) {
+            continue;
+        }
+        const sprite_ref &s = *pt.sprite;
+        // Only the opaque part of the sprite (a raindrop is a few pixels of a whole tile), at
+        // its own proportions, pt.size tall.
+        const auto u0 = static_cast<float>( s.u0 + ( s.u1 - s.u0 ) * s.opaque_x0 );
+        const auto u1 = static_cast<float>( s.u0 + ( s.u1 - s.u0 ) * s.opaque_x1 );
+        const auto v0 = static_cast<float>( s.v0 + ( s.v1 - s.v0 ) * s.opaque_y0 );
+        const auto v1 = static_cast<float>( s.v0 + ( s.v1 - s.v0 ) * s.opaque_y1 );
+        const auto opaque_h = static_cast<float>( std::max( ( s.opaque_y1 - s.opaque_y0 ) * s.size_y,
+                              0.01f ) );
+        const auto aspect = static_cast<float>( std::clamp( ( s.opaque_x1 - s.opaque_x0 ) * s.size_x /
+                                                opaque_h, 0.1f,
+                                                4.0f ) );
+        const auto half_h = static_cast<float>( pt.size * 0.5f );
+        const auto half_w = static_cast<float>( half_h * aspect );
+        const auto rx = static_cast<float>( right.x * half_w );
+        const auto ry = static_cast<float>( -right.y * half_w );
+        const auto ux = static_cast<float>( up.x * half_h );
+        const auto uy = static_cast<float>( -up.y * half_h );
+        const auto uz = static_cast<float>( up.z * half_h / view.cam.z_scale );
+        const auto uv = uvs_t{{ { u0, v0 }, { u1, v0 }, { u1, v1 }, { u0, v1 } }};
+        const auto c = corners_t{{
+                { pt.x - rx + ux, pt.y - ry + uy, pt.z + uz }, { pt.x + rx + ux, pt.y + ry + uy, pt.z + uz },
+                { pt.x + rx - ux, pt.y + ry - uy, pt.z - uz }, { pt.x - rx - ux, pt.y - ry - uy, pt.z - uz }
+            }
+        };
+        sink.add_colored( { .sprite = s, .corners = c, .uvs = uv, .ref = light_ref{}, .color = no_pull( pt.color ) } );
+    }
+    return sink.finish();
+}
+
 } // namespace r3d
 
 #endif // defined(TILES)

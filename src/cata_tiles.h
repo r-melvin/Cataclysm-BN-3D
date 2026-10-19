@@ -1019,6 +1019,13 @@ class cata_tiles
         auto get_character_layers( const Character &ch ) -> character_layers;
         auto tileset_loads() const -> uint64_t { return r3d_tileset_loads; }
         struct frame_markers {
+            bool sct = false;
+            bool zones = false;
+            tripoint_bub_ms zone_start;
+            tripoint_bub_ms zone_end;
+            tripoint_rel_ms zone_offset;
+            std::vector<tripoint_bub_ms> zone_points;
+
             std::vector<tripoint_bub_ms> cursors;
             std::vector<tripoint_bub_ms> highlights;
             std::vector<tripoint_bub_ms> line;

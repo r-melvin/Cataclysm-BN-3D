@@ -210,6 +210,12 @@ auto cata_tiles::get_character_layers( const Character &ch ) -> character_layers
 auto cata_tiles::get_frame_markers() const -> frame_markers
 {
     auto out = frame_markers{};
+    out.sct = do_draw_sct;
+    out.zones = do_draw_zones;
+    out.zone_start = zone_start;
+    out.zone_end = zone_end;
+    out.zone_offset = zone_offset;
+    out.zone_points = zone_points;
     if( do_draw_cursor ) { out.cursors = cursors; }
     if( do_draw_highlight ) { out.highlights = highlights; }
     if( do_draw_line && !line_trajectory.empty() ) {
@@ -224,6 +230,12 @@ auto cata_tiles::get_frame_markers() const -> frame_markers
 
 auto cata_tiles::restore_frame_markers( const frame_markers &markers ) -> void
 {
+    do_draw_sct = markers.sct;
+    do_draw_zones = markers.zones;
+    zone_start = markers.zone_start;
+    zone_end = markers.zone_end;
+    zone_offset = markers.zone_offset;
+    zone_points = markers.zone_points;
     cursors = markers.cursors;
     highlights = markers.highlights;
     do_draw_cursor = !cursors.empty();

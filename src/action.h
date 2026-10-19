@@ -323,6 +323,7 @@ enum action_id : int {
     ACTION_R3D_ZOOM_IN,
     ACTION_R3D_ZOOM_OUT,
     ACTION_R3D_RESET,
+    ACTION_STATUS_REPORT,
 
     /** Open the action menu */
     ACTION_ACTIONMENU,

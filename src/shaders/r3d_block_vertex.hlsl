@@ -5,6 +5,8 @@ cbuffer params : register(b0, space1) {
     float4 pull;
     float4 cut;
     float4 cut2;
+    float4 fog;
+    float4 fog2;
 };
 struct VertexInput {
     float3 position : TEXCOORD0;
@@ -19,6 +21,8 @@ struct VertexOutput {
     float height : TEXCOORD3;
     nointerpolation float4 cut : TEXCOORD4;
     nointerpolation float2 cut2 : TEXCOORD5;
+    float fog_amount : TEXCOORD6;
+    nointerpolation float4 fog_color : TEXCOORD7;
 };
 VertexOutput main(VertexInput input) {
     VertexOutput output;
@@ -35,5 +39,8 @@ VertexOutput main(VertexInput input) {
     output.height = position.z;
     output.cut = cut;
     output.cut2 = cut2.xy;
+    const float distance = length(position.xy - fog2.xy) * fog.w;
+    output.fog_amount = 1.0 - exp(-distance * distance);
+    output.fog_color = float4(fog.rgb, fog2.z);
     return output;
 }

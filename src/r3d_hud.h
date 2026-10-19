@@ -1,0 +1,64 @@
+#pragma once
+#ifndef CATA_SRC_R3D_HUD_H
+#define CATA_SRC_R3D_HUD_H
+
+#if defined(TILES)
+
+#include <optional>
+#include <vector>
+
+#include "coordinates.h"
+#include "r3d.h"
+#include "r3d_camera.h"
+#include "r3d_sky.h"
+
+struct SDL_Renderer;
+
+namespace r3d
+{
+
+/// How the 3D picture just drawn maps the scene to the screen.
+struct hud_frame {
+    float x = 0.0f; // the picture's rectangle, logical pixels
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+    camera cam;
+    mat4 view_proj;
+    tripoint_bub_ms center; // the viewed tile: the origin of the scene frame
+    bool sct = false;       // the game queued its scrolling combat text for this frame
+    int view_z = 0;         // level of the viewed tile
+    const sky_sprites *sky = nullptr; // sun and moon sprites, when loaded
+    float cell_w = 8.0f;    // size of a character of the font hud texts are drawn in
+    float cell_h = 16.0f;
+
+    /// Clip position of a point in scene-frame tile space (x east, y south, z levels).
+    auto clip( const vec3 &tile, float &w_out ) const -> vec3;
+    /// Screen position (logical pixels) of that point; nothing when it is behind the camera.
+    auto screen( const vec3 &tile ) const -> std::optional<vec3>;
+    /// Screen position of the middle of a map tile, height levels above its floor.
+    auto screen( const tripoint_bub_ms &p, float height ) const -> std::optional<vec3>;
+    /// Scene-frame tile space position of the middle of a map tile, height levels up.
+    auto tile_point( const tripoint_bub_ms &p, float height ) const -> vec3;
+};
+
+/// Draws the overlays of the 3D view over its picture with the SDL renderer (shapes) and adds
+/// the texts they need to texts (drawn by sdltiles in the map font). Each part follows its own
+/// option and only shows what the player perceives.
+struct draw_hud_options {
+    SDL_Renderer *renderer;
+    const hud_frame &frame;
+    const atmosphere &air;
+    std::vector<hud_text> &texts;
+};
+
+auto draw_hud( const draw_hud_options &options ) -> void;
+
+/// Whether a hit fade or location notice needs another idle presentation frame.
+auto hud_animation_pending() -> bool;
+
+} // namespace r3d
+
+#endif // defined(TILES)
+
+#endif // CATA_SRC_R3D_HUD_H

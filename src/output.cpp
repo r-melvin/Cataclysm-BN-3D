@@ -1,4 +1,5 @@
 #include "output.h"
+#include "ui_theme.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -584,12 +585,15 @@ void draw_custom_border(
 void draw_border( const catacurses::window &w, nc_color border_color, const std::string &title,
                   nc_color title_color )
 {
+    const auto &theme = get_ui_theme();
+    if( theme.modern_borders && border_color == BORDER_COLOR ) { border_color = theme.border; }
     wattron( w, border_color );
     wborder( w, LINE_XOXO, LINE_XOXO, LINE_OXOX, LINE_OXOX,
              LINE_OXXO, LINE_OOXX, LINE_XXOO, LINE_XOOX );
     wattroff( w, border_color );
     if( !title.empty() ) {
-        center_print( w, 0, title_color, title );
+        center_print( w, 0, theme.modern_borders && title_color == c_light_red ? theme.title : title_color,
+                      theme.modern_borders ? " " + title + " " : title );
     }
 }
 

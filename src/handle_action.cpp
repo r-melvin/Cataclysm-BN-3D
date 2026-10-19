@@ -1,3 +1,4 @@
+#include "status_report.h"
 #include "action.h"
 #include "advanced_inv.h"
 #include "animation.h"
@@ -3196,6 +3197,13 @@ bool game::handle_action()
             case ACTION_R3D_RESET:
                 r3d::reset();
                 break;
+            case ACTION_STATUS_REPORT: {
+                const auto report = status_report( u );
+                add_msg( m_info, "%s", report );
+                popup( "%s", report );
+                break;
+            }
+
             case ACTION_ITEMACTION:
                 item_action_menu();
                 break;

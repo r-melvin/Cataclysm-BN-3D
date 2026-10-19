@@ -2566,6 +2566,8 @@ void options_manager::add_options_graphics()
        );
 #endif
 
+    add( "MODERN_MENUS", graphics, translate_marker( "Modern menu borders" ),
+         translate_marker( "Use muted borders and padded headings. Disable to keep the classic menu appearance." ), false );
 #if defined(TILES)
     add( "RENDERER_3D", graphics, translate_marker( "Voxelised 3D renderer (experimental)" ),
          translate_marker( "If true, draws the map as a voxelised 3D scene instead of the standard isometric view.  "
@@ -2574,6 +2576,21 @@ void options_manager::add_options_graphics()
        );
 
     get_option( "RENDERER_3D" ).setPrerequisite( "USE_TILES" );
+
+        add( "R3D_WEATHER", graphics, translate_marker( "3D weather and sky" ),
+             translate_marker( "Show the weather and the time of day in the 3D view: rain and snow drifting with the wind, fog that thickens with distance, the colour of the sky, the sun and the moon in its phase.  The status report action describes the same in words." ),
+             true, COPT_CURSES_HIDE
+           );
+
+        get_option( "R3D_WEATHER" ).setPrerequisite( "RENDERER_3D" );
+
+        add( "R3D_HUD", graphics, translate_marker( "3D overlays" ),
+             translate_marker( "Draw marks over the 3D view: combat text, heard sounds, the zone being placed, pointers to threats off screen, the compass, abnormal states and where a hit came from." ),
+             true, COPT_CURSES_HIDE
+           );
+
+        get_option( "R3D_HUD" ).setPrerequisite( "RENDERER_3D" );
+
 
     add( "R3D_VIEW_DEPTH", graphics, translate_marker( "3D view depth" ),
          translate_marker( "How many z-levels below the viewed one the 3D renderer draws." ),

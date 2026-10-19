@@ -4081,5 +4081,11 @@
     "name": "3D view: reset camera",
     "id": "r3d_reset",
     "bindings": [ { "input_method": "keyboard", "key": "CTRL+R" } ]
+  },
+  {
+    "type": "keybinding",
+    "name": "Read status report",
+    "id": "status_report",
+    "bindings": [ { "input_method": "keyboard", "key": "F4" } ]
   }
 ]

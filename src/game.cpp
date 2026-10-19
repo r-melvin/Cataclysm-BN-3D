@@ -3700,6 +3700,7 @@ input_context get_default_mode_input_context()
     ctxt.register_action( "debug_sound_walls" );
     ctxt.register_action( "debug_hour_timer" );
     ctxt.register_action( "debug_mode" );
+    ctxt.register_action( "status_report" );
     if( use_tiles ) {
         ctxt.register_action( "zoom_out" );
         ctxt.register_action( "zoom_in" );
@@ -3711,7 +3712,6 @@ input_context get_default_mode_input_context()
         ctxt.register_action( "r3d_zoom_in" );
         ctxt.register_action( "r3d_zoom_out" );
         ctxt.register_action( "r3d_reset" );
-
     }
 #if !defined(__ANDROID__)
     ctxt.register_action( "toggle_fullscreen" );

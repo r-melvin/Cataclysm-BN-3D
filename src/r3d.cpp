@@ -57,10 +57,16 @@
 #include "vehicle/vehicle.h"
 #include "vehicle/vpart_position.h"
 #include "r3d_gpu.h"
+#include  "r3d_hud.h"
+#include "r3d_hud_math.h"
 #include "r3d_mesh.h"
+
+#include "r3d_sky.h"
 #include "rng.h"
 #include "sdl_wrappers.h"
 #include "sdltiles.h"
+
+#include "sounds.h"
 #include "map/submap.h"
 #include "ui_manager.h"
 
@@ -170,6 +176,7 @@ struct state {
     dynamic_mesh_buffers dyn;
     dynamic_mesh_buffers veh;
     dynamic_mesh_buffers silhouette;
+    dynamic_mesh_buffers fx;
     shown_view shown;
     bool map_drawn = false; // the game's map view has been on screen (a game is running)
     vec3 pan; // free camera: offset of the camera target from the viewed tile, world space
@@ -181,9 +188,15 @@ struct state {
     bool comparison_camera = false;
     bool was_controlling_vehicle = false;
     float last_vehicle_yaw = 0.0f;
+    std::vector<hud_text> texts; // drawn over the last frame by sdltiles
+    int text_w = 8;              // their font's character size (set_text_cell)
+    int text_h = 16;
+    sky_sprites sky;        // sun, moon and fallback weather sprites (see r3d_sky.h)
+    bool sky_failed = false;
+    bool animated_weather = false;
 };
 
-auto st() -> state &
+auto st() -> state & // *NOPAD*
 {
     // Intentionally leaked: the GPU objects must not be destroyed after SDL has shut down.
     static auto *s = new state();
@@ -192,7 +205,7 @@ auto st() -> state &
 
 auto release_dynamic( state &s ) -> void
 {
-    for( auto *buffers : { &s.dyn, &s.veh, &s.silhouette } ) {
+    for( auto *buffers : { &s.dyn, &s.veh, &s.silhouette, &s.fx } ) {
         s.device.release_buffer( buffers->positions );
         s.device.release_buffer( buffers->lights );
         s.device.release_buffer( buffers->indices );
@@ -795,6 +808,116 @@ auto apply_env_camera( camera &cam ) -> void
     }
 }
 
+struct add_weather_particles_options {
+    state &s;
+    entity_view &view;
+    const atmosphere &air;
+    const map &here;
+    const tripoint_bub_ms &center;
+    const tripoint_abs_ms &origin;
+    const light_sampler &sampler;
+};
+
+auto add_weather_particles( const add_weather_particles_options &options ) -> void
+{
+    auto &s = options.s;
+    auto &view = options.view;
+    const auto &air = options.air;
+    const auto &here = options.here;
+    const auto &center = options.center;
+    const auto &origin = options.origin;
+    const auto &sampler = options.sampler;
+
+    if( air.particles <= 0 || air.particle_id.empty() ) {
+        return;
+    }
+    const auto &from_tileset = s.cache.named( { .category = C_WEATHER, .id = air.particle_id, .tiles = *tilecontext } );
+    const sprite_ref *sprite = from_tileset.sprite.valid ? &from_tileset.sprite :
+                               from_tileset.backdrop.valid ? &from_tileset.backdrop : nullptr;
+    if( !sprite && s.sky.loaded() ) {
+        sprite = &s.sky.cells[air.snow ? sky_sprites::snow : sky_sprites::rain];
+    }
+    if( !sprite ) {
+        return;
+    }
+    auto field = particle_field{};
+    // The field covers what the camera shows, more of it from farther away.
+    field.half_extent = std::clamp( s.cam.distance * 0.9f, 12.0f, 40.0f );
+    field.height = 4.0f;
+    field.fall_speed = air.snow ? 0.6f : 4.5f;
+    // Snow is carried by the wind more than rain is.
+    field.wind = air.wind * ( air.snow ? 0.5f : 0.35f );
+    const auto area = static_cast<float>( field.half_extent * field.half_extent / ( 20.0f * 20.0f ) );
+    const auto count = static_cast<int>( std::min( static_cast<int>( static_cast<float>
+                                         ( air.particles ) * area ), 3000 ) );
+    const auto seconds = static_cast<float>( static_cast<float>( SDL_GetTicks() % 3600000u ) /
+                         1000.0f );
+    // Particles stay put in the world when the view moves: wrap them in world coordinates.
+    const auto field_world = vec3{ static_cast<float>( origin.x() ) + s.pan.x,
+                                   -static_cast<float>( origin.y() ) + s.pan.y, 0.0f };
+    const auto size = static_cast<float>( air.snow ? 0.35f : 0.7f );
+    for( auto i = static_cast<int>( 0 ); i < count; ++i ) {
+        const auto p = vec3( particle_position( { .index = static_cast<uint32_t>( i ), .seconds = seconds, .field = field, .world_offset = field_world } ) );
+        // Scene-frame tile space: x east, y south, origin at the viewed tile.
+        const auto tx = static_cast<float>( p.x + s.pan.x );
+        const auto ty = static_cast<float>( -( p.y + s.pan.y ) );
+        const auto tile = tripoint_bub_ms( center.x() + static_cast<int>( std::floor( tx ) ),
+                                           center.y() + static_cast<int>( std::floor( ty ) ), center.z() );
+        if( !here.inbounds( tile ) || !here.is_outside( tile ) || !here.pl_sees( tile, -1 ) ) {
+            continue;
+        }
+        const auto light = static_cast<uint32_t>( sampler.color_at( tile ) );
+        if( light == pack_light( 0, 0, 0 ) || light == remembered_light() ) {
+            continue; // only where the player sees the sky now
+        }
+        const auto channel = [ light ]( int shift, float tint ) {
+            return static_cast<uint8_t>( std::min( 255.0f,
+                                                   static_cast<float>( ( light >> shift ) & 255u ) * tint ) );
+        };
+        const auto color = static_cast<uint32_t>( air.snow ? light : pack_light( channel( 0, 0.8f ),
+                           channel( 8, 0.85f ),
+                           channel( 16, 1.0f ) ) );
+        view.particles.push_back( { tx, ty, floor_height + p.z, size, sprite, color } );
+    }
+    static auto logged = static_cast<bool>( false );
+    if( !logged && std::getenv( "CATA_R3D_DEBUG_LAYERS" ) ) {
+        logged = true;
+        DebugLog( DL::Info, DC::Main ) << "r3d weather " << air.particle_id << " tileset=" <<
+                                       from_tileset.sprite.valid << "/" << from_tileset.backdrop.valid << " count=" << count <<
+                                       " shown=" << view.particles.size() << " opaque=" << sprite->opaque_x0 << "," <<
+                                       sprite->opaque_y0 << "," << sprite->opaque_x1 << "," << sprite->opaque_y1 << " size=" <<
+                                       sprite->size_x << "x" << sprite->size_y;
+    }
+}
+
+// The sun and the moon as discs far out in the sky, in their direction from the camera target.
+// Far enough that the loaded map stands in front of them; the weather's fog hides them too.
+struct add_sky_bodies_options {
+    state &s;
+    entity_view &view;
+    const atmosphere &air;
+    int view_z;
+};
+
+auto add_sky_bodies( const add_sky_bodies_options &options ) -> void
+{
+    auto &s = options.s;
+    auto &view = options.view;
+    const auto &air = options.air;
+    auto view_z = options.view_z;
+
+    if( !s.sky.loaded() ) {
+        return;
+    }
+    constexpr auto distance = static_cast<float>( 300.0f );
+    for( const sky_body &b : sky_bodies( view_z, air ) ) {
+        // The view stretches heights by z_scale: shrink the direction's height to keep the angle.
+        const auto at = vec3( s.cam.target + vec3{ b.dir.x, b.dir.y, b.dir.z / s.cam.z_scale } * distance );
+        view.particles.push_back( { at.x, -at.y, at.z, b.sun ? 16.0f : 14.0f,
+                                    &s.sky.cells[static_cast<size_t>( b.cell )], pack_light( 255, 255, 255 ) } );
+    }
+}
+
 auto maybe_take_screenshot( state &s ) -> void
 {
     // CATA_R3D_SCREENSHOT=<path> saves the finished previous frame once things have settled;
@@ -851,7 +974,7 @@ struct loaded_submap_at_options {
     const tripoint_abs_sm &p;
 };
 
-auto loaded_submap_at( const loaded_submap_at_options &options ) -> const submap *
+auto loaded_submap_at( const loaded_submap_at_options &options ) -> const submap * // *NOPAD*
 {
     const auto &base = options.base;
     auto view_z = options.view_z;
@@ -889,7 +1012,7 @@ auto append_frame_markers( const append_frame_markers_options &options ) -> void
     const auto &id = options.id;
     auto box = options.box;
 
-    const tile_info &sprite = s.cache.named( { .category = C_NONE, .id = id, .tiles = *tilecontext } );
+    const auto &sprite = s.cache.named( { .category = C_NONE, .id = id, .tiles = *tilecontext } );
     for( const tripoint_bub_ms &p : where ) {
         entities_view.markers.push_back( { .pos = p, .top = column_height( s, here, p ), .sprite = &sprite, .box = box } );
     }
@@ -1351,6 +1474,15 @@ auto compare_capture( bool gameplay_boundary ) -> void
     }
 }
 
+auto hud_texts() -> const std::vector<hud_text> & // *NOPAD*
+{ return st().texts; }
+
+auto set_text_cell( int width, int height ) -> void
+{
+    st().text_w = std::max( width, 1 );
+    st().text_h = std::max( height, 1 );
+}
+
 auto active() -> bool
 { return st().drawn && get_option<bool>( "RENDERER_3D" ); }
 
@@ -1484,6 +1616,9 @@ auto shutdown() -> void
     s.pending_assets.reset();
     s.asset_request_started = false;
     s.last_asset_refresh = {};
+    s.sky = sky_sprites();
+    s.sky_failed = false;
+    s.animated_weather = false;
     s.tileset_loads = 0;
     s.device.shutdown();
     s.epoch_valid = false;
@@ -1495,7 +1630,8 @@ auto shutdown() -> void
 auto refresh_pending_assets() -> void
 {
     auto &s = st();
-    if( !g || !active() || !assets_pending( s ) ) { return; }
+    if( !g || !active() ||
+        ( !assets_pending( s ) && !s.animated_weather && !hud_animation_pending() ) ) { return; }
     const auto now = std::chrono::steady_clock::now();
     if( now - s.last_asset_refresh < std::chrono::milliseconds( 33 ) ) { return; }
     s.last_asset_refresh = now;
@@ -1595,6 +1731,12 @@ auto draw( const draw_options &options ) -> bool
     const auto render_started = debug_chunk_work ? std::chrono::steady_clock::now() :
                                 std::chrono::steady_clock::time_point{};
     maybe_take_screenshot( s );
+
+    // The sky sheet is uploaded on its own command buffer, so before the frame starts.
+    if( !s.sky.loaded() && !s.sky_failed ) {
+        s.sky = make_sky_sprites( s.device );
+        s.sky_failed = !s.sky.loaded();
+    }
     if( !s.env_camera_applied ) {
         apply_env_camera( s.cam );
         s.env_camera_applied = true;
@@ -1742,7 +1884,7 @@ auto draw( const draw_options &options ) -> bool
                                       .light = [&sampler]( const tripoint_bub_ms & p )
     -> uint32_t {
         return sampler.color_at( p );
-    }, .markers = {}, .uprights = std::move( upright_list ), .surface = [&s, &here]( const tripoint_bub_ms & p )
+    }, .markers = {}, .uprights = std::move( upright_list ), .particles = {}, .surface = [&s, &here]( const tripoint_bub_ms & p )
     -> float {
         return surface_height( s, here, p );
     }, .vehicle_vox_parts = &s.vehicle_vox_parts, .item_vox_models = &s.item_vox_models,
@@ -1752,8 +1894,12 @@ auto draw( const draw_options &options ) -> bool
         return here.inbounds( p ) && ( fullbright || here.pl_sees( p, -1 ) );
     } };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
+
+    // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
+    auto queued_sct = static_cast<bool>( false );
     {
         const auto queued = cata_tiles::frame_markers( tilecontext->get_frame_markers() );
+        queued_sct = queued.sct;
         const auto add_markers = [ &s, &here, &entities_view ]( const std::vector<tripoint_bub_ms> &where,
                                  const std::string & id,
         bool box ) -> void {
@@ -1765,6 +1911,57 @@ auto draw( const draw_options &options ) -> bool
         }
         add_markers( queued.highlights, "highlight", false );
         add_markers( queued.cursors, "cursor", true );
+        if( get_option<bool>( "R3D_HUD" ) ) {
+            // Heard sounds, as the flat view marks them (draw_footsteps_frame), and the zone
+            // being placed (draw_zones_frame).
+            const auto &step = s.cache.named( { .category = C_NONE, .id = "footstep", .tiles = *tilecontext } );
+            const auto &step_above = s.cache.named( { .category = C_NONE, .id = "footstep_above", .tiles = *tilecontext } );
+            const auto &step_below = s.cache.named( { .category = C_NONE, .id = "footstep_below", .tiles = *tilecontext } );
+            for( const tripoint_bub_ms &p : sounds::get_footstep_markers() ) {
+                const tile_info *sprite = &step;
+                if( p.z() > center.z() && step_above.main().valid ) {
+                    sprite = &step_above;
+                } else if( p.z() < center.z() && step_below.main().valid ) {
+                    sprite = &step_below;
+                }
+                entities_view.markers.push_back( { p, column_height( s, here, p ), sprite, false } );
+            }
+            // The route auto-travel is walking, as a ribbon of the targeting line's sprite.
+            const auto &path = s.cache.named( { .category = C_NONE, .id = "animation_line", .tiles = *tilecontext } );
+            for( const tripoint_bub_ms &p : get_avatar().get_auto_move_route() ) {
+                if( here.inbounds( p ) ) {
+                    entities_view.markers.push_back( { p, column_height( s, here, p ), &path, false } );
+                }
+            }
+            if( queued.zones ) {
+                const auto &zone = s.cache.named( { .category = C_NONE, .id = "highlight", .tiles = *tilecontext } );
+                const auto add_zone = [&]( const tripoint_bub_ms & p ) {
+                    if( here.inbounds( p ) && p.z() == center.z() ) {
+                        entities_view.markers.push_back( { p, column_height( s, here, p ), &zone, false } );
+                    }
+                };
+                if( !queued.zone_points.empty() ) {
+                    for( const auto &p : queued.zone_points ) { add_zone( p ); }
+                } else {
+                    const auto zone_z = get_avatar().bub_pos().z();
+                    for( auto zy = queued.zone_start.y(); zy <= queued.zone_end.y(); ++zy ) {
+                        for( auto zx = queued.zone_start.x(); zx <= queued.zone_end.x(); ++zx ) {
+                            add_zone( tripoint_bub_ms( zx, zy, zone_z ) + queued.zone_offset.xy() );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    const auto weather_on = static_cast<bool>( get_option<bool>( "R3D_WEATHER" ) );
+    const auto air = atmosphere( current_atmosphere( view_z, weather_on ) );
+    s.animated_weather = weather_on && air.particles > 0;
+    if( weather_on ) {
+        if( !Messages::capture_read_frozen ) { report_weather_changes(); }
+    }
+    if( weather_on ) {
+        add_weather_particles( { .s = s, .view = entities_view, .air = air, .here = here, .center = center, .origin = origin, .sampler = sampler } );
+        add_sky_bodies( { .s = s, .view = entities_view, .air = air, .view_z = view_z } );
     }
     const auto vehicles = chunk_mesh( build_vehicle_mesh( entities_view ) );
     const auto draw_vehicles = upload_mesh( s, s.veh, vehicles );
@@ -1784,7 +1981,12 @@ auto draw( const draw_options &options ) -> bool
         draw_avatar_silhouette = upload_mesh( s, s.silhouette, avatar_silhouette );
     }
 
-    if( !s.device.begin_pass( 0.05f, 0.05f, 0.07f ) ) {
+    const auto particles = chunk_mesh( build_particle_mesh( entities_view ) );
+    const auto draw_particles = upload_mesh( s, s.fx, particles );
+
+    // Without the weather option the background keeps the near-black it always had.
+    const auto clear = rgb( weather_on ? air.sky : rgb{ 0.05f, 0.05f, 0.07f  } );
+    if( !s.device.begin_pass( clear.r, clear.g, clear.b ) ) {
         s.device.abort_frame();
         // This frame's uploads may not have happened, so no chunk's buffers can be trusted.
         release_all_chunks( s );
@@ -1794,6 +1996,15 @@ auto draw( const draw_options &options ) -> bool
     auto uniforms = block_uniforms{};
     uniforms.view_proj = view_proj;
     set_cutaway( { .u = uniforms, .view_proj = view_proj, .aspect = aspect, .cam = s.cam, .center = center } );
+
+    if( weather_on && air.fog_density > 0.0f ) {
+        uniforms.fog[0] = air.fog_color.r;
+        uniforms.fog[1] = air.fog_color.g;
+        uniforms.fog[2] = air.fog_color.b;
+        uniforms.fog[3] = air.fog_density;
+        uniforms.fog2[0] = s.cam.target.x;
+        uniforms.fog2[1] = s.cam.target.y;
+    }
     for( const visible_chunk &vc : visible ) {
         uniforms.offset[0] = vc.offset[0];
         uniforms.offset[1] = vc.offset[1];
@@ -1859,12 +2070,39 @@ auto draw( const draw_options &options ) -> bool
                                    .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
+
+    if( draw_particles ) {
+        uniforms.cut[3] = 0.0f;
+        uniforms.offset[0] = 0.0f;
+        uniforms.offset[1] = 0.0f;
+        uniforms.offset[2] = 0.0f;
+        uniforms.pull[3] = 0.0f;
+        uniforms.fog2[2] = 1.0f;
+        for( const mesh_batch &b : particles.batches ) {
+            s.device.draw_block( { .positions = s.fx.positions, .lights = s.fx.lights, .indices = s.fx.indices, .first_index = b.first_index, .index_count = b.index_count, .sheet = b.sheet, .uniforms = uniforms } );
+        }
+    }
     SDL_Texture *const result = s.device.end_frame();
     if( !result ) {
         return false;
     }
     const auto dst = SDL_FRect{ .x = x, .y = y, .w = w, .h = h };
     SDL_RenderTexture( renderer, result, nullptr, &dst );
+    s.texts.clear();
+    auto frame = hud_frame{};
+    frame.x = x;
+    frame.y = y;
+    frame.w = w;
+    frame.h = h;
+    frame.cam = s.cam;
+    frame.view_proj = view_proj;
+    frame.center = center;
+    frame.sct = queued_sct;
+    frame.view_z = view_z;
+    frame.cell_w = static_cast<float>( s.text_w );
+    frame.cell_h = static_cast<float>( s.text_h );
+    frame.sky = &s.sky;
+    draw_hud( { .renderer = renderer, .frame = frame, .air = air, .texts = s.texts } );
 
     const auto report_time = debug_chunk_work ? std::chrono::steady_clock::now() :
                              std::chrono::steady_clock::time_point{};

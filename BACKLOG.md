@@ -247,14 +247,26 @@ Sources: [README](README.md), [renderer guide](docs/en/dev/guides/renderer_3d.md
 
 ## R3D-11: Integrate the native UI/HUD branch
 
-**Status: implemented on a branch, not merged.** Local `feat/ui-overhaul` at
-`ce6d386` has menu themes, the F4 report, HUD indicators and weather/sky effects.
-Its guide is `docs/en/dev/guides/ui_overhaul.md` on that branch.
+**Status: integrated on main; native platform acceptance remains R3D-10.**
+The native menu theme, F4 report, HUD and weather/sky effects from `ce6d386`
+are integrated with current asset preparation, voxel items, vehicle visibility,
+silhouettes, shared dynamic buffers and capture restoration. Weather particles
+require native tile perception. HUD shapes/text are clipped to the map, SDL
+renderer state is restored, and comparison redraws cannot emit weather notices.
+F4 is registered for both native tiles and curses input. Rain/snow and transient
+HUD fades request idle redraws; an Xvfb snow trial changed frames without input,
+held at 23,554 kernel mappings, and retained the source save's turn 1,327,697
+and 100 moves after normal save/quit. Evidence: `/tmp/bn-ui-idle/`.
 
-Refresh against current main; resolve camera/visibility overlap and validate
-native UI refresh, perception, input, capture and 2D fallback before merging.
-Coordinate existing sky/fog effects with R3D-14 instead of starting a separate
-weather renderer.
+Validation: both game/test targets build, all 113 renderer tests pass (33,208
+assertions), 43 standalone math cases pass, and 14 tooling tests pass. All 25
+SPIR-V shaders validate; both revised block shaders cross-compile to MSL/DXIL.
+A private Xvfb/Lavapipe run exercised F4, eight camera angles, view restoration,
+2D fallback and normal save/quit; it produced an integrity-checked 8.7 MB ZIP
+with no Vulkan validation errors. Temporary evidence:
+`/tmp/bn-ui-integration-capture/`. These checks do not establish every HUD
+condition or native Metal/Direct3D appearance; broader visual fixtures remain
+R3D-07. See the [UI guide](docs/en/dev/guides/ui_overhaul.md).
 
 ## R3D-12: Integrate the first-person branch
 
@@ -281,10 +293,15 @@ turns or alter normal gameplay rules.
 
 ## R3D-14: Fog of war and a time-of-day sky
 
-**Status: research requested; related effects exist on R3D-11's branch.**
+**Status: existing effects evaluated and integrated through R3D-11; broader
+scene acceptance remains R3D-07.**
 Distinguish unseen terrain from visible darkness and replace the uniformly black
-exposed background with a game-time/weather-driven sky or horizon. Evaluate
-existing UI-branch effects first. Cover indoor/underground scenes, weather,
+exposed background with a game-time/weather-driven sky or horizon. The integrated UI implementation provides calendar/weather-driven sky colour,
+sun/moon sprites, visible outdoor precipitation and distance fog. Its fog is
+a presentation effect: native BN visibility still controls what may appear.
+Unknown/memorized geometry retains the existing knowledge treatment; it does
+not become visible merely through fog. Evaluate these effects with the saved
+fixture matrix before adding another weather renderer. Cover indoor/underground scenes, weather,
 cutaways, first person and remembered terrain. Keep BN lighting/knowledge
 in control. See the [Dramatic Shape constraints](docs/en/dev/research/dramatic_shape_voxel_review.md)
 and R3D-11's branch guide.

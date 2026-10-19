@@ -8,6 +8,9 @@
 #if defined(TILES)
 #include <optional>
 
+#include  <string>
+#include <vector>
+
 #include "coordinates.h"
 
 struct SDL_Renderer;
@@ -17,6 +20,27 @@ namespace r3d
 {
 
 #if defined(TILES)
+
+/// A line of text the 3D view wants drawn over its last frame, in the map font.
+struct hud_text {
+    float x = 0.0f; // logical pixels, in the space of the rectangle given to draw()
+    float y = 0.0f; // top of the text
+    std::string text;
+    int color = 7;  // curses colour index (0-15), as for overlay strings
+    int align = 0;  // -1: starts at x, 0: centred on x, 1: ends at x
+    bool boxed = false; // drawn on a dark box, for text over a busy picture
+};
+
+/// Texts to draw over the 3D frame the last draw() returned true for.
+auto hud_texts() -> const std::vector<hud_text> &; // *NOPAD*
+/// Size in logical pixels of a character of the font hud texts are drawn in.
+auto set_text_cell( int width, int height ) -> void ;
+
+/// Draws the map around center into the pixel rectangle (x, y, w, h) of the renderer's current
+/// target, composited like any other 2D draw. Returns false when the 3D view cannot be drawn this
+/// frame (option off, no GPU renderer, ...), in which case the caller draws the flat view instead.
+/// render_epoch changes whenever the renderer or its textures were rebuilt.
+
 
 /// Draws the map around center into the pixel rectangle (x, y, w, h) of the renderer's current
 /// target, composited like any other 2D draw. Returns false when the 3D view cannot be drawn this
