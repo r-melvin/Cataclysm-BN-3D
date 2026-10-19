@@ -74,6 +74,19 @@ struct panel_outline_options {
 /// Clip the corner specified by the native vehicle-part shape, in mount space.
 auto panel_outline( const panel_outline_options &options ) -> std::vector<std::array<float, 2>>;
 
+enum class outline_edge { chamfer, front, rear, left, right };
+
+struct outline_edge_options {
+    std::array<float, 2> a;
+    std::array<float, 2> b;
+    float front;
+    float rear;
+    float left;
+    float right;
+};
+/// Which cell side an outline edge lies on (forward, right coordinates); clipped corners are chamfers.
+auto classify_outline_edge( const outline_edge_options &options ) -> outline_edge;
+
 struct wheel_outline_options {
     int segments;
     float center_forward;

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <ranges>
 #include <set>
 #include <span>
@@ -168,6 +169,30 @@ TEST_CASE("r3d_roof_cap_sits_on_the_wall_top", "[r3d][vehicle]") {
     CHECK(r3d::roof_cap_height(r3d::chassis_floor_h) == Approx(r3d::vehicle_cabin_h));
 }
 
+TEST_CASE("r3d_shaped_panel_outline_edges_are_classified_by_cell_side", "[r3d][vehicle]") {
+    for (const auto corner :
+         {r3d::panel_corner::front_left, r3d::panel_corner::front_right,
+          r3d::panel_corner::rear_left, r3d::panel_corner::rear_right}) {
+        const auto outline = r3d::panel_outline(
+            {.corner = corner, .front = 0.5f, .rear = -0.5f, .left = -0.5f, .right = 0.5f});
+        auto counts = std::map<r3d::outline_edge, int>{};
+        for (auto i = size_t{0}; i < outline.size(); ++i) {
+            ++counts[r3d::classify_outline_edge(
+                {.a = outline[i],
+                 .b = outline[(i + 1) % outline.size()],
+                 .front = 0.5f,
+                 .rear = -0.5f,
+                 .left = -0.5f,
+                 .right = 0.5f})];
+        }
+        CHECK(counts[r3d::outline_edge::chamfer] == 1);
+        CHECK(counts[r3d::outline_edge::front] == 1);
+        CHECK(counts[r3d::outline_edge::rear] == 1);
+        CHECK(counts[r3d::outline_edge::left] == 1);
+        CHECK(counts[r3d::outline_edge::right] == 1);
+    }
+}
+
 #if defined(TILES)
 #    include "cata_tiles.h"
 #    include "cata_utility.h"
@@ -292,5 +317,42 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
     }));
     view.light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(0, 0, 0); };
     CHECK(r3d::build_vehicle_mesh(view).empty());
+}
+TEST_CASE("r3d_adjacent_shaped_panels_skip_shared_side_walls", "[r3d][vehicle][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto& here = get_map();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    const auto mesh_vertices = [&](const int second_x) {
+        auto* const veh = here.add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+        REQUIRE(veh != nullptr);
+        for (const auto x : {0, second_x}) {
+            const auto mount = tripoint_mnt_veh(x, 0, 0);
+            REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+            REQUIRE(veh->install_part(mount, vpart_id("halfboard_nw"), true) >= 0);
+        }
+        auto cache = r3d::tile_info_cache{};
+        const auto cam = r3d::camera{};
+        const auto view = r3d::entity_view{
+            .tiles = *tilecontext,
+            .cache = cache,
+            .cam = cam,
+            .center = origin,
+            .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+            .markers = {},
+            .uprights = {},
+            .surface = {}};
+        const auto count = r3d::build_vehicle_mesh(view).vertices.size();
+        here.destroy_vehicle(veh);
+        return count;
+    };
+    const auto apart = mesh_vertices(3);
+    const auto adjacent = mesh_vertices(1);
+    REQUIRE(apart > 0);
+    CHECK(adjacent < apart);
 }
 #endif

@@ -1157,6 +1157,16 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 for( auto index = size_t{0}; index < outline.size(); ++index ) {
                     const auto &a = outline[index];
                     const auto &b = outline[( index + 1 ) % outline.size()];
+                    // Skip edges shared with an equal or taller neighbouring cell, as the unshaped walls do.
+                    const auto side = classify_outline_edge( { .a = a, .b = b, .front = f_top, .rear = f_bot,
+                                                               .left = r_l, .right = r_r } );
+                    const auto neighbor_height = side == outline_edge::front ? h_fwd :
+                                                 side == outline_edge::rear ? h_rear :
+                                                 side == outline_edge::left ? h_left :
+                                                 side == outline_edge::right ? h_right : 0.0f;
+                    if( cell.height <= neighbor_height ) {
+                        continue;
+                    }
                     const auto pa = transform.apply( a[0], a[1] );
                     const auto pb = transform.apply( b[0], b[1] );
                     const auto corners = corners_t{{ {pa.x, pa.y, z_top}, {pb.x, pb.y, z_top},

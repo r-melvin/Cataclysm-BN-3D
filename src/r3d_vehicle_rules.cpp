@@ -153,6 +153,18 @@ auto panel_outline( const panel_outline_options &options ) -> std::vector<std::a
     return result;
 }
 
+auto classify_outline_edge( const outline_edge_options &options ) -> outline_edge
+{
+    const auto &o = options;
+    const auto on = []( const float a, const float b, const float side ) {
+        return std::abs( a - side ) < 1e-4f && std::abs( b - side ) < 1e-4f;
+    };
+    return on( o.a[0], o.b[0], o.front ) ? outline_edge::front :
+           on( o.a[0], o.b[0], o.rear ) ? outline_edge::rear :
+           on( o.a[1], o.b[1], o.left ) ? outline_edge::left :
+           on( o.a[1], o.b[1], o.right ) ? outline_edge::right : outline_edge::chamfer;
+}
+
 auto wheel_outline( const wheel_outline_options &options ) -> std::vector<std::array<float, 2>>
 {
     const auto segments = std::max( options.segments, 3 );
