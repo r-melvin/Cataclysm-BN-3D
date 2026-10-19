@@ -51,6 +51,8 @@ python3 tools/r3d_spike/compare_session.py --help
 For headless Linux tests, also set `SDL_VIDEODRIVER=dummy`. The CPU compute setting
 avoids requiring an SDL GPU compute device for tests; it does not validate the
 rendered GPU image. This fork uses local checks rather than paid GitHub CI.
+A [native opening-state scene builder](tools/r3d_spike/fixtures/README.md)
+creates repeatable intact/open/broken window and door fixtures for comparison captures.
 Run interactive game smoke tests in a virtual window (`xvfb-run -a` on Linux),
 with a private `--userdir` and `--configdir`. A software Vulkan installation and
 `--gpu-backend software` allow GPU image checks without a physical display.

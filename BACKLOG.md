@@ -45,7 +45,7 @@ Sources: [agent guidelines](AGENTS.md),
 ## R3D-03: Complete the presentation-profile shape and material contract
 
 **Status: partially implemented; broader shape/material contract remains open.**
-Size, support-anchor and depth profiles work. Solid wall terrain now supports
+Size, support-anchor and depth profiles work. Solid walls and window/door surrounds support
 per-tileset side/top donors and normalized source crops, with exact sprite
 identity checks, preserved source-sheet ownership, fallback and profile-triggered
 cache/chunk invalidation. The renderer guide documents the opt-in format and
@@ -55,8 +55,17 @@ wall mesh sheet/crop checks, invalid donors and profile removal. All 14 tooling
 tests pass. A private Xvfb/software-Vulkan profile-install smoke captures a frame
 and exits 0 without validation errors (`/tmp/bn-face-profile-smoke.*`).
 Material regions are still gallery annotations, not runtime palette mappings.
-Geometry-family overrides and equivalent furniture/window/door/vehicle face
-consumers from the original proposal remain outstanding.
+Opening overrides preserve their pane/leaf art and geometry and apply rotated
+crops to sill, lintel and jamb sections. Native broken/empty window frames now
+remain upright without adding gameplay flags. Tests cover eight opening states,
+both axes and both wall thicknesses, including sheet/UV identity and unchanged
+profiled geometry. Both binaries build; the combined renderer/onboarding run
+passes 156 cases (37,524 assertions). A private Xvfb/Vulkan scene confirms upright
+broken/empty windows and the open door leaf; a reusable native Lua scene builder
+and instructions now live in `tools/r3d_spike/fixtures/`. The saved private scene
+reloads and exits normally (0), with turn 1,327,697 and moves 100 unchanged and
+no Vulkan validation errors. Native 2D and 3D references were inspected. Geometry-family overrides and equivalent furniture/vehicle
+face consumers from the original proposal remain outstanding.
 
 Define those fields for a bin, chair, locker, window, door, tree, loose item and
 vehicle corner. Bind sprite crops to a tileset/sprite identity; cover footprint,
@@ -139,6 +148,13 @@ logs, source galleries, support markers, 2D and eight 3D views. The state matrix
 reports available/observed sprites, not automatic captures of every state.
 The 17 seeded geometry snapshots cover positions/light, not UVs, textures,
 shaders or the final GPU image.
+
+An opening-state scene builder is now checked in at
+[fixtures/openings.lua](tools/r3d_spike/fixtures/openings.lua), with
+[instructions](tools/r3d_spike/fixtures/README.md). It constructs eight native
+states and was executed in a private virtual game; its saved scene and images
+are under `/tmp/bn-opening-acceptance/`. This is one repeatable fixture, not the
+complete state/interaction matrix or a bundled user save.
 
 Create saved fixtures for R3D-03's props and a sedan, van, pickup/flatbed,
 bicycle/motorcycle and unusual player-built assembly. Cover intact/open/broken/

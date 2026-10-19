@@ -1,8 +1,10 @@
 #include "catch/catch.hpp"
 #include "r3d_presentation_profiles.h"
 
+#include <algorithm>
 #include <sstream>
 #include <string>
+#include <vector>
 
 TEST_CASE(
     "r3d_presentation_profiles_load_dimensions_and_anchors_alongside_gallery_metadata",
@@ -74,7 +76,9 @@ TEST_CASE(
     REQUIRE(contexts.valid());
     tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
     auto cache = r3d::tile_info_cache{};
+    cache.set_wall_sides(std::make_shared<r3d::wall_sides>());
     const auto original = cache.terrain({.id = t_wall, .tiles = *tilecontext});
+    REQUIRE(original.elevation.valid);
     const auto donor =
         cache.named({.category = C_TERRAIN, .id = "t_grass", .tiles = *tilecontext}).main();
     REQUIRE(donor.valid);
@@ -134,5 +138,106 @@ TEST_CASE(
     CHECK(restored.cap.sheet == original.cap.sheet);
     CHECK(restored.cap.valid == original.cap.valid);
     CHECK(restored.cap.u0 == original.cap.u0);
+}
+
+TEST_CASE("r3d_opening_profiles_preserve_native_geometry_and_leaf_art", "[r3d][profiles][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto id = std::string(
+        GENERATE("t_window", "t_window_open", "t_window_frame", "t_window_empty", "t_door_c",
+                 "t_door_o", "t_door_b", "t_door_frame"));
+    const auto thin = GENERATE(false, true);
+    const auto along_y = GENERATE(false, true);
+    CAPTURE(id, thin, along_y);
+    const auto pos = tripoint_abs_sm(get_map().get_abs_sub(), 0);
+    auto sm = submap(pos, {});
+    sm.set_all_ter(t_floor);
+    const auto terrain_id = ter_str_id(id).id();
+    sm.set_ter(point_sm_ms(5, 5), terrain_id);
+    sm.set_ter(point_sm_ms(along_y ? 5 : 4, along_y ? 4 : 5), t_wall);
+    sm.set_ter(point_sm_ms(along_y ? 5 : 6, along_y ? 6 : 5), t_wall);
+    const auto lookup = [&sm, &pos](const tripoint_abs_sm& requested) -> const submap* {
+        return requested == pos ? &sm : nullptr;
+    };
+    auto cache = r3d::tile_info_cache{};
+    cache.set_thin_walls(thin);
+    const auto original = cache.terrain({.id = terrain_id, .tiles = *tilecontext});
+    REQUIRE(original.sh.kind == r3d::shape_kind::pane);
+    if (id == "t_window_frame" || id == "t_window_empty") {
+        CHECK(original.window);
+        CHECK_FALSE(terrain_id.obj().has_flag("WINDOW"));
+    }
+    const auto baseline = r3d::build_chunk_mesh(
+        {.pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    auto cap_source = r3d::profile_face_source{
+        .face = r3d::profile_face::top,
+        .tileset = "UltimateCataclysm",
+        .sprite = "t_grass",
+        .rotation = 1,
+        .crop = {0.23f, 0.19f, 0.71f, 0.83f}};
+    auto side_source = cap_source;
+    side_source.face = r3d::profile_face::side;
+    cache.set_presentation_profiles(
+        {{"terrain:" + id, {.face_sources = {cap_source, side_source}}}});
+    const auto art = cache.terrain({.id = terrain_id, .tiles = *tilecontext});
+    REQUIRE(art.cap.valid);
+    REQUIRE(art.side.valid);
+    const auto donor =
+        cache.named({.category = C_NONE, .id = "t_grass", .tiles = *tilecontext, .rota = 1}).main();
+    CHECK(art.cap.sheet == donor.sheet);
+    CHECK(art.side.sheet == donor.sheet);
+    CHECK(art.sprite.sheet == original.sprite.sheet);
+    CHECK(art.sprite.u0 == original.sprite.u0);
+    CHECK(art.open_door == original.open_door);
+    CHECK(art.closed_door_id == original.closed_door_id);
+    CHECK(art.see_through == original.see_through);
+    const auto mesh = r3d::build_chunk_mesh(
+        {.pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    CHECK(mesh.indices.size() == baseline.indices.size());
+    const auto positions = [](const auto& geometry) {
+        auto result = std::vector<std::array<float, 3>>{};
+        for (const auto& vertex : geometry.vertices) {
+            result.push_back({vertex.x, vertex.y, vertex.z});
+        }
+        std::ranges::sort(result);
+        return result;
+    };
+    CHECK(positions(mesh) == positions(baseline));
+    const auto raw_uvs = r3d::uvs_t{
+        {{art.cap.u0, art.cap.v0},
+         {art.cap.u1, art.cap.v0},
+         {art.cap.u1, art.cap.v1},
+         {art.cap.u0, art.cap.v1}}};
+    const auto expected = r3d::orient_material_uvs(art.cap, raw_uvs)[0];
+    const auto inset = thin ? 0.5f - r3d::wall_half_thickness : 0.0f;
+    const auto cap_x = 5.0f + (along_y ? inset : 0.0f);
+    const auto cap_y = -(5.0f + (along_y ? 0.0f : inset));
+    auto found_cap = false;
+    for (const auto& batch : mesh.batches) {
+        if (batch.sheet != donor.sheet) { continue; }
+        for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+            const auto& vertex = mesh.vertices[mesh.indices[i]];
+            if (vertex.x == Approx(cap_x) && vertex.y == Approx(cap_y) && vertex.z == Approx(1.0f)
+                && vertex.u == Approx(expected[0]) && vertex.v == Approx(expected[1])) {
+                found_cap = true;
+            }
+        }
+    }
+    CHECK(found_cap);
+}
+
+TEST_CASE(
+    "r3d_material_uv_orientation_keeps_partial_regions_in_the_source_crop", "[r3d][profiles]") {
+    const auto sprite =
+        r3d::sprite_ref{.u0 = 0.2f, .v0 = 0.3f, .u1 = 0.6f, .v1 = 0.9f, .quarter_turns = 1};
+    const auto part = r3d::uvs_t{{{0.3f, 0.6f}, {0.4f, 0.6f}, {0.4f, 0.9f}, {0.3f, 0.9f}}};
+    const auto oriented = r3d::orient_material_uvs(sprite, part);
+    // The first point is (1/4, 1/2) of the crop: clockwise rotation maps it to (1/2, 3/4).
+    CHECK(oriented[0][0] == Approx(0.4f));
+    CHECK(oriented[0][1] == Approx(0.75f));
+    auto unrotated = sprite;
+    unrotated.quarter_turns = 0;
+    CHECK(r3d::orient_material_uvs(unrotated, part) == part);
 }
 #endif

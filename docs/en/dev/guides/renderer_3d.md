@@ -122,8 +122,13 @@ the normal wall material. Installing/reloading profiles rebuilds affected
 cached geometry. The renderer does not change terrain collision, visibility,
 door/window states or native part colours to apply these textures.
 
-Currently these face sources apply to solid wall terrain. Window/door surrounds,
-furniture families, vehicle layers and runtime palette material regions remain
+These face sources apply to solid walls and window/door surrounds. A profile on
+an opening overrides only its selected surround faces; missing faces still use
+the neighboring wall. The window pane, door leaf, hinge and open/broken state
+retain their native artwork and geometry. Quarter-turns and crops also apply to
+partial sill/lintel sections. Native broken/empty window frames remain upright
+even though BN deliberately omits their `WINDOW` gameplay flag.
+Furniture families, vehicle layers and runtime palette material regions remain
 in [the presentation backlog](../../../../BACKLOG.md#r3d-03-complete-the-presentation-profile-shape-and-material-contract).
 
 ## Renderer diagnostics

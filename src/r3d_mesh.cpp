@@ -344,6 +344,7 @@ struct emit_side_options {
     float shift_x = 0.0f;
     float shift_y = 0.0f;
     const sprite_band &band = {};
+    bool orient_material = false;
 };
 
 auto emit_side( const emit_side_options &options ) -> void
@@ -371,7 +372,8 @@ auto emit_side( const emit_side_options &options ) -> void
     if( !side_corners( { .face = face, .x0 = x0, .y0 = y0, .z_base = z_base, .z_top = z_top, .c = c } ) ) {
         return;
     }
-    const auto uv = uvs_t{{ { s.u0, v_top }, { s.u1, v_top }, { s.u1, v_bot }, { s.u0, v_bot } }};
+    const auto raw_uv = uvs_t{{ { s.u0, v_top }, { s.u1, v_top }, { s.u1, v_bot }, { s.u0, v_bot } }};
+    const auto uv = options.orient_material ? orient_material_uvs( s, raw_uv ) : raw_uv;
     sink.add( { .sprite = s, .corners = c, .uvs = uv, .ref = ref } );
 }
 
@@ -786,7 +788,7 @@ auto emit_wall_side( const emit_wall_side_options &options ) -> void
     const auto &ref = options.ref;
 
     if( t.side.valid ) {
-        emit_side( { .sink = sink, .s = t.side, .x = x, .y = y, .face = face, .z_base = z_base, .z_top = z_top, .ref = tinted( ref, t.side_tint ) } );
+        emit_side( { .sink = sink, .s = t.side, .x = x, .y = y, .face = face, .z_base = z_base, .z_top = z_top, .ref = tinted( ref, t.side_tint ), .orient_material = true } );
     } else if( t.elevation_split >= 0.0f ) {
         // Coving, paint and skirting board read from the edge-on sprite, once over the storey.
         emit_side( { .sink = sink, .s = t.elevation, .x = x, .y = y, .face = face, .z_base = z_base, .z_top = z_top, .ref = ref, .shift_x = 0.0f, .shift_y = 0.0f,
@@ -834,7 +836,8 @@ auto emit_wall_section( const emit_wall_section_options &options ) -> void
 
     const auto &art = t.side.valid ? t.side :
                       t.elevation.valid ? t.elevation : t.main();
-    const auto split = static_cast<float>( t.elevation.valid ? t.elevation_split : 0.0f );
+    const auto split = static_cast<float>( !t.side.valid &&
+                                           t.elevation.valid ? t.elevation_split : 0.0f );
     auto c = corners_t{};
     if( !side_corners( { .face = face, .x0 = float( x ), .y0 = float( y ), .z_base = bottom, .z_top = top, .c = c } ) ) {
         return;
@@ -857,7 +860,8 @@ auto emit_wall_section( const emit_wall_section_options &options ) -> void
     const auto v0 = static_cast<float>( art.v0 + dv * ( split + ( 1.0f - top ) * ( 1.0f - split ) ) );
     const auto v1 = static_cast<float>( art.v0 + dv * ( split + ( 1.0f - bottom ) *
                                         ( 1.0f - split ) ) );
-    const auto uv = uvs_t{{ { u0, v0 }, { u1, v0 }, { u1, v1 }, { u0, v1 } }};
+    const auto raw_uv = uvs_t{{ { u0, v0 }, { u1, v0 }, { u1, v1 }, { u0, v1 } }};
+    const auto uv = t.side.valid ? orient_material_uvs( art, raw_uv ) : raw_uv;
     sink.add( { .sprite = art, .corners = c, .uvs = uv, .ref = t.side.valid ? tinted( ref, t.side_tint ) : ref } );
 }
 
@@ -897,10 +901,11 @@ auto emit_wall_cap( const emit_wall_cap_options &options ) -> void
             { x + x1, y + y1, z }, { x + x0, y + y1, z }
         }
     };
-    const auto uv = uvs_t{{ { art.u0, art.v0 }, { art.u1, art.v0 },
+    const auto raw_uv = uvs_t{{ { art.u0, art.v0 }, { art.u1, art.v0 },
             { art.u1, art.v1 }, { art.u0, art.v1 }
         }
     };
+    const auto uv = t.cap.valid ? orient_material_uvs( art, raw_uv ) : raw_uv;
     sink.add( { .sprite = art, .corners = c, .uvs = uv, .ref = t.cap.valid ? tinted( ref, t.cap_tint ) : ref } );
 }
 
@@ -1249,6 +1254,14 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
     auto info = tile_info{};
     const auto &t = id.obj();
     auto traits = tile_traits( traits_of( t ) );
+    // Native broken/empty frames intentionally lack WINDOW, but still occupy the wall
+    // opening. This is a presentation classification; no native flags are changed.
+    const auto frame_art = []( const auto & name ) {
+        return name == "t_window_frame" || name.starts_with( "t_window_frame_" ) ||
+               name == "t_window_empty" || name.starts_with( "t_window_empty_" );
+    };
+    if( !traits.window && !traits.wall && t.movecost > 0 && t.has_flag( "CONNECT_TO_WALL" ) &&
+        ( frame_art( t.id.str() ) || frame_art( t.looks_like ) ) ) { traits.window = true; }
     if( !traits.window ) {
         const auto id_str = std::string( t.id.str() );
         const auto looks_like = std::string( t.looks_like );
@@ -1362,7 +1375,7 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
         }
     }
     // Authored wall faces override presentation only; native geometry/knowledge stays intact.
-    if( info.wall_connection && info.sh.kind == shape_kind::block ) {
+    if( info.wall_connection ) {
         const auto profile = profiles_.find( presentation_profile_key( "terrain", t.id.str() ) );
         const auto *tileset = tiles.current_tileset();
         if( profile != profiles_.end() && tileset ) {
@@ -1927,6 +1940,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                                               nb.south.kind == shape_kind::block );
                     chunk_tiles.emit_floor_under( { .sink = sink, .lx = lx, .ly = ly, .wall_along_y = wall_along_y } );
                     const auto *surround = static_cast<const tile_info *>( nullptr );
+                    auto authored_surround = std::optional<tile_info> {};
                     if( terrain.window || terrain.door ) {
                         const auto neighbours = std::array<point, 4> {{
                                 point( -1, 0 ), point( 1, 0 ), point( 0, -1 ), point( 0, 1 )
@@ -1941,6 +1955,19 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                         }
                         if( !surround ) {
                             surround = &cache.terrain( { .id = ter_str_id( "t_wall" ).id(), .tiles = tiles, .subtile = 2, .rota = 0 } );
+                        }
+                        if( terrain.side.valid || terrain.cap.valid ) {
+                            authored_surround = *surround;
+                            if( terrain.side.valid ) {
+                                authored_surround->side = terrain.side;
+                                authored_surround->side_tint = terrain.side_tint;
+                                authored_surround->brick_wall = false;
+                            }
+                            if( terrain.cap.valid ) {
+                                authored_surround->cap = terrain.cap;
+                                authored_surround->cap_tint = terrain.cap_tint;
+                            }
+                            surround = &*authored_surround;
                         }
                     }
                     if( terrain.window ) {

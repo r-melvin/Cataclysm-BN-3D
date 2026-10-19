@@ -45,7 +45,8 @@ side elevation with their support point, plus material-region names and VOX
 palette slots. Profiles with wall face donors list their exact tileset/sprite
 identities, rotations and crop bounds for review. The profile file is bundled with the tileset sources so gallery
 values match the renderer build. Separate gameplay checkpoints are needed to compare rendered
-geometry for states absent from this scene.
+geometry for states absent from this scene. Use the [opening-state fixture](fixtures/README.md)
+to construct a repeatable window/door scene in a private world.
 No complete marker is written if saving or either renderer fails. A genuine disk-write
 failure may show the normal game save error dialog; dismiss it normally. The
 checkpoint is aborted and its older disk save is never packaged as current state.
