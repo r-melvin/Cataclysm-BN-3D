@@ -87,9 +87,6 @@ struct sprite_opaque_bounds {
 /// Computes local footprint bounds from a sprite's opaque fraction and rotation.
 auto get_sprite_opaque_bounds( const sprite_ref &s ) -> sprite_opaque_bounds;
 
-/// Converts 0xAARRGGBB color to packed vertex light (pack_light) modulated by ambient light without swapping channels.
-auto color_to_packed_light( uint32_t color_argb, uint32_t ambient_light ) -> uint32_t;
-
 } // namespace r3d
 
 #endif // defined(TILES)

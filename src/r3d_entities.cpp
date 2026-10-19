@@ -750,7 +750,6 @@ struct add_vehicles_options {
     quad_sink &sink;
     const entity_view &view;
     map &here;
-    const avatar &you;
 };
 
 auto add_vehicles( const add_vehicles_options &options ) -> void
@@ -758,7 +757,6 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
     auto &sink = options.sink;
     const auto &view = options.view;
     auto &here = options.here;
-    static_cast<void>( options.you );
 
     for( const wrapped_vehicle &wrapped : here.get_vehicles() ) {
         auto &veh = *wrapped.v;
@@ -837,7 +835,6 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
         }
 
         const sprite_ref *best_body_spr = nullptr;
-        auto best_body_color = uint32_t{ 0 };
         auto best_score = -1;
 
         for( auto i = 0; i < veh.part_count(); ++i ) {
@@ -891,10 +888,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             if( spr && spr->valid ) {
                 best_score = score;
                 best_body_spr = spr;
-                best_body_color = spr->body_color != 0 ? spr->body_color : spr->top_color;
             }
         }
-        static_cast<void>( best_body_color );
 
         for( const auto &[pt, cell] : cells ) {
             const auto rel_forward = static_cast<float>( cell.mount.x() - pivot_mnt.x() );
@@ -1667,26 +1662,6 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
 
 } // namespace
 
-auto color_to_packed_light( uint32_t color_argb, uint32_t ambient_light ) -> uint32_t
-{
-    if( color_argb == 0 ) {
-        return ambient_light;
-    }
-    const auto col_r = static_cast<uint8_t>( ( color_argb >> 16u ) & 0xffu );
-    const auto col_g = static_cast<uint8_t>( ( color_argb >> 8u ) & 0xffu );
-    const auto col_b = static_cast<uint8_t>( color_argb & 0xffu );
-
-    const auto amb_r = static_cast<uint8_t>( ambient_light & 0xffu );
-    const auto amb_g = static_cast<uint8_t>( ( ambient_light >> 8u ) & 0xffu );
-    const auto amb_b = static_cast<uint8_t>( ( ambient_light >> 16u ) & 0xffu );
-
-    const auto out_r = static_cast<uint8_t>( ( static_cast<uint32_t>( col_r ) * amb_r ) / 255u );
-    const auto out_g = static_cast<uint8_t>( ( static_cast<uint32_t>( col_g ) * amb_g ) / 255u );
-    const auto out_b = static_cast<uint8_t>( ( static_cast<uint32_t>( col_b ) * amb_b ) / 255u );
-
-    return pack_light( out_r, out_g, out_b );
-}
-
 auto get_sprite_opaque_bounds( const sprite_ref &s ) -> sprite_opaque_bounds
 {
     if( !s.valid || ( s.opaque_x0 <= 0.01f && s.opaque_x1 >= 0.99f &&
@@ -1748,9 +1723,8 @@ auto get_sprite_opaque_bounds( const sprite_ref &s ) -> sprite_opaque_bounds
 auto build_vehicle_mesh( const entity_view &view ) -> chunk_mesh
 {
     auto &here = get_map();
-    const auto &you = get_avatar();
     auto sink = quad_sink{};
-    add_vehicles( { .sink = sink, .view = view, .here = here, .you = you } );
+    add_vehicles( { .sink = sink, .view = view, .here = here } );
     return sink.finish();
 }
 
