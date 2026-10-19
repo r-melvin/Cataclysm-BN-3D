@@ -6,6 +6,7 @@ Build `cataclysm-bn-tiles`. BN ships the `HitButton_iso` and
 ```sh
 python3 tools/r3d_spike/compare_session.py 'My world' --output /tmp/my-renderer-report
 # For saves outside this checkout, add --userdir /path/to/user-directory.
+# If settings are elsewhere (e.g. XDG), also add --configdir /path/to/source-config.
 # Omit the world to choose/create a new world in the private session.
 ```
 
@@ -14,7 +15,10 @@ windows, or change desktop focus. It clones the chosen world and a small list of
 configuration files into `/tmp/my-renderer-report/user`; your original saves are
 untouched. **All progress during this session remains in that private user
 directory.** Keep it if you want to continue that character. Launch the same
-executable with `--userdir /tmp/my-renderer-report/user/` to resume it.
+executable with `--userdir /tmp/my-renderer-report/user/ --configdir /tmp/my-renderer-report/user/config/`
+to resume it. The launcher always passes both private paths, including on XDG builds.
+It preserves allowlisted startup/backend, font and panel settings in the private
+session and each checkpoint, alongside that checkpoint's current options.
 
 The default is five checkpoints at least 30 seconds apart (`--count`, `--interval`).
 A checkpoint happens when gameplay next asks for a normal player action. Menus,
@@ -59,7 +63,8 @@ After quitting, numbered `comparison-001.zip`, etc. are created in the session
 directory. Each is a normal ZIP below GitHub's 25 MB attachment limit. Upload all
 of them to the issue. To reproduce, extract all ZIPs into one empty directory and
 run `python3 restore.py` (reassembles any oversized files), then follow README.txt
-to load a checkpoint in a new user directory (copy both its `save/` and `config/`). No saves are silently trimmed.
+to load a checkpoint in a new user directory (copy both its `save/` and `config/`,
+and pass both `--userdir` and `--configdir` when launching). No saves are silently trimmed.
 If the game crashes, keep the private directory and package completed checkpoints:
 
 ```sh

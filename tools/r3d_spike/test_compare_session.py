@@ -195,8 +195,13 @@ class SessionLaunchTest(unittest.TestCase):
             root = Path(temporary)
             source = root / "source"
             (source / "config").mkdir(parents=True)
+            external_config = root / "external-config"
+            external_config.mkdir()
             original = '[{"name": "USE_TILES", "value": "false"}]'
-            (source / "config/options.json").write_text(original)
+            (source / "config/options.json").write_text("[]")
+            (external_config / "options.json").write_text(original)
+            preload = '{"compute_acceleration":"cpu"}'
+            (external_config / "preload.json").write_text(preload)
             binary = root / "fake-game"
             binary.write_text('''#!/usr/bin/env python3
 import json, os, sys
@@ -210,6 +215,10 @@ session = captures.parent
 for key in ("CATA_R3D_COMPARE", "CATA_R3D_QUIT_AFTER_SHOT", "CATA_R3D_SCREENSHOT"):
     assert key not in os.environ
 user = Path(sys.argv[sys.argv.index("--userdir") + 1])
+config_arg = sys.argv[sys.argv.index("--configdir") + 1]
+assert config_arg.endswith(os.sep)
+assert Path(config_arg) == user / "config"
+assert (Path(config_arg) / "preload.json").read_text() == '{"compute_acceleration":"cpu"}'
 assert json.loads((user / "config/options.json").read_text()) == [{"name": "USE_TILES", "value": "true"}, {"name": "RENDERER", "value": "gpu"}]
 assert not (user / "save").exists()
 assert (session / "art-assets/HitButton_iso/tile_config.json").is_file()
@@ -239,12 +248,32 @@ assert (session / "art-assets/presentation_profiles.json").is_file()
                        CATA_R3D_QUIT_AFTER_SHOT="1", CATA_R3D_SCREENSHOT="stale")
             result = subprocess.run(["python3", str(script),
                                      "--binary", str(binary), "--userdir", str(source),
+                                     "--configdir", str(external_config),
                                      "--output", str(output)], env=env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("waiting for a character", result.stderr)
             self.assertIn("starts without existing worlds", result.stdout)
-            self.assertEqual((source / "config/options.json").read_text(), original)
+            self.assertEqual((source / "config/options.json").read_text(), "[]")
+            self.assertEqual((external_config / "options.json").read_text(), original)
+            self.assertEqual((external_config / "preload.json").read_text(), preload)
             self.assertFalse(list(output.glob("*.zip")))
+            # The original USERDIR/config default remains supported and private.
+            (source / "config/preload.json").write_text(preload)
+            default_output = root / "default-session"
+            default_result = subprocess.run(
+                ["python3", str(script), "--binary", str(binary), "--userdir", str(source),
+                 "--output", str(default_output)], env=env, text=True, capture_output=True)
+            self.assertEqual(default_result.returncode, 1, default_result.stderr)
+            self.assertIn("waiting for a character", default_result.stderr)
+            self.assertEqual((source / "config/options.json").read_text(), "[]")
+            missing_output = root / "invalid-session"
+            missing_result = subprocess.run(
+                ["python3", str(script), "--binary", str(binary), "--userdir", str(source),
+                 "--configdir", str(root / "missing-config"), "--output", str(missing_output)],
+                env=env, text=True, capture_output=True)
+            self.assertNotEqual(missing_result.returncode, 0)
+            self.assertIn("configuration directory does not exist", missing_result.stderr)
+            self.assertFalse(missing_output.exists())
 
     def test_failure_diagnostics_report_actual_failed_stage(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -44,6 +44,7 @@
 #include "map/mapbuffer.h"
 #include "map/mapdata.h"
 #include "options.h"
+#include "output.h"
 #include "path_info.h"
 #include "r3d_camera.h"
 #include "r3d_dda.h"
@@ -1015,13 +1016,21 @@ auto dump_view( const std::string &path, const tripoint_bub_ms &center ) -> void
     }
 }
 
+auto redraw_capture_frame() -> void
+{
+    g->invalidate_main_ui_adaptor();
+    ui_manager::redraw();
+    // Complete the normal frame lifecycle, including switching to the window target.
+    // Presenting while the display texture is active fails and leaves GPU work accumulating.
+    refresh_display();
+}
+
 auto settle_capture_assets() -> void
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds( 30 );
     while( active() && assets_pending( st() ) && std::chrono::steady_clock::now() < deadline ) {
         SDL_Delay( 1 );
-        g->invalidate_main_ui_adaptor();
-        ui_manager::redraw();
+        redraw_capture_frame();
     }
     if( active() && assets_pending( st() ) ) {
         throw std::runtime_error( "timed out preparing 3D assets for capture" );
@@ -1030,11 +1039,9 @@ auto settle_capture_assets() -> void
 
 auto capture( const std::string &path ) -> bool
 {
-    g->invalidate_main_ui_adaptor();
-    ui_manager::redraw();
+    redraw_capture_frame();
     settle_capture_assets();
-    g->invalidate_main_ui_adaptor();
-    ui_manager::redraw();
+    redraw_capture_frame();
     const auto ok = static_cast<bool>( save_screenshot( path ) );
     DebugLog( ok ? DL::Info : DL::Error,
               DC::Main ) << "r3d compare: " << ( ok ? "saved " : "failed " ) <<
@@ -1081,12 +1088,9 @@ struct comparison_view_guard {
         st().last_vehicle_yaw = old_vehicle_yaw;
         st().comparison_camera = false;
         // Flush the restored atlas before resuming the player's world view.
-        if( const auto &r = get_sdl_renderer() ) {
-            SDL_RenderPresent( r.get() );
-        }
+        refresh_display();
         for( auto i = static_cast<int>( 0 ); i < 40; ++i ) {
-            g->invalidate_main_ui_adaptor();
-            ui_manager::redraw();
+            redraw_capture_frame();
         }
         attempted = true;
         return restored;
@@ -1215,6 +1219,13 @@ auto compare_capture( bool gameplay_boundary ) -> void
             if( !options_file ) {
                 throw std::runtime_error( "checkpoint options write failed" );
             }
+            // Startup/backend, font and panel settings are needed to reproduce the view.
+            for( const auto *name : { "preload.json", "fonts.json", "panel_options.json" } ) {
+                const auto source = std::filesystem::path( PATH_INFO::config_dir() ) / name;
+                if( !std::filesystem::is_symlink( source ) && std::filesystem::is_regular_file( source ) ) {
+                    std::filesystem::copy_file( source, directory / "config" / name );
+                }
+            }
             std::ofstream( directory / "state.txt" ) << "turn " << to_turn<int>( calendar::turn )
                     << " moves " << get_avatar().get_moves() << "\n";
             base = ( directory / "view" ).string();
@@ -1257,19 +1268,9 @@ auto compare_capture( bool gameplay_boundary ) -> void
         if( ok_3d ) {
             // The game is waiting for input and draws nothing by itself; draw until the chunks
             // around the view are built (a few per frame).
-            const auto redraw = []() -> void {
-                g->invalidate_main_ui_adaptor();
-                ui_manager::redraw();
-            };
-            redraw();
+            redraw_capture_frame();
             // Do not package transient fallbacks while the new tileset's assets prepare.
             settle_capture_assets();
-            // The renderer only uploads the new tileset's textures when it presents, and the
-            // capture reads the 3D pass before any present: show one frame so the sheets the
-            // meshes sample from are on the GPU (SDL versions differ in when a flush uploads).
-            if( const auto &r = get_sdl_renderer() ) {
-                SDL_RenderPresent( r.get() );
-            }
             auto &s = st();
             if( s.cam.orthographic && iso_tile_width > 0 && s.shown.valid ) {
                 // Same scale as the flat view: a tile (whose diagonal spans sqrt(2) across the
@@ -1280,7 +1281,7 @@ auto compare_capture( bool gameplay_boundary ) -> void
             }
             constexpr auto settle_frames = static_cast<int>( 40 );
             for( auto i = static_cast<int>( 0 ); i < settle_frames; ++i ) {
-                redraw();
+                redraw_capture_frame();
             }
             ok_3d = active() && capture( base + "_3d.png" );
             dump_view( base + "_map.txt", g->ter_view_p );
@@ -1291,7 +1292,7 @@ auto compare_capture( bool gameplay_boundary ) -> void
                     st().cam.yaw = ( -45.0f + angle * 45.0f ) * deg;
                     st().cam.pitch = 30.0f * deg;
                     for( auto i = static_cast<int>( 0 ); i < settle_frames; ++i ) {
-                        redraw();
+                        redraw_capture_frame();
                     }
                     ok_3d = capture( base + "_3d_yaw_" + std::to_string( angle ) + ".png" ) && ok_3d;
                 }

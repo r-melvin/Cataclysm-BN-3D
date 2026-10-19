@@ -19,7 +19,8 @@ import re
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_FILES = ("options.json", "keybindings.json", "auto_pickup.json", "safemode.json",
-                "auto_note.json", "colors.json", "base_colors.json", "custom_colors.json")
+                "auto_note.json", "colors.json", "base_colors.json", "custom_colors.json",
+                "preload.json", "fonts.json", "panel_options.json")
 MAX_PAYLOAD = 24_000_000  # GitHub says 25 MB; reserve space for ZIP headers.
 CHUNK = 20_000_000
 
@@ -381,8 +382,8 @@ def package(session):
             src = session / name
             if src.is_file() and not src.is_symlink():
                 shutil.copy2(src, diagnostics / name)
-        # Configuration is allowlisted; never include keybindings, other worlds, caches,
-        # credentials, arbitrary files in the checkout, or unrelated personal configuration.
+        # Checkpoints carry their own rendering configuration. Keep the final options
+        # alongside the logs; never sweep other private configuration or worlds.
         src = session / "user" / "config" / "options.json"
         if src.is_file() and not src.is_symlink():
             shutil.copy2(src, diagnostics / "options.json")
@@ -390,8 +391,9 @@ def package(session):
             "Renderer comparison report\n\n"
             "Extract ALL numbered ZIPs into the same empty directory, then run python3 restore.py.\n"
             "Each captures/capture-NNNN is an independent same-state checkpoint. Copy its save/\n"
-            "AND config/ directories into a NEW user directory, then launch the recorded build with --userdir\n"
-            "that directory and --world WORLD. Do not overwrite your normal saves. Custom mods\n"
+            "AND config/ directories into a NEW user directory, then launch the recorded build with\n"
+            "--userdir that-directory/ --configdir that-directory/config/ --world WORLD.\n"
+            "Both directory arguments are required for XDG builds. Do not overwrite your normal saves. Custom mods\n"
             "and tileset assets are not included; use the versions listed in game-report.txt.\n"
             "rng.txt records the gameplay RNG for investigation; normal loading initializes RNG\n"
             "normally. Saves reproduce the scene, not a deterministic future action sequence.\n\n"
@@ -463,6 +465,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("world", nargs="?", help="saved world to clone (omit to create a new world in an empty private session)")
     parser.add_argument("--userdir", type=Path, default=ROOT, help="source user directory")
+    parser.add_argument("--configdir", type=Path, help="source configuration directory (default: USERDIR/config)")
     parser.add_argument("--output", type=Path, help="new private session directory (must not exist)")
     parser.add_argument("--binary", type=Path, default=ROOT / "cataclysm-bn-tiles")
     parser.add_argument("--interval", type=int, default=30, help="minimum seconds between action-boundary captures")
@@ -476,6 +479,8 @@ def main():
         parser.error("count must be 1..100; interval must be 1..86400")
     if args.world and (Path(args.world).name != args.world or args.world in (".", "..")):
         parser.error("world must be a single directory name")
+    if args.configdir is not None and not args.configdir.is_dir():
+        parser.error(f"configuration directory does not exist: {args.configdir}")
     binary = args.binary.resolve()
     if not binary.is_file():
         parser.error(f"build the tiles executable first: {binary}")
@@ -500,8 +505,9 @@ def main():
     for tileset in ("HitButton_iso", "UltimateCataclysm"):
         copy_tree(ROOT / "gfx" / tileset, asset_snapshot / tileset)
     shutil.copy2(ROOT / "data/raw/r3d/presentation_profiles.json", asset_snapshot / "presentation_profiles.json")
+    source_config = args.configdir if args.configdir is not None else args.userdir / "config"
     for name in CONFIG_FILES:
-        src = args.userdir / "config" / name
+        src = source_config / name
         if src.is_file() and not src.is_symlink():
             shutil.copy2(src, user / "config" / name)
     # The map hook is only drawn with tiles enabled. Change the isolated copy only.
@@ -515,7 +521,8 @@ def main():
         if not source.is_dir():
             parser.error(f"world does not exist: {source}")
         copy_tree(source, user / "save" / args.world)
-    command = [str(binary), "--userdir", str(user) + os.sep]
+    command = [str(binary), "--userdir", str(user) + os.sep,
+               "--configdir", str(user / "config") + os.sep]
     if args.world:
         command += ["--world", args.world]
     env.update(CATA_R3D_COMPARE_SESSION=str(session / "captures"),
