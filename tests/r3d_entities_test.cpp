@@ -2,6 +2,7 @@
 #include "r3d_item_profiles.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -21,20 +22,19 @@
 #    include "state_helpers.h"
 #    include "tile_helpers.h"
 
-TEST_CASE( "r3d_avatar_only_mesh_excludes_loose_items", "[r3d][entities][tiles]" )
-{
-    const auto cleanup = on_out_of_scope( [] { clear_all_state(); } );
+TEST_CASE("r3d_avatar_only_mesh_excludes_loose_items", "[r3d][entities][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
     clear_all_state();
     clear_map();
-    const auto contexts = tile_context_fixture( true );
-    REQUIRE( contexts.valid() );
-    tilecontext->load_tileset( "UltimateCataclysm", {}, false, true, false );
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
 
-    auto &here = get_map();
-    auto &you = get_avatar();
-    const auto origin = tripoint_bub_ms( 60, 60, 0 );
-    you.setpos( origin );
-    here.add_item( origin, item::spawn( "rock", calendar::turn ) );
+    auto& here = get_map();
+    auto& you = get_avatar();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    you.setpos(origin);
+    here.add_item(origin, item::spawn("rock", calendar::turn));
 
     auto cache = r3d::tile_info_cache{};
     auto view = r3d::entity_view{
@@ -42,20 +42,20 @@ TEST_CASE( "r3d_avatar_only_mesh_excludes_loose_items", "[r3d][entities][tiles]"
         .cache = cache,
         .cam = r3d::camera{},
         .center = origin,
-        .light = []( const tripoint_bub_ms & /*p*/ ) { return r3d::pack_light( 255, 255, 255 ); },
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
         .markers = {},
         .uprights = {},
-        .surface = []( const tripoint_bub_ms & /*p*/ ) { return r3d::floor_height; }};
-    const auto full = r3d::build_entity_mesh( view );
+        .surface = [](const tripoint_bub_ms& /*p*/) { return r3d::floor_height; }};
+    const auto full = r3d::build_entity_mesh(view);
     view.avatar_only = true;
-    const auto with_item = r3d::build_entity_mesh( view );
-    here.i_clear( origin );
-    const auto without_item = r3d::build_entity_mesh( view );
+    const auto with_item = r3d::build_entity_mesh(view);
+    here.i_clear(origin);
+    const auto without_item = r3d::build_entity_mesh(view);
 
-    CHECK_FALSE( with_item.empty() );
-    CHECK( full.indices.size() > with_item.indices.size() );
-    CHECK( with_item.vertices.size() == without_item.vertices.size() );
-    CHECK( with_item.indices.size() == without_item.indices.size() );
+    CHECK_FALSE(with_item.empty());
+    CHECK(full.indices.size() > with_item.indices.size());
+    CHECK(with_item.vertices.size() == without_item.vertices.size());
+    CHECK(with_item.indices.size() == without_item.indices.size());
 }
 
 TEST_CASE("r3d_voxel_item_menu_option_switches_tank_geometry", "[r3d][items][tiles]") {
@@ -231,5 +231,59 @@ TEST_CASE(
     CHECK(authored_height - authored_bottom == Approx(1.0f));
     CHECK(profiled_height - profiled_bottom == Approx(0.5f));
     CHECK(profiled_bottom == Approx(authored_bottom - 0.1f));
+}
+
+TEST_CASE("r3d_particles_face_the_first_person_camera", "[r3d][entities][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto cache = r3d::tile_info_cache{};
+    auto sprite =
+        cache.named({.category = C_TERRAIN, .id = "t_grass", .tiles = *tilecontext}).main();
+    REQUIRE(sprite.valid);
+    REQUIRE(sprite.sheet != nullptr);
+    sprite.opaque_x0 = 0;
+    sprite.opaque_y0 = 0;
+    sprite.opaque_x1 = 1;
+    sprite.opaque_y1 = 1;
+    auto cam = r3d::camera{};
+    cam.mode = r3d::camera_mode::first_person;
+    cam.z_scale = 1.8f;
+    for (const auto heading : {0, 2, 5}) {
+        for (const auto pitch : {0.0f, 0.5f}) {
+            cam.heading = heading;
+            cam.look_pitch = pitch;
+            const auto center = cam.eye() + cam.fp_forward() * 5.0f;
+            auto view = r3d::entity_view{.tiles = *tilecontext, .cache = cache, .cam = cam};
+            view.particles.push_back(
+                {.x = center.x,
+                 .y = -center.y,
+                 .z = center.z / cam.z_scale,
+                 .size = 1.0f,
+                 .sprite = &sprite,
+                 .color = 0xffffffff});
+            const auto mesh = r3d::build_particle_mesh(view);
+            REQUIRE(mesh.vertices.size() == 4);
+            REQUIRE(mesh.batches.size() == 1);
+            CHECK(mesh.batches.front().sheet == sprite.sheet);
+            CHECK(mesh.vertices[0].u == Approx(sprite.u0));
+            CHECK(mesh.vertices[0].v == Approx(sprite.v0));
+            CHECK(mesh.vertices[2].u == Approx(sprite.u1));
+            CHECK(mesh.vertices[2].v == Approx(sprite.v1));
+            auto projected = std::array<r3d::vec3, 4>{};
+            for (auto i = size_t{0}; i < projected.size(); ++i) {
+                const auto& vertex = mesh.vertices[i];
+                projected[i] = r3d::transform_point(
+                    cam.view_projection(1.0f), {.x = vertex.x, .y = vertex.y, .z = vertex.z});
+                CHECK(projected[i].z == Approx(projected[0].z).margin(1e-5));
+            }
+            CHECK(projected[0].x == Approx(projected[3].x).margin(1e-5));
+            CHECK(projected[1].x == Approx(projected[2].x).margin(1e-5));
+            CHECK(projected[0].y == Approx(projected[1].y).margin(1e-5));
+            CHECK(projected[2].y == Approx(projected[3].y).margin(1e-5));
+            CHECK(projected[1].x > projected[0].x);
+            CHECK(projected[0].y > projected[3].y);
+        }
+    }
 }
 #endif

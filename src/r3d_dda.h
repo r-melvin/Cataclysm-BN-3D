@@ -45,6 +45,13 @@ struct raycast_columns_options {
 
 auto raycast_columns( const raycast_columns_options &options ) -> voxel_hit;
 
+/// Whether the straight line from one point to another (tile space) reaches the cell holding the
+/// second point without first touching another cell's column: what lies there can be seen from
+/// the first point unless something nearer stands in the way.
+auto clear_line( const vec3 &from, const vec3 &to, const column_height_fn &height ) -> bool ;
+
+/// Slow reference: tests every cell in the box [lo, hi] and keeps the nearest hit. For tests.
+
 /// Slow reference: tests every cell in the box [lo, hi] and keeps the nearest hit. For tests.
 struct raycast_columns_reference_options {
     const vec3 &origin;

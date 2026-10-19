@@ -183,6 +183,23 @@ auto raycast_columns_reference( const raycast_columns_reference_options &options
     return best;
 }
 
+auto clear_line( const vec3 &from, const vec3 &to, const column_height_fn &height ) -> bool
+{
+    const auto d = vec3( to - from );
+    const auto dist = static_cast<float>( length( d ) );
+    if( dist < 1e-4f ) {
+        return true;
+    }
+    const auto hit = voxel_hit( raycast_columns( { .origin = from, .dir = d * ( 1.0f / dist ), .max_t = dist, .height = height } ) );
+    if( !hit.hit ) {
+        return true;
+    }
+    // Reaching the target's own column (the furniture it stands on) is not being blocked.
+    return hit.x == static_cast<int>( std::floor( to.x ) ) &&
+           hit.y == static_cast<int>( std::floor( to.y ) ) &&
+           hit.z == static_cast<int>( std::floor( to.z ) );
+}
+
 auto pick_cell( const pick_cell_options &options ) -> voxel_hit
 {
     const auto &cam = options.cam;

@@ -4087,5 +4087,39 @@
     "name": "Read status report",
     "id": "status_report",
     "bindings": [ { "input_method": "keyboard", "key": "F4" } ]
+  },
+  {
+    "type": "keybinding",
+    "name": "3D view: toggle first person",
+    "id": "r3d_first_person",
+    "bindings": [ { "input_method": "keyboard", "key": "CTRL+F" } ]
+  },
+  {
+    "type": "keybinding",
+    "name": "3D view (first person): face the nearest hostile",
+    "category": "DEFAULTMODE",
+    "id": "r3d_fp_face_threat",
+    "bindings": [ { "input_method": "keyboard", "key": "CTRL+G" } ]
+  },
+  {
+    "type": "keybinding",
+    "name": "3D view (first person): pick the tile ahead",
+    "category": "DEFAULTMODE",
+    "id": "r3d_fp_select_ahead",
+    "bindings": [ { "input_method": "keyboard", "key": "/" } ]
+  },
+  {
+    "type": "keybinding",
+    "name": "3D view (first person): pick the tile under the crosshair",
+    "category": "LOOK",
+    "id": "r3d_fp_select_ahead",
+    "bindings": [ { "input_method": "keyboard", "key": "/" } ]
+  },
+  {
+    "type": "keybinding",
+    "name": "3D view (first person): aim at the tile under the crosshair",
+    "category": "TARGET",
+    "id": "r3d_fp_select_ahead",
+    "bindings": [ { "input_method": "keyboard", "key": "/" } ]
   }
 ]

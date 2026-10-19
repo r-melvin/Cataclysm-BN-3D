@@ -73,6 +73,16 @@ door hinges/swings and intact/open/broken/removed/folded/accessory states;
 terrain-door tests do not establish vehicle-door correctness. Preserve arbitrary
 assembly, pivots, paint, damage, interactions and attachment seams.
 
+The closed [hatchback report #6](https://github.com/r-melvin/Cataclysm-BN-3D/issues/6)
+adds a concrete fixture: dark side-door/window faces, an elevated rear hatch and
+cargo markers are visible in its screenshot. BN's `car_hatch` has separate
+side-door/window cells, four inner roof tiles and rear hatch cargo cells.
+Validate the actual installed roles and mesher output before adopting the
+attached generated proposal. Preserve per-part paint and cargo information;
+a blanket vehicle-wide colour average or deletion of markers would lose them.
+No save, logs or capture archive were attached. The reporter closed it as
+completed; its visual findings remain part of this presentation work.
+
 Source and acceptance matrix:
 [vehicle research](docs/en/dev/research/vehicle_rendering_research.md).
 
@@ -270,14 +280,34 @@ R3D-07. See the [UI guide](docs/en/dev/guides/ui_overhaul.md).
 
 ## R3D-12: Integrate the first-person branch
 
-**Status: implemented on a branch, not merged.** Local `feat/first-person` at
-`ae02e6f` has the BN camera/overlays and a branch guide at
-`docs/en/dev/guides/first_person.md`.
+**Status: integrated on main; broader scene acceptance remains R3D-07/10.**
+The camera, discrete controls, look/target/direction integration, saved heading,
+optional easing, ceilings and heading-up minimap from `ae02e6f` are integrated
+with current assets, vehicle geometry, visibility, weather and captures. The
+math helpers have separate signed-bearing names, avoiding collisions with the
+orbit HUD. All 17 seeded geometry snapshots remain unchanged.
 
-Refresh against main and validate eye-level geometry, visibility, targeting,
-direction prompts, menus, minimap/alerts, saved heading, camera switching and
-comparison restoration. Preserve discrete BN movement/turns; analog or real-time
-movement is not part of integration.
+Main’s native render-state guard clips both overlays and restores SDL state.
+Easing uses the normal idle presentation path. FP captures share settled asset
+loading, normal frame presentation and RAII view restoration; they preserve RNG
+and message-read state. Current labels use native perception; remembered labels
+use recorded terrain/overlay IDs and honor the memory toggle instead of reading
+unseen live furniture. Weather quads use the actual view direction in first
+person, and sun/moon sprites remain within its far plane.
+
+Linux validation: both targets and 25 SPIR-V modules build/validate. Both revised
+shaders cross-compile to MSL/DXIL. The combined renderer, native map-memory and
+seen-cache run passes 143 cases (176,312 assertions), including 136 renderer
+cases. The standalone suite passes 64 cases (35,796 assertions). A private
+Xvfb/Lavapipe session exercised turning/pitch, look/crosshair selection, threat
+facing, menus, camera switching and first-person restoration after the eight
+standard orbit poses; normal quit produced an integrity-checked 8.6 MB ZIP.
+Turn 1,327,697 and 100 moves were unchanged. Downward first-person captures cover
+all eight headings; upward captures exercise the revised particle/sky path.
+These are not claims that every indoor, targeting, creature and occluder
+combination has received human visual acceptance. Temporary evidence:
+`/tmp/bn-first-person-acceptance/`, `/tmp/bn-first-person-shots/`, and
+`/tmp/bn-first-person-up/`. See the [first-person guide](docs/en/dev/guides/first_person.md).
 
 ## R3D-13: Integrate guided onboarding
 

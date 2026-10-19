@@ -3203,6 +3203,30 @@ bool game::handle_action()
                 popup( "%s", report );
                 break;
             }
+            case ACTION_R3D_FIRST_PERSON:
+                r3d::toggle_first_person();
+                break;
+
+            case ACTION_R3D_FACE_THREAT:
+                if( r3d::first_person() ) {
+                    // Free: only the picture turns. The nearest hostile the player can see.
+                    auto nearest = static_cast<Creature *>( nullptr );
+                    auto nearest_distance = 0;
+                    for( auto *critter : u.get_hostile_creatures( MAX_VIEW_DISTANCE ) ) {
+                        const auto distance = rl_dist( u.bub_pos(), critter->bub_pos() );
+                        if( !nearest || distance < nearest_distance ) {
+                            nearest = critter;
+                            nearest_distance = distance;
+                        }
+                    }
+                    if( nearest ) {
+                        const auto away = nearest->bub_pos() - u.bub_pos();
+                        r3d::face_towards( away.x(), away.y() );
+                    } else {
+                        add_msg( m_info, _( "You see no hostile creature to turn towards." ) );
+                    }
+                }
+                break;
 
             case ACTION_ITEMACTION:
                 item_action_menu();

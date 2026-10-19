@@ -1,6 +1,9 @@
 #if defined(TILES)
 
 #    include "pixel_minimap.h"
+#    include "r3d.h"
+#    include "r3d_first_person_math.h"
+#    include "options.h"
 
 #    include "avatar.h"
 #    include "cata_utility.h"
@@ -476,7 +479,59 @@ void pixel_minimap::render( const tripoint_bub_ms &center )
                           float( main_tex_clip_rect.w ), float( main_tex_clip_rect.h ) };
     const SDL_FRect fdst{ float( screen_clip_rect.x ), float( screen_clip_rect.y ),
                           float( screen_clip_rect.w ), float( screen_clip_rect.h ) };
-    RenderCopy( renderer, main_tex, &fsrc, &fdst );
+    if( type != pixel_minimap_type::ortho || !r3d::first_person() ||
+        !get_option<bool>( "R3D_FP_MINIMAP_ROTATE" ) ) {
+        RenderCopy( renderer, main_tex, &fsrc, &fdst );
+        return;
+    }
+    // Draw a rotated disc using BN's existing cached texture. Its centre is the
+    // player beacon, so the beacon stays fixed as the world turns underneath it.
+    const auto beacon = projector->get_tile_pos( { view_tiles_count.x / 2, view_tiles_count.y / 2 },
+                        view_tiles_count );
+    const auto beacon_w = std::max( projector->get_tile_size().x * settings.beacon_size / 2, 2 );
+    const auto beacon_h = std::max( projector->get_tile_size().y * settings.beacon_size / 2, 2 );
+    const auto source_x = float( beacon.x ) + float( beacon_w ) * 0.5f;
+    const auto source_y = float( beacon.y ) + float( beacon_h ) * 0.5f;
+    const auto cx = fdst.x + ( source_x - fsrc.x ) * fdst.w / fsrc.w;
+    const auto cy = fdst.y + ( source_y - fsrc.y ) * fdst.h / fsrc.h;
+    const auto radius = std::max( 1.0f, std::min( { cx - fdst.x, fdst.x + fdst.w - cx,
+                                  cy - fdst.y, fdst.y + fdst.h - cy } ) );
+    auto texture_w = 0.0f;
+    auto texture_h = 0.0f;
+    if( !SDL_GetTextureSize( main_tex.get(), &texture_w, &texture_h ) ) { return; }
+    constexpr auto slices = 96;
+    auto vertices = std::array < SDL_Vertex, slices + 2 > {};
+    auto indices = std::array<int, slices * 3> {};
+    const auto white = SDL_FColor{ 1, 1, 1, 1 };
+    vertices[0] = { .position = { cx, cy }, .color = white,
+                    .tex_coord = { source_x / texture_w, source_y / texture_h }
+                  };
+    const auto turn = r3d::minimap_turn( r3d::view_eighths() );
+    const auto cosine = std::cos( turn );
+    const auto sine = std::sin( turn );
+    for( auto i = 0; i <= slices; ++i ) {
+        const auto theta = float( i ) * 6.283185307f / float( slices );
+        const auto dx = std::cos( theta ) * radius;
+        const auto dy = std::sin( theta ) * radius;
+        const auto sx = source_x + ( dx * cosine + dy * sine ) * fsrc.w / fdst.w;
+        const auto sy = source_y + ( -dx * sine + dy * cosine ) * fsrc.h / fdst.h;
+        vertices[i + 1] = { .position = { cx + dx, cy + dy }, .color = white,
+                            .tex_coord = { sx / texture_w, sy / texture_h }
+                          };
+        if( i < slices ) {
+            indices[i * 3] = 0;
+            indices[i * 3 + 1] = i + 1;
+            indices[i * 3 + 2] = i + 2;
+        }
+    }
+    SDL_RenderGeometry( renderer.get(), main_tex.get(), vertices.data(), vertices.size(),
+                        indices.data(), indices.size() );
+    const auto arrow = std::array<SDL_Vertex, 3> {
+        SDL_Vertex{ .position = { cx, cy - 9 }, .color = white },
+        SDL_Vertex{ .position = { cx - 3, cy - 4 }, .color = white },
+        SDL_Vertex{ .position = { cx + 3, cy - 4 }, .color = white }
+    };
+    SDL_RenderGeometry( renderer.get(), nullptr, arrow.data(), arrow.size(), nullptr, 0 );
 }
 
 void pixel_minimap::render_cache( const tripoint_bub_ms &center )

@@ -2590,6 +2590,87 @@ void options_manager::add_options_graphics()
            );
 
         get_option( "R3D_HUD" ).setPrerequisite( "RENDERER_3D" );
+    add( "R3D_CAMERA_MODE", graphics, translate_marker( "3D camera" ),
+         translate_marker( "Orbit: the free camera above the map.  First person: the view from the character's eyes, facing one of the eight directions; the arrow keys turn by 45 degrees and movement follows the facing.  The game itself is unchanged: you still see all around you, even though the picture shows only what is ahead." ),
+    {
+        { "orbit", translate_marker( "Orbit" ) },
+        { "first_person", translate_marker( "First person" ) }
+    },
+    "orbit", COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_CAMERA_MODE" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_FOV", graphics, translate_marker( "3D first-person field of view" ),
+         translate_marker( "Horizontal field of view of the first-person camera, in degrees." ),
+         60, 110, 90, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_FOV" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_EYE_HEIGHT", graphics, translate_marker( "3D first-person eye height" ),
+         translate_marker( "Height of the first-person camera above the floor, in percent of a tile's width." ),
+         50, 95, 80, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_EYE_HEIGHT" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_TWEEN_MS", graphics, translate_marker( "3D first-person step easing (ms)" ),
+         translate_marker( "How long a step or a turn takes to slide into place in first person. 0 is instant. Never applies while travelling or doing an activity." ),
+         0, 250, 0, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_TWEEN_MS" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_COMPASS", graphics, translate_marker( "3D first-person compass" ),
+         translate_marker( "A strip at the top of the first-person view showing the way you face and, since the picture covers only part of the view all around you, where visible hostile creatures are.  Threats: heading and hostile creatures.  Heading: only the way you face." ),
+    {
+        { "off", translate_marker( "Off" ) },
+        { "heading", translate_marker( "Heading" ) },
+        { "threats", translate_marker( "Threats" ) }
+    },
+    "threats", COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_COMPASS" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_EDGE_ALERT", graphics, translate_marker( "3D first-person edge alert" ),
+         translate_marker( "Light up the edge of the first-person view on the side of a hostile creature next to you that is out of the picture." ),
+         true, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_EDGE_ALERT" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_CROSSHAIR", graphics, translate_marker( "3D first-person crosshair" ),
+         translate_marker( "A dot in the middle of the first-person view with the name of what is under it." ),
+         true, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_CROSSHAIR" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_USE_HEADING", graphics,
+         translate_marker( "3D first-person: a key picks the tile ahead" ),
+         translate_marker( "In first person, direction prompts (close, examine, smash and so on) also accept the \"pick the tile ahead\" key (/ by default) for the tile you are facing.  In look and aiming mode the same key moves the cursor to the tile under the crosshair either way." ),
+         true, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_USE_HEADING" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_MINIMAP_ROTATE", graphics,
+         translate_marker( "3D first-person: minimap turns with you" ),
+         translate_marker( "In first person, the pixel minimap is drawn heading-up: the way you face points up and the map turns around you.  Off keeps north up.  Orbit mode and the flat view always keep north up." ),
+         true, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_MINIMAP_ROTATE" ).setPrerequisite( "RENDERER_3D" );
+
+    add( "R3D_FP_OCCLUDE_UNSEEN", graphics,
+         translate_marker( "3D first-person: unexplored places are solid" ),
+         translate_marker( "In first person, places you have never seen are drawn solid black, so an unexplored wall hides the rooms behind it as it would in reality.  Off leaves them out, so you can see known rooms through unknown walls." ),
+         true, COPT_CURSES_HIDE
+       );
+
+    get_option( "R3D_FP_OCCLUDE_UNSEEN" ).setPrerequisite( "RENDERER_3D" );
 
 
     add( "R3D_VIEW_DEPTH", graphics, translate_marker( "3D view depth" ),

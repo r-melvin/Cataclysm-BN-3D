@@ -15,8 +15,8 @@ curses interface. Game simulation, visibility, actions, and saves remain BN's.
   threat pointers, compass destinations/notes, route and zone markers, damage
   indication, and location notices. Information follows native BN perception.
 
-Use the normal [renderer and capture guide](renderer_3d.md). The first-person
-camera and guided onboarding remain separate feature ports; main uses orbit view.
+Use the normal [renderer and capture guide](renderer_3d.md). The optional [first-person camera](first_person.md) is integrated on main;
+guided onboarding remains a separate feature port.
 
 Build both `cataclysm-bn-tiles` and `cata_test-tiles`. The pure overlay/camera
 checks can also run through `bash tools/r3d_spike/run_pure_tests.sh`.

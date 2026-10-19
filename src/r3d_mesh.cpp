@@ -1007,6 +1007,51 @@ auto make_ref( const make_ref_options &options ) -> light_ref
     return r;
 }
 
+// Ceilings face down, away from the light the view assumes comes from above (face_shade), so
+// they are darker than any floor or wall cap: about as dark as the walls' darker sides. Lit by
+// their own tile like floors are, so a room's ceiling goes dark or sepia with its floor.
+constexpr auto ceiling_shade = uint8_t( 170 );
+// The floor sprite stands in for plaster without wall textures; it is brighter, so darker still.
+constexpr auto floor_ceiling_shade = uint8_t( 150 );
+
+// The underside of the storey above, one storey up from the cell's floor (before the stretch).
+// What it is made of: plaster when the wall textures are on (tinted like plaster walls and their
+// caps), else the cell's own floor sprite, darker.
+struct emit_ceiling_options {
+    quad_sink &sink;
+    tile_info_cache &cache;
+    const tile_info &floor_info;
+    int x;
+    int y;
+};
+
+auto emit_ceiling( const emit_ceiling_options &options ) -> void
+{
+    auto &sink = options.sink;
+    auto &cache = options.cache;
+    const auto &floor_info = options.floor_info;
+    auto x = options.x;
+    auto y = options.y;
+
+    auto tint = static_cast<uint32_t>( 0xffffffu );
+    const auto plaster = sprite_ref( cache.ceiling( tint ) );
+    const auto &s = plaster.valid ? plaster : floor_info.main();
+    if( !s.valid ) {
+        return;
+    }
+    const auto x0 = static_cast<float>( static_cast<float>( x ) );
+    const auto y0 = static_cast<float>( static_cast<float>( y ) );
+    constexpr auto z = static_cast<float>( 1.0f );
+    // Wound the other way round from a top face, so it faces down.
+    const auto c = corners_t{{ { x0, y0, z }, { x0, y0 + 1, z }, { x0 + 1, y0 + 1, z }, { x0 + 1, y0, z } }};
+    const auto uv = uvs_t{{ { s.u0, s.v0 }, { s.u0, s.v1 }, { s.u1, s.v1 }, { s.u1, s.v0 } }};
+    auto ref = light_ref( make_ref( { .lx = x, .ly = y, .shade = plaster.valid ? ceiling_shade : floor_ceiling_shade } ) );
+    if( plaster.valid ) {
+        ref = tinted( ref, tint );
+    }
+    sink.add( { .sprite = s, .corners = c, .uvs = uv, .ref = ref } ) ;
+}
+
 auto wall_ref( const wall_ref_options &options ) -> light_ref
 {
     auto lx = options.lx;
@@ -1151,6 +1196,37 @@ auto orientation_key( int id, int subtile, int rota ) -> int
 { return id * 128 + ( subtile + 1 ) * 8 + ( rota + 1 ); }
 } // namespace
 
+auto tile_info_cache::ceiling( uint32_t &tint ) const -> sprite_ref
+{
+    const auto none = sprite_ref{};
+    tint = 0xffffffu;
+    if( !wall_sides_ ) {
+        return none;
+    }
+    const auto found = std::find( wall_sides_->names.begin(), wall_sides_->names.end(), "plaster" );
+    if( found == wall_sides_->names.end() ) {
+        return none;
+    }
+    const auto uv = uv_rect( atlas_cell( { .index = static_cast<int>( found - wall_sides_->names.begin() ), .cell = wall_sides_->cell, .atlas_w = wall_sides_->width, .atlas_h = wall_sides_->height } ) );
+    if( !uv.valid ) {
+        return none;
+    }
+    auto sprite = sprite_ref{};
+    sprite.sheet = wall_sides_->atlas.get();
+    sprite.owner = wall_sides_->atlas;
+    // The middle of the cell, like a wall's cap: an even surface.
+    const auto du = static_cast<float>( ( uv.u1 - uv.u0 ) * 0.4f );
+    const auto dv = static_cast<float>( ( uv.v1 - uv.v0 ) * 0.4f );
+    sprite.u0 = uv.u0 + du;
+    sprite.u1 = uv.u1 - du;
+    sprite.v0 = uv.v0 + dv;
+    sprite.v1 = uv.v1 - dv;
+    sprite.valid = true;
+    const auto color = wall_sides_->colors.find( "plaster" );
+    tint = color != wall_sides_->colors.end() ? color->second : 0xc4baa0u;
+    return sprite;
+}
+
 auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_info & // *NOPAD*
 {
     auto id = options.id;
@@ -1184,6 +1260,8 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
     }
     info.sh = classify_terrain( traits );
     info.tree = traits.tree;
+    info.stairs = t.has_flag( TFLAG_GOES_UP ) ||
+                  t.has_flag( TFLAG_GOES_DOWN );
     info.window = traits.window;
     info.door = traits.door;
     info.open_door = traits.open_door;
@@ -1562,6 +1640,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
     auto &cache = options.cache;
     auto &tiles = options.tiles;
 
+    const auto &config = options.config;
     const submap *self = lookup( pos );
     if( !self ) {
         return {};
@@ -1613,7 +1692,24 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
     }
     for( auto ly = static_cast<int>( 0 ); ly < side; ++ly ) {
         for( auto lx = static_cast<int>( 0 ); lx < side; ++lx ) {
-            up[static_cast<size_t>( ly * side + lx )] = chunk_tiles.occupancy_at( above, lx, ly );
+
+            // The terrain decides: furniture up there (a table, a window pane) stands on a floor
+            // or frame, which is what closes the room. Only solid furniture without terrain
+            // under it (a box on open air) closes the column by itself.
+            auto &u = up[static_cast<size_t>( ly * side + lx )] ;
+            u = {};
+            if( !above ) {
+                continue;
+            }
+            const auto p = point_sm_ms( lx, ly );
+
+            u = cache.terrain( { .id = above->get_ter( p ), .tiles = tiles } ).sh;
+            if( u.kind == shape_kind::empty ) {
+                const auto f = shape( cache.furniture( { .id = above->get_furn( p ), .tiles = tiles } ).sh );
+                if( ( f.kind == shape_kind::prism && f.slab <= 0.0f ) || f.kind == shape_kind::block ) {
+                    u = f;
+                }
+            }
         }
     }
     auto level_at = [ &level ]( int lx, int ly ) -> const shape & {
@@ -1667,6 +1763,12 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             constexpr auto all_sides = uint8_t( face_north | face_south | face_west | face_east );
             const auto faces = uint8_t( visible_faces( ts, nb ) |
                                         ( ts.kind == shape_kind::block ? all_sides : 0 ) );
+
+            if( config.ceilings && ( faces & face_ceiling ) != 0 ) {
+                // Over a window or door the fallback sprite is the ground, not the frame.
+                emit_ceiling( { .sink = sink, .cache = cache, .floor_info = ts.kind == shape_kind::pane ? cache.ground( tiles ) : terrain,
+                                .x = lx, .y = ly } );
+            }
             switch( ts.kind ) {
                 case shape_kind::floor:
                     if( ( faces & face_top ) != 0 ) {
@@ -1680,6 +1782,12 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                         } else {
                             emit_top_layers( { .sink = sink, .t = terrain, .x = lx, .y = ly, .z = ts.height, .ref = floor_ref } );
                         }
+
+                    }
+                    if( config.first_person && terrain.stairs ) {
+                        // The flat sprite is a line at eye level: stand a copy of it up as well.
+                        mesh_uprights.push_back( { static_cast<uint8_t>( lx ), static_cast<uint8_t>( ly ),
+                                                   ts.height, &terrain } );
                     }
                     break;
                 case shape_kind::block:
@@ -1816,7 +1924,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                             if( broad ) {
                                 const auto dx = static_cast<int>( face == face_west ? -1 : face == face_east ? 1 : 0 );
                                 const auto dy = static_cast<int>( face == face_north ? -1 : face == face_south ? 1 : 0 );
-                                const tile_info &material = chunk_tiles.face_material( { .bub = bub, .wall = *surround, .dx = dx, .dy = dy } );
+                                const auto &material = chunk_tiles.face_material( { .bub = bub, .wall = *surround, .dx = dx, .dy = dy } );
                                 const auto ref = light_ref( wall_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ) );
                                 emit_wall_section( { .sink = sink, .t = material, .x = lx, .y = ly, .face = face,
                                                      .bottom = 0.0f, .top = sill, .left = 0.0f, .right = 1.0f, .ref = ref, .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1 } );

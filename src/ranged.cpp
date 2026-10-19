@@ -1,3 +1,4 @@
+#include "r3d.h"
 #include "ranged.h"
 
 #include "activity_actor_definitions.h"
@@ -3271,6 +3272,7 @@ void target_ui::init_window_and_input()
     ctxt.register_directions();
     ctxt.register_action( "COORDINATE" );
     ctxt.register_action( "SELECT" );
+    if( r3d::first_person() ) { ctxt.register_action( "r3d_fp_select_ahead" ); }
     ctxt.register_action( "FIRE" );
     ctxt.register_action( "NEXT_TARGET" );
     ctxt.register_action( "PREV_TARGET" );
@@ -3345,6 +3347,9 @@ bool target_ui::handle_cursor_movement( const std::string &action, bool &skip_re
         shift_view_or_cursor( *delta );
     } else if( action == "SELECT" && ( mouse_pos = ctxt.get_coordinates( g->w_terrain ) ) ) {
         // Set pos by clicking with mouse
+        mouse_pos->z() = you->bub_pos().z() + you->view_offset.z();
+        set_cursor_pos( *mouse_pos );
+    } else if( action == "r3d_fp_select_ahead" && ( mouse_pos = r3d::crosshair() ) ) {
         mouse_pos->z() = you->bub_pos().z() + you->view_offset.z();
         set_cursor_pos( *mouse_pos );
     } else if( action == "LEVEL_UP" || action == "LEVEL_DOWN" ) {

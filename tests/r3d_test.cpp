@@ -667,7 +667,7 @@ TEST_CASE( "r3d_face_visibility", "[r3d]" )
     CHECK( r3d::visible_faces( floor, open ) == r3d::face_top );
     r3d::neighbourhood roofed;
     roofed.up = block;
-    CHECK( r3d::visible_faces( floor, roofed ) == r3d::face_top );
+    CHECK( r3d::visible_faces( floor, roofed ) == ( r3d::face_top | r3d::face_ceiling ) );
 
     // Air, upright sprites and panes emit nothing through this path.
     CHECK( r3d::visible_faces( air, open ) == 0 );

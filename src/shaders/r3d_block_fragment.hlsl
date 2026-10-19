@@ -11,6 +11,7 @@ struct FragmentInput {
     nointerpolation float2 cut2 : TEXCOORD5;
     float fog_amount : TEXCOORD6;
     nointerpolation float4 fog_color : TEXCOORD7;
+    nointerpolation float occlude : TEXCOORD8;
 };
 float4 main(FragmentInput input) : SV_Target0 {
     float rim = 1.0;
@@ -26,6 +27,9 @@ float4 main(FragmentInput input) : SV_Target0 {
         const uint2 cell = uint2(input.position.xy) & 3;
         if (texel.a <= (bayer[cell.y * 4 + cell.x] + 0.5) / 16.0) { discard; }
     } else if (texel.a < 0.75) { discard; }
-    if (max(input.light.r, max(input.light.g, input.light.b)) < 0.5 / 255.0) { discard; }
+    if (max(input.light.r, max(input.light.g, input.light.b)) < 0.5 / 255.0) {
+        if (input.occlude > 0.5) { return float4(0, 0, 0, 1); }
+        discard;
+    }
     return float4(lerp(texel.rgb * input.light.rgb * rim, input.fog_color.rgb, saturate(input.fog_amount)), 1.0);
 }

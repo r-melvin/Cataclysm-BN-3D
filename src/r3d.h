@@ -5,14 +5,13 @@
 // Public entry points of the 3D renderer. No SDL types here so game code can include it in
 // every build; without TILES everything is an inline no-op.
 
-#if defined(TILES)
 #include <optional>
-
-#include  <string>
+#include <string>
 #include <vector>
 
 #include "coordinates.h"
 
+#if defined(TILES)
 struct SDL_Renderer;
 #endif
 
@@ -34,13 +33,7 @@ struct hud_text {
 /// Texts to draw over the 3D frame the last draw() returned true for.
 auto hud_texts() -> const std::vector<hud_text> &; // *NOPAD*
 /// Size in logical pixels of a character of the font hud texts are drawn in.
-auto set_text_cell( int width, int height ) -> void ;
-
-/// Draws the map around center into the pixel rectangle (x, y, w, h) of the renderer's current
-/// target, composited like any other 2D draw. Returns false when the 3D view cannot be drawn this
-/// frame (option off, no GPU renderer, ...), in which case the caller draws the flat view instead.
-/// render_epoch changes whenever the renderer or its textures were rebuilt.
-
+auto set_text_cell( int width, int height ) -> void;
 
 /// Draws the map around center into the pixel rectangle (x, y, w, h) of the renderer's current
 /// target, composited like any other 2D draw. Returns false when the 3D view cannot be drawn this
@@ -83,8 +76,21 @@ auto wasd_controls() -> bool;
 /// the generic input hook can still perform the legacy one-shot without saving.
 auto compare_capture( bool gameplay_boundary ) -> void;
 
+/// Developer-only orbit/eight-heading capture, preserving the player view.
+auto fp_shots_capture() -> void;
+
 /// Flips the RENDERER_3D option.
 auto toggle() -> void;
+/// Switches between the orbit and the first-person camera (the R3D_CAMERA_MODE option).
+auto toggle_first_person() -> void;
+/// True when the first-person camera is what the last drawn 3D frame showed.
+auto first_person() -> bool;
+/// Ends a mouse glance: the first-person view snaps back to the heading.
+auto end_glance() -> void;
+/// First person: the tile under the centre of the picture, nothing when it shows no tile.
+auto crosshair() -> std::optional<tripoint_bub_ms>;
+/// First person: turns to face a tile dx east and dy south of the player (no game time).
+auto face_towards( int dx, int dy ) -> void;
 /// Orbit the camera by one step; dir < 0 is left, dir > 0 right.
 auto rotate( int dir ) -> void;
 /// Tilt the camera by one step; dir > 0 raises the view towards top-down.
@@ -106,6 +112,13 @@ inline auto view_eighths() -> int { return 0; }
 inline auto wasd_controls() -> bool { return false; }
 inline auto compare_capture( bool /*gameplay_boundary*/ ) -> void {}
 inline auto toggle() -> void {}
+inline auto toggle_first_person() -> void {}
+inline auto first_person() -> bool
+{ return false; }
+inline auto end_glance() -> void {}
+inline auto crosshair() -> std::optional<tripoint_bub_ms>
+{ return std::nullopt; }
+inline auto face_towards( int /*dx*/, int /*dy*/ ) -> void {}
 inline auto rotate( int /*direction*/ ) -> void {}
 inline auto pitch( int /*direction*/ ) -> void {}
 inline auto zoom( int /*direction*/ ) -> void {}

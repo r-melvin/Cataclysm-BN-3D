@@ -3,6 +3,7 @@
 #define CATA_SRC_R3D_CAMERA_H
 
 #include <array>
+#include <cstdint>
 
 #include "r3d_math.h"
 
@@ -39,8 +40,17 @@ struct frustum {
     auto intersects( const aabb &box ) const -> bool;
 };
 
+/// Supported presentation cameras.
+enum class camera_mode : uint8_t {
+    orbit,
+    first_person
+};
+
 /// Orbit camera around a target point. yaw 0 puts the camera south of the target looking north;
 /// increasing yaw swings it clockwise seen from above. pitch is the elevation above the horizon.
+/// In first-person mode the same struct is an eye standing on the target (the point on the floor
+/// under the viewer, in world space), facing one of the eight map directions given by heading.
+/// yaw, pitch, distance and fovy are then unused; the fields below take their place.
 struct camera {
     static constexpr auto min_pitch = static_cast<float>( 0.17f );  // ~10 degrees
     static constexpr auto max_pitch = static_cast<float>
@@ -59,6 +69,36 @@ struct camera {
     float distance = 18.0f;
     float fovy = 0.785f;       // 45 degrees
     bool orthographic = false;
+
+    camera_mode mode = camera_mode::orbit;
+    // First person only.
+    static constexpr auto fp_near_plane = static_cast<float>( 0.05f );
+    static constexpr auto fp_far_plane = static_cast<float>( 200.0f );
+    static constexpr auto max_look_pitch = static_cast<float>( 1.2f ); // ~70 degrees
+    static constexpr auto look_pitch_step = static_cast<float>( 0.2618f ); // 15 degrees
+    int heading = 0;           // 1/8 turns clockwise from north, 0..7 (map convention, y south)
+    float look_pitch = 0.0f;   // radians, positive looks up
+    float eye_height = 0.8f;   // above the target, in stretched space (see z_scale)
+    float glance_yaw = 0.0f;   // mouse glance, display only; snaps back to 0
+    float glance_pitch = 0.0f;
+    float tween_yaw = 0.0f;    // the turn still to be shown while a turn is eased, display only
+    float tilt_pitch = 0.0f;   // looking at another level (look mode), display only
+    float fovx = 1.5708f;      // horizontal field of view, 90 degrees
+
+    auto first_person() const -> bool {
+        return mode == camera_mode::first_person;
+    }
+    /// First person: yaw of the view in world space (0 looks north, positive swings east).
+    auto fp_yaw() const -> float;
+    /// First person: unit view direction in stretched space.
+    auto fp_forward() const -> vec3;
+    /// Vertical field of view at the aspect ratio (width / height). fovx is the field of view of
+    /// the narrower side: across a wide picture (so a wide terrain window does not become a
+    /// fisheye vertically), and up and down a tall, narrow one (a 90 degree width there would be
+    /// more than 100 degrees high).
+    auto fp_fovy( float aspect ) const -> float;
+    /// Horizontal field of view actually shown at the aspect ratio (see fp_fovy).
+    auto fp_fovx( float aspect ) const -> float;
 
     /// Camera position in stretched space (see z_scale).
     auto eye() const -> vec3;
@@ -85,6 +125,9 @@ struct camera {
     auto pitch_steps( int steps ) -> void;
     auto zoom_steps( int steps ) -> void;
 };
+
+/// Nearest map heading, clockwise from north, for a tile offset.
+auto eighths_towards( int dx, int dy ) -> int;
 
 /// Extracts the six clip planes from a view-projection matrix (depth range [0, 1]).
 auto frustum_from_matrix( const mat4 &view_proj ) -> frustum;

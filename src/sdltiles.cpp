@@ -3482,7 +3482,13 @@ static void CheckMessages()
                 break;
 
             case SDL_EVENT_MOUSE_BUTTON_UP:
-                if( ev.button.button == SDL_BUTTON_MIDDLE ) { r3d_dragging = false; }
+                if( ev.button.button == SDL_BUTTON_MIDDLE ) {
+                    r3d_dragging = false;
+                    r3d::end_glance();
+                    if( g ) { g->invalidate_main_ui_adaptor(); }
+                    ui_manager::redraw_invalidated();
+                    needupdate = true;
+                }
                 switch( ev.button.button ) {
                     case SDL_BUTTON_LEFT:
                         last_input = input_event( MOUSE_BUTTON_LEFT, input_event_t::mouse );
@@ -4045,6 +4051,7 @@ input_event input_manager::get_input_event()
     }
 
     r3d::compare_capture( false );
+    r3d::fp_shots_capture();
 
     if( inputdelay < 0 ) {
         ZoneScopedN( "sdl_input_wait_blocking" );

@@ -103,6 +103,8 @@ enum face_bit : uint8_t {
     face_south = 4,
     face_west = 8,
     face_east = 16,
+
+    face_ceiling = 32, // the underside, closing a room whose level above has a floor
 };
 
 /// Occupied cells of a 3x3 grid split at the two faces of the centred wall.

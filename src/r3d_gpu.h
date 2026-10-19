@@ -42,8 +42,10 @@ struct block_uniforms {
     // fog2 z is 1 to draw translucent texels dithered instead of leaving them out (particles).
     float fog[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     float fog2[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    /// Draw unseen terrain as solid black in first person, rather than revealing beyond it.
+    float flags[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 };
-static_assert( sizeof( block_uniforms ) == 160, "block_uniforms is mirrored by r3d_block.vert" );
+static_assert( sizeof( block_uniforms ) == 176, "block_uniforms is mirrored by r3d_block.vert" );
 
 /// Owns the GPU objects of the 3D renderer: pipelines, sampler, and the offscreen colour+depth
 /// target that gets composited into the SDL_Renderer scene. It shares the SDL_Renderer's own

@@ -66,7 +66,8 @@ struct tile_info {
     sprite_ref backdrop; // opaque background layer, drawn first when the tileset has one
     sprite_ref sprite;   // foreground layer (alpha tested, may be sparse)
     float depth_scale = 1.0f; // furniture depth, anchored at its back after wall fitting
-    bool tree = false;   // the level above holds its treetop, which this sprite already shows
+    bool tree  = false;   // the level above holds its treetop, which this sprite already shows
+    bool stairs = false;   // the level above holds its treetop, which this sprite already shows
     sprite_ref side;     // texture for the sides of a wall (see wall_sides), else invalid
     sprite_ref cap;      // the top of such a wall: a plain patch of the same texture
     // >= 0: the wall's sprite is a front elevation (tilesets draw painted walls as a band of
@@ -165,7 +166,10 @@ class tile_info_cache
 
         auto named( const named_options &options ) -> const tile_info &; // *NOPAD*
         /// Ground drawn under trees and bushes, which are terrain with a transparent background.
-        auto ground( cata_tiles &tiles ) -> const tile_info &; // *NOPAD*
+        auto ground( cata_tiles &tiles ) -> const tile_info &;
+        /// Plain plaster for ceilings: the middle of the wall texture "plaster". Invalid when wall
+        /// textures are off. tint is 0xRRGGBB, multiplied into the (grey) texture.
+        auto ceiling( uint32_t &tint ) const -> sprite_ref;
 
     private:
         std::unordered_map<int, tile_info> terrain_;
@@ -276,12 +280,23 @@ auto chunk_stamp( const tripoint_abs_sm &pos, const submap_lookup &lookup ) -> u
 /// Packs a grey level into the RGBA8 light format of stream 1.
 auto pack_light( uint8_t r, uint8_t g, uint8_t b ) -> uint32_t;
 
+/// What a chunk's mesh contains besides the basics; changing it means rebuilding every chunk.
+struct mesh_options {
+    /// The first-person view: stairs get an upright copy of their sprite (visible at eye level).
+    bool first_person = false;
+    /// Ceilings under storeys above, which are only seen from below (so only first person).
+    bool ceilings = false;
+};
+
+/// Meshes the terrain and furniture of one submap. Returns an empty mesh if it is not loaded.
+
 /// Meshes the terrain and furniture of one submap. Returns an empty mesh if it is not loaded.
 struct build_chunk_mesh_options {
     const tripoint_abs_sm &pos;
     const submap_lookup &lookup;
     tile_info_cache &cache;
     cata_tiles &tiles;
+    mesh_options config;
 };
 
 auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh;

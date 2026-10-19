@@ -19,15 +19,18 @@
   eight 3D angles, current saves, settings, and diagnostic logs. Reports are split
   into ZIPs below GitHub's attachment limit. The launcher checks executable/shader
   compatibility and reports capture progress and failures.
+- Optional first-person view: **Ctrl+F** switches cameras; arrows turn/look and
+  movement keeps BN’s normal discrete turns. See the
+  [first-person guide](docs/en/dev/guides/first_person.md).
 - Native UI/HUD options: menu themes, an F4 status report, compass and threat
   markers, plus sky, fog and weather effects driven by BN time and perception.
 - Simple fork issue forms: describe the problem and attach a report if available.
 
 See the [3D build, controls, and capture guide](docs/en/dev/guides/renderer_3d.md).
 The renderer is experimental. Linux builds and capture reports have been tested;
-native macOS and Windows execution has not yet been verified. The native UI/HUD and weather overlays are included; see the
-[UI guide](docs/en/dev/guides/ui_overhaul.md). First-person and guided onboarding
-remain separate feature ports in progress.
+native macOS and Windows execution has not yet been verified. The native UI/HUD, weather overlays and optional first-person view are included;
+see the [UI guide](docs/en/dev/guides/ui_overhaul.md). Guided onboarding remains
+a separate feature port in progress.
 Current remaining work, branch integration and deferred ideas are tracked in the
 [project backlog](BACKLOG.md); research documents retain their original evidence.
 

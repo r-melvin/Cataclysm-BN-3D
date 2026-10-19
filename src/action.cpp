@@ -210,6 +210,8 @@ std::string io::enum_to_string<action_id>( action_id data )
             PAIR( ACTION_R3D_ZOOM_OUT )
             PAIR( ACTION_R3D_RESET )
             PAIR( ACTION_STATUS_REPORT )
+            PAIR( ACTION_R3D_FIRST_PERSON )
+            PAIR( ACTION_R3D_FACE_THREAT )
 
             PAIR( ACTION_ACTIONMENU )
             PAIR( ACTION_ITEMACTION )
@@ -534,6 +536,10 @@ std::string action_ident( action_id act )
             return "r3d_reset";
         case ACTION_STATUS_REPORT:
             return "status_report";
+        case ACTION_R3D_FIRST_PERSON:
+            return "r3d_first_person";
+        case ACTION_R3D_FACE_THREAT:
+            return "r3d_fp_face_threat";
         case ACTION_TOGGLE_FULLSCREEN:
             return "toggle_fullscreen";
         case ACTION_TOGGLE_PIXEL_MINIMAP:
@@ -1246,7 +1252,7 @@ action_id handle_action_menu()
             } );
 #if defined(TILES)
             if( use_tiles ) {
-                register_actions( { ACTION_ZOOM_OUT, ACTION_ZOOM_IN, ACTION_R3D_TOGGLE, ACTION_R3D_ROTATE_LEFT, ACTION_R3D_ROTATE_RIGHT, ACTION_R3D_PITCH_UP, ACTION_R3D_PITCH_DOWN, ACTION_R3D_ZOOM_IN, ACTION_R3D_ZOOM_OUT, ACTION_R3D_RESET, ACTION_STATUS_REPORT } );
+                register_actions( { ACTION_ZOOM_OUT, ACTION_ZOOM_IN, ACTION_R3D_TOGGLE, ACTION_R3D_ROTATE_LEFT, ACTION_R3D_ROTATE_RIGHT, ACTION_R3D_PITCH_UP, ACTION_R3D_PITCH_DOWN, ACTION_R3D_ZOOM_IN, ACTION_R3D_ZOOM_OUT, ACTION_R3D_RESET, ACTION_R3D_FIRST_PERSON, ACTION_R3D_FACE_THREAT, ACTION_STATUS_REPORT } );
             }
 #endif
             register_lua_action_entries( category_id );
@@ -1334,6 +1340,8 @@ std::optional<tripoint_rel_ms> choose_direction( const std::string &message,
         ctxt.register_action( "LEVEL_DOWN" );
     }
 
+    const auto ahead_key = r3d::first_person() && get_option<bool>( "R3D_FP_USE_HEADING" );
+    if( ahead_key ) { ctxt.register_action( "r3d_fp_select_ahead" ); }
     static_popup popup;
     //~ %s: "Close where?" "Pry where?" etc.
     popup.message( _( "%s (Direction button)" ), message ).on_top( true );
@@ -1352,6 +1360,8 @@ std::optional<tripoint_rel_ms> choose_direction( const std::string &message,
             return vec;
         } else if( action == "pause" ) {
             return tripoint_rel_ms::zero();
+        } else if( ahead_key && action == "r3d_fp_select_ahead" ) {
+            return tripoint_rel_ms( rotate_eighths( point_rel_ms::north(), r3d::view_eighths() ), 0 );
         } else if( action == "LEVEL_UP" ) {
             return tripoint_rel_ms::above();
         } else if( action == "LEVEL_DOWN" ) {

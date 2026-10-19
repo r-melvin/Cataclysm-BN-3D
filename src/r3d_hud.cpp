@@ -1,6 +1,7 @@
 #if defined(TILES)
 
 #include "r3d_hud.h"
+#include "r3d_renderer_state.h"
 
 #include <algorithm>
 #include <array>
@@ -599,28 +600,17 @@ auto draw_hud( const draw_hud_options &options ) -> void
     const auto &air = options.air;
     auto &texts = options.texts;
 
-    const auto clipped = SDL_RenderClipEnabled( renderer );
-    auto old_clip = SDL_Rect{};
-    SDL_GetRenderClipRect( renderer, &old_clip );
-    auto old_color = SDL_FColor{  };
-    SDL_GetRenderDrawColorFloat( renderer, &old_color.r, &old_color.g, &old_color.b, &old_color.a );
-    auto old_blend = SDL_BLENDMODE_NONE;
-    SDL_GetRenderDrawBlendMode( renderer, &old_blend );
-    const auto restore_renderer = on_out_of_scope( [ = ]() {
-        SDL_SetRenderClipRect( renderer, clipped ? &old_clip : nullptr );
-        SDL_SetRenderDrawColorFloat( renderer, old_color.r, old_color.g, old_color.b, old_color.a );
-        SDL_SetRenderDrawBlendMode( renderer, old_blend );
+    const auto restore_renderer = renderer_state_guard( renderer, {
+        .x = static_cast<int>( frame.x ), .y = static_cast<int>( frame.y ),
+        .w = static_cast<int>( frame.w ), .h = static_cast<int>( frame.h )
     } );
-    auto clip = SDL_Rect{ .x = static_cast<int>( frame.x ), .y = static_cast<int>( frame.y ),
-                          .w = static_cast<int>( frame.w ), .h = static_cast<int>( frame.h ) };
-    if( clipped ) { SDL_GetRectIntersection( &old_clip, &clip, &clip ); }
-    SDL_SetRenderClipRect( renderer, &clip );
-    SDL_SetRenderDrawBlendMode( renderer, SDL_BLENDMODE_BLEND );
 
     if( get_option<bool>( "R3D_HUD" ) ) {
         add_combat_text( frame, texts );
-        draw_edge_arrows( renderer, frame );
-        draw_compass( { .renderer = renderer, .frame = frame, .air = air, .texts = texts } );
+        if( !frame.cam.first_person() ) {
+            draw_edge_arrows( renderer, frame );
+            draw_compass( { .renderer = renderer, .frame = frame, .air = air, .texts = texts } );
+        }
         add_status_badges( frame, texts );
         draw_hit_direction( renderer, frame );
         add_place_notice( frame, texts );

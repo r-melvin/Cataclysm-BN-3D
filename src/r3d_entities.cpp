@@ -28,6 +28,9 @@
 #include "mtype.h"
 #include "npc.h"
 #include "options.h"
+#include  "r3d_first_person_math.h"
+#include "r3d_shapes.h"
+#include "r3d_scene_rules.h"
 #include "r3d_decals.h"
 #include "r3d_item_profiles.h"
 #include "r3d_scene_rules.h"
@@ -53,6 +56,16 @@ constexpr auto item_radius = static_cast<int>
                              ( 20 );     // and for items (every tile costs a map lookup)
 constexpr auto marker_box_height = static_cast<float>( 1.0f );
 constexpr auto item_size = static_cast<float>( 1.0f );
+constexpr auto item_stand_size = static_cast<float>
+                                 ( 1.0f ); // first person: size of an item standing on the floor
+constexpr auto post_width = static_cast<float>
+                            ( 0.3f );       // first person: markers along a line of fire
+constexpr auto post_height = static_cast<float>( 0.6f );
+constexpr auto heard_post_width = static_cast<float>
+                                  ( 0.35f ); // first person: a sound heard there this turn
+constexpr auto heard_post_height = static_cast<float>( 0.8f );
+// First person: the nearest an upright sprite's quad comes to the eye along the view.
+constexpr auto min_sprite_depth = static_cast<float>( 0.35f );
 
 // Light colour with a zero alpha: no depth pull (see r3d_block.vert), for everything in the
 // entity mesh that is not the top of a billboard.
@@ -225,6 +238,48 @@ auto emit_flat( const emit_flat_options &options ) -> void
 }
 
 // Box standing on a tile with the sprite on its four sides, so a cursor reads as a 3D outline.
+struct emit_stand_options {
+    quad_sink &sink;
+    const tile_info &sprite;
+    const vec3 &right_world;
+    float z_scale;
+    float cx;
+    float cy;
+    float z;
+    uint32_t color;
+    float size = item_stand_size;
+};
+
+auto emit_stand( const emit_stand_options &options ) -> void
+{
+    auto &sink = options.sink;
+    const auto &sprite = options.sprite;
+    const auto &right_world = options.right_world;
+    auto z_scale = options.z_scale;
+    auto cx = options.cx;
+    auto cy = options.cy;
+    auto z = options.z;
+    auto color = options.color;
+    auto size = options.size;
+
+    const auto rx = static_cast<float>( right_world.x * size * 0.5f );
+    const auto ry = static_cast<float>( -right_world.y * size * 0.5f ); // tile space has y flipped
+    const auto top = static_cast<float>( z + size / z_scale );
+    const auto c = corners_t{{ { cx - rx, cy - ry, top }, { cx + rx, cy + ry, top }, { cx + rx, cy + ry, z },
+            { cx - rx, cy - ry, z }
+        }
+    };
+    for( const sprite_ref *s : {
+             &sprite.backdrop, &sprite.sprite
+         } ) {
+        if( !s->valid ) {
+            continue;
+        }
+        const auto uv = uvs_t{{ { s->u0, s->v0 }, { s->u1, s->v0 }, { s->u1, s->v1 }, { s->u0, s->v1 } }};
+        sink.add_colored( { .sprite = *s, .corners = c, .uvs = uv, .ref = light_ref{}, .color = no_pull( color ) } );
+    }
+}
+
 struct emit_marker_box_options {
     quad_sink &sink;
     const sprite_ref &s;
@@ -233,7 +288,7 @@ struct emit_marker_box_options {
     float z0;
     float z1;
     uint32_t color;
-    float width = 1.0f;
+    float size = 1.0f;
 };
 
 auto emit_marker_box( const emit_marker_box_options &options ) -> void
@@ -245,10 +300,13 @@ auto emit_marker_box( const emit_marker_box_options &options ) -> void
     auto z0 = options.z0;
     auto z1 = options.z1;
     auto color = options.color;
-    auto width = options.width;
+    auto size = options.size;
 
-    const auto x1 = static_cast<float>( x0 + width );
-    const auto y1 = static_cast<float>( y0 + width );
+    const auto vertex_color = no_pull( color );
+    x0 += ( 1.0f - size ) * 0.5f;
+    y0 += ( 1.0f - size ) * 0.5f;
+    const auto x1 = static_cast<float>( x0 + size );
+    const auto y1 = static_cast<float>( y0 + size );
     const auto uv = uvs_t{{ { s.u0, s.v0 }, { s.u1, s.v0 }, { s.u1, s.v1 }, { s.u0, s.v1 } }};
     const auto sides = std::array<std::array<float, 4>, 4> {{
             { x0, y1, x1, y1 }, { x1, y0, x0, y0 }, { x1, y1, x1, y0 }, { x0, y0, x0, y1 }
@@ -259,7 +317,7 @@ auto emit_marker_box( const emit_marker_box_options &options ) -> void
                 { e[0], e[1], z0 }
             }
         };
-        sink.add_colored( { .sprite = s, .corners = c, .uvs = uv, .ref = light_ref{}, .color = no_pull( color ) } );
+        sink.add_colored( { .sprite = s, .corners = c, .uvs = uv, .ref = light_ref{}, .color = vertex_color } );
     }
 }
 
@@ -1671,12 +1729,31 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
     auto &here = get_map();
     const auto &you = get_avatar();
     auto sink = quad_sink{};
+    const auto upright = view.upright_billboards;
     const auto right = vec3( view.cam.ground_right() );
     // Camera vectors in the stretched space the picture is in (see camera::z_scale).
-    const auto toward = vec3( normalize( view.cam.eye() - view.cam.stretched_target() ) );
-    const auto up = vec3( cross( right, vec3{ .x = 0.0f, .y = 0.0f, .z = 0.0f } - toward ) );
+    auto toward = vec3( normalize( view.cam.eye() - view.cam.stretched_target() ) );
+    auto up = vec3( cross( right, vec3{ .x = 0.0f, .y = 0.0f, .z = 0.0f } - toward ) );
+
+    if( upright ) {
+        // Cylindrical billboards: straight up, facing the screen, so nothing leans and nothing
+        // needs its depth pulled (see r3d_block.vert). The horizontal view direction orders
+        // the layers of a sprite.
+        const auto ahead = vec3( view.cam.fp_forward() );
+        toward = normalize( vec3{ -ahead.x, -ahead.y, 0.0f } );
+        up = { 0.0f, 0.0f, 1.0f };
+    }
     const auto white = static_cast<uint32_t>( pack_light( 255, 255, 255 ) );
     const auto voxel_items = static_cast<bool>( get_option<bool>( "R3D_VOXEL_ITEMS" ) );
+    // First person: the eye and the view direction on the ground, in the scene's tile space
+    // (y south), for sliding sprites away from the eye.
+    const auto eye_world = vec3( view.cam.eye() );
+    const auto eye_tile = vec3{ eye_world.x, -eye_world.y, 0.0f };
+    const auto ahead_world = vec3( view.cam.fp_forward() );
+    const auto ahead_len = static_cast<float>( std::sqrt( ahead_world.x * ahead_world.x + ahead_world.y
+                           * ahead_world.y ) );
+    const auto ahead_x = static_cast<float>( ahead_len > 0.0f ? ahead_world.x / ahead_len : 0.0f );
+    const auto ahead_y = static_cast<float>( ahead_len > 0.0f ? -ahead_world.y / ahead_len : 1.0f );
 
     auto in_range = [ &view ]( const tripoint_bub_ms & p, int radius ) -> bool {
         return p.z() >= view.z_lo && p.z() <= view.z_hi &&
@@ -1782,6 +1859,9 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                           .anchor_forward = has_authored_profile ? authored_profile->second.support_anchor[0] : 0.5f,
                                           .anchor_right = has_authored_profile ? authored_profile->second.support_anchor[1] : 0.5f,
                                           .anchor_up = has_authored_profile ? authored_profile->second.support_anchor[2] : 0.0f } );
+                } else if( upright ) {
+                    emit_stand( { .sink = sink, .sprite = sprite, .right_world = right, .z_scale = view.cam.z_scale,
+                                  .cx = frame_x( p ), .cy = frame_y( p ), .z = frame_z( p ) + view.surface( p ) + 0.02f, .color = light } );
                 } else {
                     // Items without a usable transparent sprite stay as camera-facing art.
                     emit_billboard( { .sink = sink, .layers = { &sprite }, .right_world = right, .up_world = up,
@@ -1813,7 +1893,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
         if( view.avatar_only && !critter.is_avatar() ) {
             continue;
         }
-        if( !critter.is_avatar() && !you.sees( critter ) ) {
+        if( critter.is_avatar() ? upright : !you.sees( critter ) ) {
             continue;
         }
         // Characters are their body plus worn and wielded overlays, like the flat view.
@@ -1847,7 +1927,20 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                                << " backdrop=" << layers[i]->backdrop.valid;
             }
         }
-        emit_billboard( { .sink = sink, .layers = layers, .right_world = right, .up_world = up, .toward_world = toward, .z_scale = view.cam.z_scale, .cx = frame_x( p ), .cy = frame_y( p ),
+
+        auto cx = static_cast<float>( frame_x( p ) );
+        auto cy = static_cast<float>( frame_y( p ) );
+        if( upright ) {
+            // A creature next to the eye (while a step is eased in, the eye passes close to
+            // tiles) is slid back along the view direction rather than cut by the near plane or
+            // filling the screen. Its depth against walls behind it is not an issue: those are
+            // at least half a tile further on.
+            const auto slide = static_cast<float>( slide_from_eye( { .x = cx, .y = cy, .ex = eye_tile.x, .ey = eye_tile.y, .fx = ahead_x, .fy = ahead_y,
+                                                   .min_depth = min_sprite_depth } ) );
+            cx += ahead_x * slide;
+            cy += ahead_y * slide;
+        }
+        emit_billboard( { .sink = sink, .layers = layers, .right_world = right, .up_world = up, .toward_world = toward, .z_scale = view.cam.z_scale, .cx = cx, .cy = cy,
                           .z_base = frame_z( p ) + view.surface( p ), .color = color == pack_light( 0, 0, 0 ) ? seen_in_dark_light : color,
                           .mirrored = mirrored } );
     }
@@ -1862,7 +1955,28 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
         const auto x0 = static_cast<float>( m.pos.x() - view.center.x() );
         const auto y0 = static_cast<float>( m.pos.y() - view.center.y() );
         const auto z = static_cast<float>( frame_z( m.pos ) + m.top + 0.03f );
+
+        if( m.heard ) {
+            const auto &s = m.sprite->main();
+            if( upright && s.valid ) {
+                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + heard_post_height, .color = white, .size = heard_post_width } );
+            }
+            continue;
+        }
         emit_flat( { .sink = sink, .sprite = *m.sprite, .cx = x0 + 0.5f, .cy = y0 + 0.5f, .z = z, .color = white, .size = 1.0f } );
+
+        if( upright && !m.box && !m.large ) {
+            // A point along a line of fire: a post that can be seen from eye level.
+            const auto &s = m.sprite->main();
+            if( s.valid ) {
+                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + post_height, .color = white, .size = post_width } );
+            }
+        } else if( upright && !m.box ) {
+            const auto &s = m.sprite->main();
+            if( s.valid ) {
+                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + marker_box_height, .color = white } );
+            }
+        }
         if( m.box ) {
             const auto &s = m.sprite->sprite.valid ? m.sprite->sprite : m.sprite->backdrop;
             if( s.valid ) {
@@ -1877,7 +1991,8 @@ auto build_particle_mesh( const entity_view &view ) -> chunk_mesh
 {
     auto sink = quad_sink{};
     const auto right = vec3( view.cam.ground_right() );
-    const auto toward = vec3( normalize( view.cam.eye() - view.cam.stretched_target() ) );
+    const auto toward = view.cam.first_person() ? vec3{} - view.cam.fp_forward() :
+                        normalize( view.cam.eye() - view.cam.stretched_target() );
     const auto up = vec3( cross( right, vec3{ 0.0f, 0.0f, 0.0f } - toward ) );
     // Weather particles: plain quads facing the camera, centred on their point.
     for( const entity_view::particle &pt : view.particles ) {

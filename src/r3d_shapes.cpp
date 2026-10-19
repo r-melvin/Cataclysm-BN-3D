@@ -254,6 +254,11 @@ auto hides_side( const shape &self, const shape &other ) -> bool
     return solid && other.height >= self.height;
 }
 
+// A cell has a ceiling unless the level above is open air: a floor, a wall, a window or door
+// frame, a shrub on a roof or solid furniture all stand on (or are) something that closes it.
+auto ceiling_under( const shape &up ) -> uint8_t
+{ return up.kind != shape_kind::empty ? face_ceiling : 0; }
+
 } // namespace
 
 auto visible_faces( const shape &self, const neighbourhood &n ) -> uint8_t
@@ -262,16 +267,21 @@ auto visible_faces( const shape &self, const neighbourhood &n ) -> uint8_t
     switch( self.kind ) {
         case shape_kind::empty:
         case shape_kind::upright:
-        case shape_kind::pane:
+
+            // Trees reach into the level above (their top is drawn there), so no ceiling.
             return 0;
+        case shape_kind::pane:
+            return ceiling_under( n.up );
         case shape_kind::floor:
             // Tops are kept even under a block: the levels above may be cut away.
-            return face_top;
+            return  static_cast<uint8_t>( face_top | ceiling_under( n.up ) );
         case shape_kind::block:
         case shape_kind::prism:
             break;
     }
     faces |= face_top;
+
+    faces |= ceiling_under( n.up );
     if( !hides_side( self, n.north ) ) {
         faces |= face_north;
     }

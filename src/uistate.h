@@ -83,6 +83,7 @@ class uistatedata
     private:
         enum side { left = 0, right = 1, NUM_PANES = 2 };
     public:
+        int r3d_fp_heading = -1;
         int ags_pay_gas_selected_pump = 0;
 
         int wishitem_selected = 0;

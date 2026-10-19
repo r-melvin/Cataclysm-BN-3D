@@ -4995,6 +4995,7 @@ void uistatedata::serialize( JsonOut &json ) const
 {
     const unsigned int input_history_save_max = 25;
     json.start_object();
+    json.member( "r3d_fp_heading", r3d_fp_heading );
 
     transfer_save.serialize( json, "transfer_save_" );
 
@@ -5056,6 +5057,7 @@ void uistatedata::serialize( JsonOut &json ) const
 
 void uistatedata::deserialize( const JsonObject &jo )
 {
+    jo.read( "r3d_fp_heading", r3d_fp_heading );
     transfer_save.deserialize( jo, "transfer_save_" );
 
     // the rest

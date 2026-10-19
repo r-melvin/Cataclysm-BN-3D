@@ -57,8 +57,11 @@
 #include "vehicle/vehicle.h"
 #include "vehicle/vpart_position.h"
 #include "r3d_gpu.h"
-#include  "r3d_hud.h"
+#include "r3d_hud.h"
+#include "r3d_renderer_state.h"
 #include "r3d_hud_math.h"
+#include "r3d_knowledge.h"
+#include "r3d_first_person_math.h"
 #include "r3d_mesh.h"
 
 #include "r3d_sky.h"
@@ -68,7 +71,12 @@
 
 #include "sounds.h"
 #include "map/submap.h"
+#include "sounds.h"
+#include "string_formatter.h"
+#include "translations.h"
 #include "ui_manager.h"
+
+#include "uistate.h"
 
 namespace r3d
 {
@@ -194,6 +202,24 @@ struct state {
     sky_sprites sky;        // sun, moon and fallback weather sprites (see r3d_sky.h)
     bool sky_failed = false;
     bool animated_weather = false;
+    bool chunks_first_person = false; // the mode the chunk meshes were built for
+    // First-person easing: the player and the heading jump, the picture catches up. The offsets
+    // are what is left to show, measured from the logical camera back to where it was.
+    bool fp_prev_valid = false;
+    tripoint_abs_ms fp_prev_pos;
+    int fp_prev_heading = 0;
+    float fp_ease_dx = 0.0f; // tiles east and south at the start of the ease
+    float fp_ease_dy = 0.0f;
+    float fp_ease_dz = 0.0f; // levels up at the start of the ease (stairs, climbing on things)
+    float fp_prev_surface = 0.0f;
+    float fp_ease_yaw = 0.0f; // radians at the start of the ease
+    uint32_t fp_ease_start = 0;
+    uint32_t fp_ease_ms = 0;
+    bool fp_easing = false; // the last frame was drawn mid-ease, so another is needed
+    int fp_heading_saved = 0; // the heading last written to the save's UI state
+    // Sounds heard this turn whose post cannot be seen (out of the picture or behind something):
+    // the compass strip shows a tick for each.
+    std::vector<tripoint_bub_ms> heard_ticks;
 };
 
 auto st() -> state & // *NOPAD*
@@ -303,7 +329,8 @@ auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
 
     const auto mesh_started = stats.enabled ? std::chrono::steady_clock::now() :
                               std::chrono::steady_clock::time_point{};
-    auto mesh = chunk_mesh( build_chunk_mesh( { .pos = pos, .lookup = lookup, .cache = s.cache, .tiles = *tilecontext } ) );
+    auto mesh = build_chunk_mesh( { .pos = pos, .lookup = lookup, .cache = s.cache, .tiles = *tilecontext,
+                                    .config = { .first_person = s.chunks_first_person, .ceilings = s.chunks_first_person } } );
     if( stats.enabled ) {
         stats.mesh_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
                          mesh_started ).count();
@@ -752,7 +779,7 @@ auto set_cutaway( const set_cutaway_options &options ) -> void
 
     const auto &you = get_avatar();
     const auto p = tripoint_bub_ms( you.bub_pos() );
-    if( !get_option<bool>( "R3D_CUTAWAY" ) || p.z() != center.z() ) {
+    if( cam.first_person() || !get_option<bool>( "R3D_CUTAWAY" ) || p.z() != center.z() ) {
         u.cut[3] = 0.0f;
         return;
     }
@@ -783,6 +810,129 @@ auto set_cutaway( const set_cutaway_options &options ) -> void
     u.cut2[1] = base + keep_below;
 }
 
+auto sync_camera_mode( camera &cam ) -> void
+{
+    constexpr auto eighth = static_cast<float>( 0.78539816f );
+    const auto want_first_person = static_cast<bool>( get_option<std::string>( "R3D_CAMERA_MODE" ) ==
+                                   "first_person" );
+    if( want_first_person == cam.first_person() ) {
+        return;
+    }
+    if( want_first_person ) {
+        cam.heading = cam.forward_eighths();
+        cam.mode = camera_mode::first_person;
+        cam.look_pitch = 0.0f;
+        cam.glance_yaw = 0.0f;
+        cam.glance_pitch = 0.0f;
+    } else {
+        cam.mode = camera_mode::orbit;
+        // The orbit yaw turns the other way round (see camera::forward_eighths).
+        cam.yaw = -static_cast<float>( cam.heading ) * eighth;
+    }
+}
+
+// The first-person heading is kept in the save's UI state (uistate), so a loaded game faces the
+// way it was saved. A value there that the renderer did not write itself came from loading a
+// game: the view takes it over at once, without easing a turn in.
+auto sync_saved_heading( state &s ) -> void
+{
+    const auto saved = static_cast<int>( ( uistate.r3d_fp_heading % 8 + 8 ) % 8 );
+    if( saved != s.fp_heading_saved ) {
+        s.cam.heading = saved;
+        s.fp_prev_heading = saved;
+    }
+    if( s.cam.first_person() ) {
+        uistate.r3d_fp_heading = s.cam.heading;
+    }
+    s.fp_heading_saved = ( uistate.r3d_fp_heading % 8 + 8 ) % 8;
+}
+
+// Writes a heading the player just chose to the save's UI state, before any frame is drawn.
+auto remember_heading( state &s ) -> void
+{
+    if( s.cam.first_person() ) {
+        uistate.r3d_fp_heading = s.cam.heading;
+        s.fp_heading_saved = s.cam.heading;
+    }
+}
+
+// First person: eases the picture from where the camera was to where the player now is. The
+// game state (position, heading, picking) always has the end values; only what is drawn lags, for
+// at most R3D_FP_TWEEN_MS. Sets the offsets to add to the camera this frame and the yaw to show.
+// surface is the height the player stands at within their level (floor, counter top): taking
+// stairs, or climbing onto a counter, eases the eye up or down as well (offset_z, in levels).
+struct update_fp_ease_options {
+    state &s;
+    const tripoint_abs_ms &pos;
+    float surface;
+    float &offset_x;
+    float &offset_y;
+    float &offset_z;
+};
+
+auto update_fp_ease( const update_fp_ease_options &options ) -> void
+{
+    auto &s = options.s;
+    const auto &pos = options.pos;
+    auto surface = options.surface;
+    auto &offset_x = options.offset_x;
+    auto &offset_y = options.offset_y;
+    auto &offset_z = options.offset_z;
+
+    constexpr auto eighth = static_cast<float>( 0.78539816f );
+    auto &you = get_avatar();
+    const auto now = static_cast<uint32_t>( static_cast<uint32_t>( SDL_GetTicks() ) );
+    auto length = static_cast<uint32_t>( static_cast<uint32_t>( std::max( 0,
+                                         get_option<int>( "R3D_FP_TWEEN_MS" ) ) ) );
+    // Travelling and activities make many moves in a row; showing each would only slow them.
+    if( you.is_auto_moving() || you.activity || !get_option<bool>( "ANIMATIONS" ) ) {
+        length = 0;
+    }
+    // What is still to be shown of the ease in progress: it fades out cubically.
+    auto remaining = [ &s, now ]() {
+        if( s.fp_ease_ms == 0 || now - s.fp_ease_start >= s.fp_ease_ms ) {
+            return 0.0f;
+        }
+        const auto left = static_cast<float>( 1.0f - static_cast<float>( now - s.fp_ease_start ) /
+                                              static_cast<float>( s.fp_ease_ms ) );
+        return left * left * left;
+    };
+    if( s.fp_prev_valid && length > 0 ) {
+        const auto step = tripoint_rel_ms( pos - s.fp_prev_pos );
+        // How far the eye rises: a storey for stairs, plus the change in what is stood on.
+        const auto rise = static_cast<float>( static_cast<float>( step.z() ) + surface -
+                                              s.fp_prev_surface );
+        // A step to a neighbouring tile, up or down stairs (which may land on a tile next to
+        // the one above or below), or onto furniture; teleports and falls are not eased.
+        const auto stepped = static_cast<bool>( ( step.x() != 0 || step.y() != 0 || rise != 0.0f ) &&
+                                                std::abs( step.x() ) <= 1 && std::abs( step.y() ) <= 1 &&
+                                                std::abs( step.z() ) <= 1 );
+        const auto turned = static_cast<int>( ( ( s.cam.heading - s.fp_prev_heading + 12 ) % 8 ) - 4 );
+        if( stepped || turned != 0 ) {
+            // Carry over what is left, so a held key flows from one step into the next.
+            const auto left = static_cast<float>( remaining() );
+            s.fp_ease_dx = s.fp_ease_dx * left - ( stepped ? static_cast<float>( step.x() ) : 0.0f );
+            s.fp_ease_dy = s.fp_ease_dy * left - ( stepped ? static_cast<float>( step.y() ) : 0.0f );
+            s.fp_ease_dz = s.fp_ease_dz * left - ( stepped ? rise : 0.0f );
+            s.fp_ease_yaw = s.fp_ease_yaw * left - static_cast<float>( turned ) * eighth;
+            s.fp_ease_start = now;
+            s.fp_ease_ms = length;
+        }
+    } else if( length == 0 ) {
+        s.fp_ease_ms = 0;
+    }
+    s.fp_prev_valid = true;
+    s.fp_prev_pos = pos;
+    s.fp_prev_surface = surface;
+    s.fp_prev_heading = s.cam.heading;
+    const auto left = static_cast<float>( remaining() );
+    s.fp_easing = left > 0.0f;
+    offset_x = s.fp_ease_dx * left;
+    offset_y = s.fp_ease_dy * left;
+    offset_z = s.fp_ease_dz * left;
+    s.cam.tween_yaw = s.fp_ease_yaw * left;
+}
+
 auto apply_env_camera( camera &cam ) -> void
 {
     // CATA_R3D_CAMERA="yaw_deg,pitch_deg,distance[,ortho]" gives repeatable views for
@@ -796,7 +946,12 @@ auto apply_env_camera( camera &cam ) -> void
     auto pitch = static_cast<float>( 0.0f );
     auto dist = static_cast<float>( 0.0f );
     auto ortho = static_cast<int>( 0 );
-    const auto n = static_cast<int>( std::sscanf( spec, "%f,%f,%f,%d", &yaw, &pitch, &dist, &ortho ) );
+
+    auto fp_heading = static_cast<int>( 0 );
+    auto fp_pitch = static_cast<float>( 0.0f );
+    const auto n = static_cast<int>( std::sscanf( spec, "%f,%f,%f,%d,%d,%f", &yaw, &pitch, &dist,
+                                     &ortho, &fp_heading,
+                                     &fp_pitch ) );
     if( n >= 3 ) {
         constexpr auto deg = static_cast<float>( 0.017453293f );
         cam.yaw = yaw * deg;
@@ -804,6 +959,13 @@ auto apply_env_camera( camera &cam ) -> void
         cam.distance = std::clamp( dist, camera::min_distance, camera::max_distance );
         if( n >= 4 ) {
             cam.orthographic = ortho != 0;
+        }
+        if( n >= 5 ) {
+            cam.heading = ( fp_heading % 8 + 8 ) % 8;
+        }
+        if( n >= 6 ) {
+            cam.look_pitch = std::clamp( fp_pitch * deg, -camera::max_look_pitch,
+                                         camera::max_look_pitch );
         }
     }
 }
@@ -909,11 +1071,12 @@ auto add_sky_bodies( const add_sky_bodies_options &options ) -> void
     if( !s.sky.loaded() ) {
         return;
     }
-    constexpr auto distance = static_cast<float>( 300.0f );
+    const auto distance = s.cam.first_person() ? camera::fp_far_plane * 0.8f : 300.0f;
+    const auto size_scale = distance / 300.0f;
     for( const sky_body &b : sky_bodies( view_z, air ) ) {
         // The view stretches heights by z_scale: shrink the direction's height to keep the angle.
         const auto at = vec3( s.cam.target + vec3{ b.dir.x, b.dir.y, b.dir.z / s.cam.z_scale } * distance );
-        view.particles.push_back( { at.x, -at.y, at.z, b.sun ? 16.0f : 14.0f,
+        view.particles.push_back( { at.x, -at.y, at.z, ( b.sun ? 16.0f : 14.0f ) * size_scale,
                                     &s.sky.cells[static_cast<size_t>( b.cell )], pack_light( 255, 255, 255 ) } );
     }
 }
@@ -961,7 +1124,7 @@ auto picking_column_height( const picking_column_height_options &options ) -> fl
     }
     const auto h = static_cast<float>( column_height( s, here, p ) );
     const Creature *critter = g->critter_at( p, true );
-    if( critter && ( critter->is_avatar() || you.sees( *critter ) ) ) {
+    if( critter && ( critter->is_avatar() ? !v.cam.first_person() : you.sees( *critter ) ) ) {
         return 1.0f;
     }
     return h;
@@ -1001,6 +1164,7 @@ struct append_frame_markers_options {
     const std::vector<tripoint_bub_ms> &where;
     const std::string &id;
     bool box;
+    bool large;
 };
 
 auto append_frame_markers( const append_frame_markers_options &options ) -> void
@@ -1014,8 +1178,45 @@ auto append_frame_markers( const append_frame_markers_options &options ) -> void
 
     const auto &sprite = s.cache.named( { .category = C_NONE, .id = id, .tiles = *tilecontext } );
     for( const tripoint_bub_ms &p : where ) {
-        entities_view.markers.push_back( { .pos = p, .top = column_height( s, here, p ), .sprite = &sprite, .box = box } );
+        entities_view.markers.push_back( { .pos = p, .top = column_height( s, here, p ), .sprite = &sprite, .box = box, .large = options.large, .heard = false } );
     }
+
+}
+
+struct occluding_column_height_options {
+    state &s;
+    const map &here;
+    const light_sampler &sampler;
+    const tripoint_bub_ms &center;
+    int z_lo;
+    int z_hi;
+    bool occlude_unseen;
+    int dx;
+    int dy;
+    int dz;
+};
+
+auto occluding_column_height( const occluding_column_height_options &options ) -> float
+{
+    auto &s = options.s;
+    const auto &here = options.here;
+    const auto &sampler = options.sampler;
+    const auto &center = options.center;
+    auto z_lo = options.z_lo;
+    auto z_hi = options.z_hi;
+    auto occlude_unseen = options.occlude_unseen;
+    auto dx = options.dx;
+    auto dy = options.dy;
+    auto dz = options.dz;
+
+    const auto c = tripoint_bub_ms( center.x() + dx, center.y() + dy, center.z() + dz );
+    if( c.z() < z_lo || c.z() > z_hi || !here.inbounds( c ) ) {
+        return 0.0f;
+    }
+    if( !occlude_unseen && sampler.color_at( c ) == pack_light( 0, 0, 0 ) ) {
+        return 0.0f;
+    }
+    return column_height( s, here, c );
 }
 
 } // namespace
@@ -1043,27 +1244,49 @@ auto reload_map_tileset() -> bool
 // Writes what the comparison shots show as text: the player and camera, and the tiles around
 // the view (furniture symbol over terrain symbol, and whether each is seen, remembered or
 // unknown), so a difference between the two pictures can be traced to a map tile.
+// Writes what the shots show as text: the player and the camera (orbit and first person), and
+// the tiles around the view (furniture symbol over terrain symbol, and whether each is seen,
+// remembered or unknown), so something odd in a picture can be traced to a map tile.
 auto dump_view( const std::string &path, const tripoint_bub_ms &center ) -> void
 {
     auto out = std::ofstream( path );
     if( !out ) {
         return;
     }
+
+    constexpr auto deg = static_cast<float>( 57.29578f );
     const auto &here = get_map();
     const auto &you = get_avatar();
     const auto &s = st();
+    const auto &cam = s.cam;
     out << "turn " << to_turn<int>( calendar::turn ) << " moves " << you.get_moves() << "\n";
     out << "player bub " << you.bub_pos().to_string() << " abs " << you.abs_pos().to_string()
         << "\nview center bub " << center.to_string()
-        << "\ncamera yaw " << s.cam.yaw << " pitch " << s.cam.pitch << " distance " << s.cam.distance
-        << " ortho " << s.cam.orthographic << " pan " << s.pan.x << "," << s.pan.y << "," << s.pan.z
-        << " z_scale " << s.cam.z_scale << "\n";
+        << "\ncamera mode " << ( cam.first_person() ? "first_person" : "orbit" )
+        << "\norbit yaw " << cam.yaw << " pitch " << cam.pitch << " distance " << cam.distance
+        << " ortho " << cam.orthographic << " pan " << s.pan.x << "," << s.pan.y << "," << s.pan.z
+        << " z_scale " << cam.z_scale << "\n";
+
+    if( cam.first_person() ) {
+        static const char *const names[8] = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+        const auto eye = vec3( cam.eye() );
+        const auto aspect = static_cast<float>( s.shown.valid &&
+                                                s.shown.h > 0.0f ? s.shown.w / s.shown.h : 1.0f );
+        out << "first person heading " << cam.heading << " (" << names[( cam.heading % 8 + 8 ) % 8]
+            << ")\n  eye (stretched world, scene frame: x east, y north, z up) " << eye.x << ","
+            << eye.y << "," << eye.z << "\n  eye height " << cam.eye_height << " yaw "
+            << cam.fp_yaw() * deg << " deg, look pitch " << cam.look_pitch *deg << " + tilt "
+            << cam.tilt_pitch *deg << " + glance " << cam.glance_pitch *deg << " deg\n  fov x "
+            << cam.fp_fovx( aspect ) * deg << " deg, fov y " << cam.fp_fovy( aspect ) * deg
+            << " deg at aspect "
+            << aspect << "\n";
+    }
     constexpr auto half_w = static_cast<int>( 16 );
     constexpr auto half_h = static_cast<int>( 12 );
     const auto &vvc = here.get_visibility_variables_cache();
     auto legend = std::map<std::string, std::string> {};
     out << "\nmap (x " << center.x() - half_w << ".." << center.x() + half_w << ", y "
-        << center.y() - half_h << ".." << center.y() + half_h << ", @ = player):\n";
+        << center.y() - half_h << ".." << center.y() + half_h << ", north up, @ = player):\n";
     for( auto dy = static_cast<int>( -half_h ); dy <= half_h; ++dy ) {
         for( auto dx = static_cast<int>( -half_w ); dx <= half_w; ++dx ) {
             const auto p = tripoint_bub_ms( center + tripoint_rel_ms( dx, dy, 0 ) );
@@ -1184,6 +1407,12 @@ auto capture( const std::string &path ) -> bool
     return ok;
 }
 
+auto settle_frames() -> void
+{
+    for( auto i = 0; i < 40; ++i ) { redraw_capture_frame(); }
+    settle_capture_assets();
+}
+
 struct comparison_view_options {
     const camera &cam;
     const vec3 &pan;
@@ -1197,6 +1426,9 @@ struct comparison_view_guard {
     options_manager::cOpt &view_3d = get_options().get_option( "RENDERER_3D" );
     std::string old_tiles = tiles.getValue();
     std::string old_view_3d = view_3d.getValue();
+    options_manager::cOpt &mode = get_options().get_option( "R3D_CAMERA_MODE" );
+    std::string old_mode = mode.getValue();
+    int old_heading = uistate.r3d_fp_heading;
     camera old_camera;
     vec3 old_pan;
     bool old_env_camera;
@@ -1212,11 +1444,15 @@ struct comparison_view_guard {
     }
 
     auto restore() -> bool {
+        mode.setValue( old_mode );
+        uistate.r3d_fp_heading = old_heading;
         tiles.setValue( old_tiles );
         view_3d.setValue( old_view_3d );
         const auto restored = static_cast<bool>( reload_map_tileset() );
         g->set_zoom( old_zoom );
         st().cam = old_camera;
+        st().fp_prev_valid = false;
+        st().fp_heading_saved = ( old_heading % 8 + 8 ) % 8;
         st().pan = old_pan;
         st().env_camera_applied = old_env_camera;
         st().was_controlling_vehicle = old_controlling;
@@ -1383,6 +1619,7 @@ auto compare_capture( bool gameplay_boundary ) -> void
 
     try {
         const auto ok_before = static_cast<bool>( !session || capture( base + "_before.png" ) );
+        original_view.mode.setValue( "orbit" );
         // The flat isometric view first: its tile size sets the scale of the 3D shot.
         tiles.setValue( env_or( "CATA_R3D_COMPARE_TILESET", "HitButton_iso" ) );
         view_3d.setValue( "false" );
@@ -1483,13 +1720,106 @@ auto set_text_cell( int width, int height ) -> void
     st().text_h = std::max( height, 1 );
 }
 
+auto fp_shots_capture() -> void
+{
+    // CATA_R3D_FP_SHOTS=<prefix> saves, once, as soon as a game is on screen, with no input
+    // handled in between (so no turn passes):
+    //  - <prefix>_orbit.png: the 3D view through the orbit camera, for reference;
+    //  - <prefix>_fp_<n|ne|e|se|s|sw|w|nw>.png: the whole window in first person facing each of
+    //    the eight headings, HUD included;
+    //  - <prefix>_map.txt: the player, both cameras and the tiles around them (see dump_view).
+    // CATA_R3D_FP_TILESET picks the tileset (default: the current one), CATA_R3D_FP_LOOK=up,
+    // down or level (default) tilts the first-person shots by 45 degrees. Afterwards the
+    // tileset, the 3D view, the camera mode and the heading come back (the options file is
+    // never written), or with CATA_R3D_QUIT_AFTER_SHOT the game exits (0 when every shot saved).
+    static const char *const prefix = std::getenv( "CATA_R3D_FP_SHOTS" );
+    static auto done = static_cast<bool>( false );
+    if( !prefix || done || !g || !tilecontext || !st().map_drawn ) {
+        return;
+    }
+    done = true;
+    const auto base = std::string( prefix );
+    auto &tiles = get_options().get_option( "TILES" );
+    auto &view_3d = get_options().get_option( "RENDERER_3D" );
+    auto &mode = get_options().get_option( "R3D_CAMERA_MODE" );
+    const auto old_tiles = std::string( tiles.getValue() );
+    auto &s = st();
+    auto original_view = comparison_view_guard( { .cam = s.cam, .pan = s.pan,
+                         .env_camera = s.env_camera_applied, .zoom = static_cast<int>( g->get_zoom() ) } );
+    const auto old_rng = rng_get_engine();
+    const auto rng_guard = on_out_of_scope( [&]() { rng_get_engine() = old_rng; } );
+    const auto message_guard = Messages::capture_read_guard{};
+
+    auto ok = static_cast<bool>( true );
+    try {
+        const char *const tileset = std::getenv( "CATA_R3D_FP_TILESET" );
+        const auto swap_tileset = static_cast<bool>( tileset && old_tiles != tileset );
+        view_3d.setValue( "true" );
+        mode.setValue( "orbit" );
+        if( swap_tileset ) {
+            tiles.setValue( tileset );
+            ok = reload_map_tileset();
+        }
+        // The settling frames are presented, which also puts a new tileset's textures on the GPU
+        // (the renderer only uploads them when it presents) before the shot reads the 3D pass.
+        settle_frames();
+        // Every shot is attempted even after one failed, so the files show what went wrong.
+        ok = active() && capture( base + "_orbit.png" ) && ok;
+
+        mode.setValue( "first_person" );
+        // The first frame switches the camera (which levels the view); the tilt is set after it.
+        settle_frames();
+        const auto look = std::string( std::getenv( "CATA_R3D_FP_LOOK" ) ? std::getenv( "CATA_R3D_FP_LOOK" )
+                                       :
+                                       "level" );
+        constexpr auto level_tilt = static_cast<float>( 0.7854f );
+        s.cam.look_pitch = look == "up" ? level_tilt : look == "down" ? -level_tilt : 0.0f;
+        static const char *const names[8] = { "n", "ne", "e", "se", "s", "sw", "w", "nw" };
+        for( auto h = static_cast<int>( 0 ); h < 8; ++h ) {
+            s.cam.heading = h;
+            end_glance();
+            // No easing between the shots, whatever R3D_FP_TWEEN_MS says.
+            s.fp_prev_valid = false;
+            s.fp_ease_ms = 0;
+            settle_frames();
+            ok = capture( base + "_fp_" + names[h] + ".png" ) && first_person() && ok;
+            if( h == 0 ) {
+                dump_view( base + "_map.txt", g->ter_view_p );
+            }
+        }
+        DebugLog( ok ? DL::Info : DL::Error, DC::Main ) << "r3d fp shots: " << ( ok ? "all saved" :
+                "some shots failed" );
+
+    } catch( const std::exception &error ) {
+        DebugLog( DL::Error, DC::Main ) << "r3d fp shots: " << error.what();
+        ok = false;
+    }
+    ok = original_view.restore() && ok;
+    if( std::getenv( "CATA_R3D_QUIT_AFTER_SHOT" ) ) {
+        flush_debug_log();
+        std::_Exit( ok ? 0 : 1 );
+    }
+
+}
+
 auto active() -> bool
 { return st().drawn && get_option<bool>( "RENDERER_3D" ); }
 
 auto view_eighths() -> int
 {
-    const auto &v = st().shown;
-    return active() && v.valid ? v.cam.forward_eighths() : 0;
+    const auto &s = st();
+    if( !active() || !s.shown.valid ) {
+        return 0;
+    }
+    // The first-person heading changes before the next frame is drawn; the orbit camera is read
+    // as last shown.
+    return s.shown.cam.first_person() ? s.cam.heading : s.shown.cam.forward_eighths();
+}
+
+auto first_person() -> bool
+{
+    const auto &s = st();
+    return active() && s.shown.valid && s.shown.cam.first_person();
 }
 
 auto wasd_controls() -> bool
@@ -1501,9 +1831,48 @@ auto toggle() -> void
     get_options().save();
 }
 
+auto toggle_first_person() -> void
+{
+    get_options().get_option( "R3D_CAMERA_MODE" ).setNext();
+    get_options().save();
+}
+
+auto end_glance() -> void
+{
+    auto &cam = st().cam;
+    cam.glance_yaw = 0.0f;
+    cam.glance_pitch = 0.0f;
+}
+
+auto crosshair() -> std::optional<tripoint_bub_ms>
+{
+    const auto &v = st().shown;
+    if( !first_person() ) {
+        return std::nullopt;
+    }
+    return pick( v.x + v.w * 0.5f, v.y + v.h * 0.5f );
+}
+
+auto face_towards( int dx, int dy ) -> void
+{
+    auto &s = st();
+    if( s.cam.first_person() && ( dx != 0 || dy != 0 ) ) {
+        s.cam.heading = eighths_towards( dx, dy );
+        remember_heading( s );
+        end_glance();
+    }
+}
+
 auto rotate( int dir ) -> void
 {
-    st().cam.rotate_steps( dir );
+
+    auto &s = st();
+    s.cam.rotate_steps( dir );
+
+    if( s.cam.first_person() ) {
+        remember_heading( s );
+        end_glance();
+    }
 }
 
 auto pitch( int dir ) -> void
@@ -1513,13 +1882,30 @@ auto pitch( int dir ) -> void
 
 auto zoom( int dir ) -> void
 {
-    st().cam.zoom_steps( dir );
+
+    auto &cam = st().cam;
+    if( cam.first_person() ) {
+        // There is no distance to change: the same keys look one level up or down, which is a
+        // 45 degree tilt of the view and back.
+        constexpr auto level_tilt = static_cast<float>( 0.7854f );
+        const auto now = static_cast<int>( cam.look_pitch > 0.4f ? 1 : cam.look_pitch < -0.4f ? -1 : 0 );
+        cam.look_pitch = static_cast<float>( std::clamp( now + ( dir > 0 ? 1 : -1 ), -1, 1 ) ) *
+                         level_tilt;
+        return;
+    }
+    cam.zoom_steps( dir );
 }
 
 auto reset() -> void
 {
     auto &s = st();
+
+    // First person keeps its mode and heading: resetting only straightens the view.
+    const auto mode = camera_mode( s.cam.mode );
+    const auto heading = static_cast<int>( s.cam.heading );
     s.cam = camera();
+    s.cam.mode = mode;
+    s.cam.heading = heading;
     s.pan = vec3{};
     s.env_camera_applied = false;
     s.was_controlling_vehicle = false;
@@ -1538,6 +1924,18 @@ auto drag_orbit( float dx, float dy ) -> void
     constexpr auto yaw_per_pixel = static_cast<float>( 0.008f );
     constexpr auto pitch_per_pixel = static_cast<float>( 0.006f );
     constexpr auto two_pi = static_cast<float>( 6.2831853f );
+
+    if( cam.first_person() ) {
+        // A glance: looks around for as long as the button is held, then snaps back to the
+        // heading. The mouse follows the view (right looks right, down looks down).
+        constexpr auto max_glance_yaw = static_cast<float>( 2.4f );
+        cam.glance_yaw = std::clamp( cam.glance_yaw + dx * yaw_per_pixel, -max_glance_yaw,
+                                     max_glance_yaw );
+        cam.glance_pitch = std::clamp( cam.glance_pitch - dy * pitch_per_pixel,
+                                       -camera::max_look_pitch - cam.look_pitch,
+                                       camera::max_look_pitch - cam.look_pitch );
+        return;
+    }
     cam.yaw = std::fmod( cam.yaw - dx * yaw_per_pixel, two_pi );
     cam.pitch = std::clamp( cam.pitch + dy * pitch_per_pixel, camera::min_pitch, camera::max_pitch );
 }
@@ -1545,6 +1943,11 @@ auto drag_orbit( float dx, float dy ) -> void
 auto drag_pan( float dx, float dy ) -> void
 {
     auto &s = st();
+    // The ground under the cursor follows the mouse: farther cameras move faster.
+
+    if( s.cam.first_person() ) {
+        return; // the eye stays on the player
+    }
     // The ground under the cursor follows the mouse: farther cameras move faster.
     const auto units_per_pixel = static_cast<float>( s.cam.distance * 0.0016f );
     const auto right = vec3( s.cam.ground_right() );
@@ -1631,13 +2034,180 @@ auto refresh_pending_assets() -> void
 {
     auto &s = st();
     if( !g || !active() ||
-        ( !assets_pending( s ) && !s.animated_weather && !hud_animation_pending() ) ) { return; }
+        ( !assets_pending( s ) && !s.animated_weather && !s.fp_easing && !hud_animation_pending() ) ) { return; }
     const auto now = std::chrono::steady_clock::now();
-    if( now - s.last_asset_refresh < std::chrono::milliseconds( 33 ) ) { return; }
+    if( now - s.last_asset_refresh < std::chrono::milliseconds( s.fp_easing ? 16 : 33 ) ) { return; }
     s.last_asset_refresh = now;
     g->invalidate_main_ui_adaptor();
     ui_manager::redraw_invalidated();
 }
+
+namespace
+{
+// First-person overlay, drawn with the 2D renderer over the finished picture: a compass strip
+// (the game keeps full-circle vision, so this shows what is behind you), an alert on the edge
+// nearest an adjacent hostile that is out of the picture, and a crosshair with its label.
+// Bearings follow r3d_hud.h: radians clockwise from north, relative to the view's yaw.
+struct draw_fp_hud_options {
+    state &s;
+    SDL_Renderer *renderer;
+    float x;
+    float y;
+    float w;
+    float h;
+    const camera &cam;
+};
+
+auto draw_fp_hud( const draw_fp_hud_options &options ) -> void
+{
+    auto &s = options.s;
+    auto renderer = options.renderer;
+    auto x = options.x;
+    auto y = options.y;
+    auto w = options.w;
+    auto h = options.h;
+    const auto &cam = options.cam;
+
+    const auto restore_renderer = renderer_state_guard( renderer, {
+        .x = static_cast<int>( x ), .y = static_cast<int>( y ),
+        .w = static_cast<int>( w ), .h = static_cast<int>( h )
+    } );
+    constexpr auto pi = static_cast<float>( 3.14159265f );
+    // The compass strip shows half a turn: the view in the middle, what is beside you at the ends.
+    constexpr auto compass_span = static_cast<float>( pi );
+    const auto compass = std::string( get_option<std::string>( "R3D_FP_COMPASS" ) );
+    const auto edge_alert = static_cast<bool>( get_option<bool>( "R3D_FP_EDGE_ALERT" ) );
+    const auto &you = get_avatar();
+    auto &here = get_map();
+    const auto view_yaw = static_cast<float>( cam.fp_yaw() );
+    auto bearing_to = [ &you, view_yaw ]( const tripoint_bub_ms & at ) {
+        const auto d = tripoint_rel_ms( at - you.bub_pos() );
+        return relative_bearing( static_cast<float>( d.x() ), static_cast<float>( d.y() ), view_yaw );
+    };
+    struct fill_options {
+        float x;
+        float y;
+        float w;
+        float h;
+        uint8_t r;
+        uint8_t g;
+        uint8_t b;
+        uint8_t a;
+    };
+    const auto fill = [renderer]( const fill_options & o ) {
+        SDL_SetRenderDrawColor( renderer, o.r, o.g, o.b, o.a );
+        const auto rect = SDL_FRect{ .x = o.x, .y = o.y, .w = o.w, .h = o.h };
+        SDL_RenderFillRect( renderer, &rect );
+    };
+    struct label_options {
+        float x;
+        float y;
+        const std::string &text;
+        unsigned char color;
+    };
+    const auto text = [&s]( const label_options & o ) {
+        s.texts.push_back( { .x = o.x, .y = o.y, .text = o.text, .color = o.color, .align = 0, .boxed = false } );
+    };
+    constexpr auto white = static_cast<unsigned char>( 15 );
+    constexpr auto light_gray = static_cast<unsigned char>( 7 );
+    const auto cell_h = static_cast<float>( static_cast<float>( s.text_h ) );
+
+    if( compass != "off" ) {
+        const auto strip_w = static_cast<float>( std::max( 120.0f, w * 0.4f ) );
+        // Room for one line of text above the ticks' footing.
+        const auto strip_h = static_cast<float>( std::max( 22.0f, cell_h + 8.0f ) );
+        const auto left = static_cast<float>( x + ( w - strip_w ) * 0.5f );
+        const auto top = static_cast<float>( y + 6.0f );
+        const auto mid = static_cast<float>( left + strip_w * 0.5f );
+        auto strip_x = [ mid, strip_w ]( float rel ) {
+            return mid + compass_offset( rel, strip_w, compass_span );
+        };
+        fill( { .x = left, .y = top, .w = strip_w, .h = strip_h, .r = 0, .g = 0, .b = 0, .a = 110 } );
+        static const auto names = std::array{ translate_marker( "N" ), translate_marker( "NE" ),
+                                              translate_marker( "E" ), translate_marker( "SE" ), translate_marker( "S" ),
+                                              translate_marker( "SW" ), translate_marker( "W" ), translate_marker( "NW" ) };
+        for( auto i = static_cast<int>( 0 ); i < 8; ++i ) {
+            const auto rel = static_cast<float>( wrap_angle( heading_bearing( i ) - view_yaw ) );
+            if( !on_compass( rel, compass_span ) ) {
+                continue;
+            }
+            const auto label = std::string( _( names[i] ) );
+            const auto cardinal = i % 2 == 0;
+            text( { .x = strip_x( rel ), .y = top + 1.0f, .text = label, .color = cardinal ? white : light_gray } );
+        }
+        fill( { .x = mid - 1.0f, .y = top + strip_h - 5.0f, .w = 2.0f, .h = 5.0f, .r = 255, .g = 255, .b = 255, .a = 255 } );
+        // Sounds heard this turn whose post cannot be seen: a short yellow tick each, dimmer
+        // when they lie behind the strip's ends. Those in sight are posts on their tile.
+        for( const tripoint_bub_ms &p : s.heard_ticks ) {
+            const auto rel = static_cast<float>( bearing_to( p ) );
+            fill( { .x = strip_x( rel ) - 2.0f, .y = top + strip_h - 9.0f, .w = 4.0f, .h = 9.0f, .r = 240, .g = 210, .b = 60, .a = static_cast<uint8_t>( on_compass( rel, compass_span ) ? 255 : 150 ) } );
+        }
+        if( compass == "threats" ) {
+            for( Creature *critter : you.get_hostile_creatures( MAX_VIEW_DISTANCE ) ) {
+                if( critter->bub_pos().z() != you.bub_pos().z() ) {
+                    continue;
+                }
+                const auto rel = static_cast<float>( bearing_to( critter->bub_pos() ) );
+                const auto distance = static_cast<int>( std::max( 1, rl_dist( you.bub_pos(),
+                                                        critter->bub_pos() ) ) );
+                // Behind the player the tick sits at the end of the strip it is nearer to.
+                const auto tick_h = static_cast<float>( std::clamp( 24.0f / static_cast<float>( distance ), 5.0f,
+                                                        strip_h ) );
+                const auto tick_w = static_cast<float>( distance == 1 ? 5.0f : 3.0f );
+                fill( { .x = strip_x( rel ) - tick_w * 0.5f, .y = top + strip_h - tick_h, .w = tick_w, .h = tick_h, .r = 230, .g = 40, .b = 40, .a = static_cast<uint8_t>( on_compass( rel, compass_span ) ? 255 : 150 ) } );
+            }
+        }
+    }
+
+    if( edge_alert ) {
+        constexpr auto bar = static_cast<float>( 6.0f );
+        for( Creature *critter : you.get_hostile_creatures( 1 ) ) {
+            if( critter->bub_pos().z() != you.bub_pos().z() ) {
+                continue;
+            }
+            switch( edge_alert_side( bearing_to( critter->bub_pos() ), cam.fp_fovx( w / h ) ) ) {
+                case edge_side::none:
+                    break;
+                case edge_side::behind:
+                    fill( { .x = x, .y = y + h - bar, .w = w, .h = bar, .r = 230, .g = 40, .b = 40, .a = 200 } );
+                    break;
+                case edge_side::left:
+                    fill( { .x = x, .y = y, .w = bar, .h = h, .r = 230, .g = 40, .b = 40, .a = 200 } );
+                    break;
+                case edge_side::right:
+                    fill( { .x = x + w - bar, .y = y, .w = bar, .h = h, .r = 230, .g = 40, .b = 40, .a = 200 } );
+                    break;
+            }
+        }
+    }
+
+    // Look mode on another level: say which, under the compass strip.
+    const auto looking = static_cast<int>( you.view_offset.z() );
+    if( looking != 0 ) {
+        const auto levels = static_cast<int>( std::abs( looking ) );
+        const auto line = std::string( looking > 0 ?
+                                       string_format( ngettext( "Looking: %d level up", "Looking: %d levels up",
+                                               levels ), levels ) :
+                                       string_format( ngettext( "Looking: %d level down", "Looking: %d levels down",
+                                               levels ), levels ) );
+        constexpr auto light_cyan = static_cast<unsigned char>( 14 );
+        text( { .x = x + w * 0.5f, .y = y + std::max( 22.0f, cell_h + 8.0f ) + 10.0f, .text = line, .color = light_cyan } );
+    }
+
+    if( get_option<bool>( "R3D_FP_CROSSHAIR" ) ) {
+        const auto cx = static_cast<float>( x + w * 0.5f );
+        const auto cy = static_cast<float>( y + h * 0.5f );
+        fill( { .x = cx - 2.0f, .y = cy - 2.0f, .w = 4.0f, .h = 4.0f, .r = 255, .g = 255, .b = 255, .a = 200 } );
+        auto label = std::string{};
+        const auto at = std::optional<tripoint_bub_ms>( crosshair() );
+        if( at ) { label = crosshair_description( get_avatar(), here, *at ); }
+        if( !label.empty() ) {
+            text( { .x = cx, .y = cy + 8.0f, .text = label, .color = white } );
+        }
+    }
+}
+
+} // namespace
 
 auto draw( const draw_options &options ) -> bool
 {
@@ -1652,6 +2222,7 @@ auto draw( const draw_options &options ) -> bool
     auto &s = st();
     s.drawn = false;
     s.map_drawn = true;
+    s.texts.clear();
     if( !get_option<bool>( "RENDERER_3D" ) ) {
         if( s.device.ready() ) {
             shutdown();
@@ -1737,6 +2308,13 @@ auto draw( const draw_options &options ) -> bool
         s.sky = make_sky_sprites( s.device );
         s.sky_failed = !s.sky.loaded();
     }
+    sync_camera_mode( s.cam );
+    sync_saved_heading( s );
+    // Meshes differ between the modes (see mesh_options), so a switch rebuilds every chunk.
+    if( s.cam.first_person() != s.chunks_first_person ) {
+        release_all_chunks( s );
+        s.chunks_first_person = s.cam.first_person();
+    }
     if( !s.env_camera_applied ) {
         apply_env_camera( s.cam );
         s.env_camera_applied = true;
@@ -1778,10 +2356,15 @@ auto draw( const draw_options &options ) -> bool
     const auto open_sky = static_cast<bool>( !multi_z || !here.inbounds( overhead ) ||
                           s.cache.terrain( { .id = here.ter( overhead ), .tiles = *tilecontext } ).sh.kind ==
                           shape_kind::empty );
-    const auto z_hi = static_cast<int>( multi_z &&
-                                        open_sky ? std::min( view_z + max_levels_above, OVERMAP_HEIGHT ) :
-                                        view_z );
-    const auto z_lo = static_cast<int>( std::max( view_z - depth, -OVERMAP_DEPTH ) );
+    const auto fp = s.cam.first_person();
+    const auto player_pos = tripoint_bub_ms( get_avatar().bub_pos() );
+    // In first person the eye stays on the player even when look mode moves the viewed tile, so
+    // the levels cover both, and the storeys above are always drawn (they are the ceilings).
+    const auto low_z = fp ? std::min( view_z, player_pos.z() ) : view_z;
+    const auto high_z = fp ? std::max( view_z, player_pos.z() ) : view_z;
+    const auto z_hi = multi_z && ( open_sky ||
+                                   fp ) ? std::min( high_z + max_levels_above, OVERMAP_HEIGHT ) : high_z;
+    const auto z_lo = static_cast<int>( std::max( low_z - depth, -OVERMAP_DEPTH ) );
     const auto base = tripoint_abs_sm( here.get_abs_sub(), view_z );
 
     // Only submaps inside the reality bubble: looking anything else up could load it from disk.
@@ -1811,8 +2394,33 @@ auto draw( const draw_options &options ) -> bool
     }
 
     // The scene is drawn in a frame whose origin is the viewed tile, which keeps floats small.
-    s.cam.target = tile_to_world( { .x = 0.5f, .y = 0.5f, .z = 0.5f } ) + s.pan;
     s.cam.z_scale = static_cast<float>( get_option<int>( "R3D_LEVEL_HEIGHT" ) ) / 100.0f;
+    if( fp ) {
+        auto ease_x = static_cast<float>( 0.0f );
+        auto ease_y = static_cast<float>( 0.0f );
+        auto ease_z = static_cast<float>( 0.0f );
+        const auto stand = static_cast<float>( surface_height( s, here, player_pos ) );
+        update_fp_ease( { .s = s, .pos = bub_to_abs( player_pos ), .surface = stand, .offset_x = ease_x, .offset_y = ease_y, .offset_z = ease_z } );
+        // The camera stands on the player's tile, at the height of what they stand on.
+        s.cam.target = tile_to_world( {
+            static_cast<float>( player_pos.x() - center.x() ) + 0.5f + ease_x,
+            static_cast<float>( player_pos.y() - center.y() ) + 0.5f + ease_y,
+            static_cast<float>( player_pos.z() - center.z() ) + stand + ease_z
+        } );
+        // Looking at another level (look mode's < and >) tilts the view towards it, 45 degrees
+        // per level at most one level's worth; the eye stays where the player stands.
+        constexpr auto level_tilt = static_cast<float>( 0.7854f );
+        s.cam.tilt_pitch = static_cast<float>( std::clamp( view_z - player_pos.z(), -1, 1 ) ) *
+                           level_tilt;
+        s.cam.fovx = static_cast<float>( get_option<int>( "R3D_FP_FOV" ) ) * 0.017453293f;
+        s.cam.eye_height = static_cast<float>( get_option<int>( "R3D_FP_EYE_HEIGHT" ) ) / 100.0f;
+    } else {
+        s.fp_prev_valid = false;
+        s.fp_easing = false;
+        s.cam.tween_yaw = 0.0f;
+        s.cam.tilt_pitch = 0.0f;
+        s.cam.target = tile_to_world( { .x = 0.5f, .y = 0.5f, .z = 0.5f } ) + s.pan;
+    }
     const auto aspect = static_cast<float>( static_cast<float>( target_w ) / static_cast<float>
                                             ( target_h ) );
     const auto view_proj = mat4( s.cam.view_projection( aspect ) );
@@ -1895,36 +2503,79 @@ auto draw( const draw_options &options ) -> bool
     } };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
 
+    entities_view.upright_billboards = fp;
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
     auto queued_sct = static_cast<bool>( false );
     {
         const auto queued = cata_tiles::frame_markers( tilecontext->get_frame_markers() );
         queued_sct = queued.sct;
-        const auto add_markers = [ &s, &here, &entities_view ]( const std::vector<tripoint_bub_ms> &where,
-                                 const std::string & id,
-        bool box ) -> void {
-            append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = where, .id = id, .box = box } );
-        };
-        add_markers( queued.line, "animation_line", false );
+        append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.line, .id = "animation_line", .box = false, .large = false } );
         if( queued.line_end && !queued.line_end_id.empty() ) {
-            add_markers( { *queued.line_end }, queued.line_end_id, false );
+            append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = { *queued.line_end }, .id = queued.line_end_id, .box = false, .large = true } );
         }
-        add_markers( queued.highlights, "highlight", false );
-        add_markers( queued.cursors, "cursor", true );
+        append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.highlights, .id = "highlight", .box = false, .large = true } );
+        append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.cursors, .id = "cursor", .box = true, .large = true } );
+
+        // Sounds heard this turn, which cata_tiles::draw_footsteps_frame would draw: posts on
+        // their tile with normal depth, so walls and creatures in front hide them. The 2D view
+        // draws them over everything; here the compass strip points at the hidden ones instead
+        // (out of the picture, or behind something solid).
+        s.heard_ticks.clear();
+        if( fp ) {
+            const auto player_z = static_cast<int>( player_pos.z() );
+            const auto occlude_unseen = static_cast<bool>( get_option<bool>( "R3D_FP_OCCLUDE_UNSEEN" ) );
+            // What hides a post: terrain and furniture as drawn. Unseen places only when they
+            // are drawn solid (R3D_FP_OCCLUDE_UNSEEN); creatures never fill a whole tile.
+            const auto solid = column_height_fn( [ &center, z_lo, z_hi, &here, occlude_unseen, &sampler,
+                                                   &s ]( int dx,
+            int dy, int dz ) {
+                return occluding_column_height( { .s = s, .here = here, .sampler = sampler, .center = center, .z_lo = z_lo, .z_hi = z_hi, .occlude_unseen = occlude_unseen, .dx = dx, .dy = dy, .dz = dz } );
+            } );
+            const auto eye_world = vec3( s.cam.eye() );
+            const auto eye_tile = vec3( world_to_tile( { eye_world.x, eye_world.y,
+                                        eye_world.z / s.cam.z_scale } ) );
+            const auto view_yaw = static_cast<float>( s.cam.fp_yaw() );
+            for( const tripoint_bub_ms &p : sounds::get_footstep_markers() ) {
+                const auto d = tripoint_rel_ms( p - player_pos );
+                const auto rel = static_cast<float>( relative_bearing( static_cast<float>( d.x() ),
+                                                     static_cast<float>( d.y() ), view_yaw ) );
+                // The middle of the post (see r3d_entities.cpp), in the scene's tile space.
+                const auto post = vec3{ static_cast<float>( p.x() - center.x() ) + 0.5f,
+                                        static_cast<float>( p.y() - center.y() ) + 0.5f,
+                                        static_cast<float>( p.z() - center.z() ) + column_height( s, here, p ) + 0.4f };
+                if( std::abs( rel ) > s.cam.fp_fovx( aspect ) * 0.5f ||
+                    !clear_line( eye_tile, post, solid ) ) {
+                    s.heard_ticks.push_back( p );
+                }
+                const char *const id = p.z() > player_z ? "footstep_above" :
+                                       p.z() < player_z ? "footstep_below" : "footstep";
+                const tile_info *sprite = &s.cache.named( { .category = C_NONE, .id = id, .tiles = *tilecontext } );
+                if( !sprite->main().valid ) {
+                    sprite = &s.cache.named( { .category = C_NONE, .id = "footstep", .tiles = *tilecontext } );
+                }
+                if( !sprite->main().valid ) {
+                    sprite = &s.cache.named( { .category = C_NONE, .id = "highlight", .tiles = *tilecontext } );
+                }
+                entities_view.markers.push_back( { p, column_height( s, here, p ), sprite, false, false,
+                                                   true } );
+            }
+        }
         if( get_option<bool>( "R3D_HUD" ) ) {
             // Heard sounds, as the flat view marks them (draw_footsteps_frame), and the zone
             // being placed (draw_zones_frame).
             const auto &step = s.cache.named( { .category = C_NONE, .id = "footstep", .tiles = *tilecontext } );
             const auto &step_above = s.cache.named( { .category = C_NONE, .id = "footstep_above", .tiles = *tilecontext } );
             const auto &step_below = s.cache.named( { .category = C_NONE, .id = "footstep_below", .tiles = *tilecontext } );
-            for( const tripoint_bub_ms &p : sounds::get_footstep_markers() ) {
-                const tile_info *sprite = &step;
-                if( p.z() > center.z() && step_above.main().valid ) {
-                    sprite = &step_above;
-                } else if( p.z() < center.z() && step_below.main().valid ) {
-                    sprite = &step_below;
+            if( !fp ) {
+                for( const tripoint_bub_ms &p : sounds::get_footstep_markers() ) {
+                    const tile_info *sprite = &step;
+                    if( p.z() > center.z() && step_above.main().valid ) {
+                        sprite = &step_above;
+                    } else if( p.z() < center.z() && step_below.main().valid ) {
+                        sprite = &step_below;
+                    }
+                    entities_view.markers.push_back( { p, column_height( s, here, p ), sprite, false } );
                 }
-                entities_view.markers.push_back( { p, column_height( s, here, p ), sprite, false } );
             }
             // The route auto-travel is walking, as a ribbon of the targeting line's sprite.
             const auto &path = s.cache.named( { .category = C_NONE, .id = "animation_line", .tiles = *tilecontext } );
@@ -1972,7 +2623,7 @@ auto draw( const draw_options &options ) -> bool
     auto draw_avatar_silhouette = static_cast<bool>( false );
     // The silhouette shows the player behind walls; not while driving (the cab hides them by
     // design) or when the player's own tile is unlit.
-    if( get_option<bool>( "R3D_AVATAR_SILHOUETTE" ) && !is_controlling &&
+    if( !fp && get_option<bool>( "R3D_AVATAR_SILHOUETTE" ) && !is_controlling &&
         entities_view.light( you.bub_pos() ) != pack_light( 0, 0, 0 ) ) {
         // Flip the flag instead of copying the view and its upright/marker vectors.
         entities_view.avatar_only = true;
@@ -2005,6 +2656,8 @@ auto draw( const draw_options &options ) -> bool
         uniforms.fog2[0] = s.cam.target.x;
         uniforms.fog2[1] = s.cam.target.y;
     }
+    // First person: never-seen places hide what lies behind them (R3D_FP_OCCLUDE_UNSEEN).
+    uniforms.flags[0] = fp && get_option<bool>( "R3D_FP_OCCLUDE_UNSEEN" ) ? 1.0f : 0.0f;
     for( const visible_chunk &vc : visible ) {
         uniforms.offset[0] = vc.offset[0];
         uniforms.offset[1] = vc.offset[1];
@@ -2055,6 +2708,7 @@ auto draw( const draw_options &options ) -> bool
     if( draw_entities ) {
         s.device.bind_entity_pipeline();
         uniforms.cut[3] = 0.0f; // creatures in front of the player stay
+        uniforms.flags[0] = 0.0f;
         uniforms.offset[0] = 0.0f;
         uniforms.offset[1] = 0.0f;
         uniforms.offset[2] = 0.0f;
@@ -2064,7 +2718,7 @@ auto draw( const draw_options &options ) -> bool
         uniforms.pull[0] = toward.x;
         uniforms.pull[1] = toward.y;
         uniforms.pull[2] = toward.z / s.cam.z_scale;
-        uniforms.pull[3] = max_billboard_pull;
+        uniforms.pull[3] =  fp ? 0.0f : max_billboard_pull;
         for( const mesh_batch &b : entities.batches ) {
             s.device.draw_block( { .positions = s.dyn.positions, .lights = s.dyn.lights, .indices = s.dyn.indices, .first_index = b.first_index, .index_count = b.index_count,
                                    .sheet = b.sheet, .uniforms = uniforms } );
@@ -2142,6 +2796,10 @@ auto draw( const draw_options &options ) -> bool
     tilecontext->drop_frame_layers();
     s.shown = { .valid = true, .x = x, .y = y, .w = w, .h = h, .cam = s.cam, .center = center, .z_lo = z_lo, .z_hi = z_hi };
     s.drawn = true;
+
+    if( fp ) {
+        draw_fp_hud( { .s = s, .renderer = renderer, .x = x, .y = y, .w = w, .h = h, .cam = s.cam } );
+    }
     return true;
 }
 

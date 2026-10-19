@@ -46,6 +46,11 @@ struct entity_view {
         float top = 0.0f;           // surface height within the tile, see column_height
         const tile_info *sprite = nullptr;
         bool box = false;           // also draw the sprite on the sides of a box above the tile
+        // also draw the sprite on the sides of a box above the tile
+        bool large = false;         // first person: a full-height box rather than a small post
+        // First person: a sound the player heard but cannot see, drawn as a post with normal
+        // depth (walls and creatures in front hide it; the compass points at hidden ones).
+        bool heard = false;
     };
     std::vector<marker> markers;
 
@@ -83,6 +88,10 @@ struct entity_view {
     /// Current BN perception, separate from terrain tint. Required by live vehicle views;
     /// synthetic mesh fixtures may omit this and use their supplied light instead.
     std::function<bool( const tripoint_bub_ms & )> vehicle_mount_visible = {};
+
+    /// First person: sprites stand upright facing the screen (no lean, no depth pull), items are
+    /// small stands, markers are posts, and the viewer's own sprite is left out.
+    bool upright_billboards = false;
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.
