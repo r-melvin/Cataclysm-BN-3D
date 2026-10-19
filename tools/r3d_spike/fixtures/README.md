@@ -56,3 +56,21 @@ to `t_wall_w` and select Hoder. That tileset lacks white-wall artwork: walls mus
 use the material atlas, with complete solid sides rather than repeated magenta
 unknown symbols. With no atlas available, the generic wall sprite is the next
 fallback. Repeat with Ultica to check the supported-art path.
+
+## Camera input and frame presentation
+
+Use a private saved scene in a virtual window. Stay at a normal gameplay input
+boundary and note the turn/move counters. Exercise rapid captured mouse motion,
+Shift panning, and Alt release followed by middle-button dragging and release.
+Repeat in first person and orbit mode, and open/close a menu between bursts.
+Camera movement must remain responsive without advancing the simulation.
+
+The mouse event loop must apply each delta but draw only after draining the
+batch, followed by the normal `refresh_display()` path. Rendering each queued
+motion can allocate many GPU command buffers before presentation and abort
+inside the driver. Merely testing camera angles or mesh fingerprints does not
+exercise that lifecycle. When diagnosing a regression, count native
+`SDL_AcquireGPUCommandBuffer` and `SDL_RenderPresent` calls around a bounded
+injected SDL motion batch. There must be no camera drawing between its events;
+the final state must be drawn and presented afterwards. Check repeated batches
+for unbounded process mappings/memory growth and inspect the game/crash logs.

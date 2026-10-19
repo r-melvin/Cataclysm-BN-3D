@@ -282,6 +282,20 @@ locally; paid GitHub CI is explicitly out of scope.
   status 25; the corrected menu exit (`923b619`) was verified to return 0.
   Failed explicit world loads retain a nonzero exit status (verified as 1).
 
+Mouse-camera crash follow-up: the native `2f73690` crash log aborts while
+acquiring a GPU command buffer from the mouse-event redraw path. Rendering
+inside `SDL_PollEvent` queued 19 command buffers before any presentation for a
+bounded 16-motion burst. Camera deltas now accumulate through native handling,
+with one redraw after event draining and a normal `refresh_display()` completion.
+A private Xvfb/software-Vulkan test shows no drawing during event draining;
+4,096 captured motions and 2,048 Alt-released middle-button/Shift-pan motions
+complete with normal exit. Process mappings stabilize after warm-up rather than
+growing per motion. Both binaries build without warnings; 180 renderer,
+onboarding and input cases pass (54,851 assertions). Evidence and the native SDL
+instrumentation are in ignored `out/validation/mouse*`; the repeatable acceptance
+procedure is in the fixture guide. The reported hardware is an RTX 5080; this
+validation uses software Vulkan and does not claim a direct NVIDIA reproduction.
+
 These are Linux/software-Vulkan checks, not the complete vehicle/prop fixture
 matrix or native Metal/Direct3D acceptance. Current private evidence is in
 `/tmp/bn-assets-live/` and `/tmp/bn-capture-e2e-20261019/` (temporary, not durable

@@ -3295,6 +3295,7 @@ static void CheckMessages()
 
     std::optional<point> resize_dims;
     bool render_target_reset = false;
+    auto camera_changed = false;
 
     while( SDL_PollEvent( &ev ) ) {
         switch( ev.type ) {
@@ -3528,19 +3529,13 @@ static void CheckMessages()
                     } else {
                         r3d::drag_orbit( ev.motion.xrel, ev.motion.yrel );
                     }
-                    if( g ) {
-                        g->invalidate_main_ui_adaptor();
-                    }
-                    ui_manager::redraw_invalidated();
-                    needupdate = true;
+                    camera_changed = true;
                     break;
                 }
                 if( r3d_dragging ) {
                     if( SDL_GetModState() & SDL_KMOD_SHIFT ) { r3d::drag_pan( ev.motion.xrel, ev.motion.yrel ); }
                     else { r3d::drag_orbit( ev.motion.xrel, ev.motion.yrel ); }
-                    if( g ) { g->invalidate_main_ui_adaptor(); }
-                    ui_manager::redraw_invalidated();
-                    needupdate = true;
+                    camera_changed = true;
                     break;
                 }
                 if( get_option<std::string>( "HIDE_CURSOR" ) == "show" ||
@@ -3558,9 +3553,7 @@ static void CheckMessages()
                 if( ev.button.button == SDL_BUTTON_MIDDLE ) {
                     r3d_dragging = false;
                     r3d::end_glance();
-                    if( g ) { g->invalidate_main_ui_adaptor(); }
-                    ui_manager::redraw_invalidated();
-                    needupdate = true;
+                    camera_changed = true;
                 }
                 switch( ev.button.button ) {
                     case SDL_BUTTON_LEFT:
@@ -3769,9 +3762,22 @@ static void CheckMessages()
         ui_manager::invalidate( rectangle<point>( point_zero, point( WindowWidth, WindowHeight ) ), false );
         ui_manager::redraw_invalidated();
     }
+    // Apply every mouse delta, but render only the final camera state in this batch.
+    // Rendering inside SDL_PollEvent can queue hundreds of GPU frames without a
+    // presentation, exhausting driver resources while more motion events arrive.
+    if( camera_changed ) {
+        if( g ) { g->invalidate_main_ui_adaptor(); }
+        ui_manager::redraw_invalidated();
+        needupdate = true;
+    }
     r3d::refresh_pending_assets();
     if( needupdate ) {
-        try_sdl_update();
+        if( camera_changed ) {
+            // Complete the normal display-buffer/window lifecycle before drawing again.
+            refresh_display();
+        } else {
+            try_sdl_update();
+        }
     }
     if( quit ) {
         exit_handler( 0 );

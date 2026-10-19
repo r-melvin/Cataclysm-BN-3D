@@ -184,3 +184,5 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Renderer tile caches include subtile and rotation in their keys. Mesh tests should compare the bound art and behavior rather than require pointer identity across differently oriented cache entries.
 - Automated Lua-console input can coalesce Return events. Preserve statement boundaries explicitly (or verify editor line breaks) before executing a pasted fixture.
 - Vehicle sprite footprint checks must include oversized/tall art (for example the 64-pixel hatch). Convert opacity fractions with the sprite size and anchor offsets before treating them as native tile-space geometry.
+
+- Camera mouse events must not render within `SDL_PollEvent` draining. Apply all deltas, redraw once per batch, and finish through `refresh_display()` before another camera redraw. Validate captured motion and released middle-button/Shift dragging in a private virtual game; geometry fingerprints cannot detect GPU command accumulation.
