@@ -79,3 +79,6 @@ Open:
   changes, because `quad_sink::finish` sorts by texture-sheet pointer. Geometry regression checks must compare
   quads as a sorted set, not hash the raw vertex buffer. Unseeded vehicle spawns also vary (random damage).
 - CI: GitHub Actions has never run on this fork and will not (no paid CI). `[r3d]` tests run locally only.
+- Geometry regression check: `tests/r3d_geometry_snapshot_test.cpp` (17 seeded vehicle/item scenes, sorted-quad
+  fingerprints of positions and light; UVs excluded). Verified by a deliberate bumper chamfer change failing
+  three vehicle scenes. Shaders, textures and GPU output are not covered.

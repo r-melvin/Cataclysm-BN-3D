@@ -73,13 +73,6 @@ so parts on different levels overwrite each other. Key cells by the full mount,
 offset each cell's geometry by its mount z, and make the neighbour lookups
 (walls, trim, bumpers, roofs) level-aware.
 
-## Visual regression checks for the 3D renderer
-
-Turn the comparison captures in `tools/r3d_spike/` into screenshot diffs of a
-few fixed scenes (vehicles with roofs, wheels and shaped panels; voxel items;
-the avatar silhouette), so geometry refactors such as merging the front and
-rear windshield paths can be checked without manual play.
-
 ## Fix `vehicle_profile` classification quirks
 
 Tests found that the `door` render role never fires for stock parts (no part
