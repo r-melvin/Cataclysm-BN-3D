@@ -22,6 +22,8 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
         const auto &part = veh.cpart( index );
         const auto &info = veh.part_info( index );
         if( part.removed ) { continue; }
+        const auto openable = info.has_flag( "OPENABLE" );
+        const auto open = openable && part.open;
         auto layer = vehicle_render_layer{ .part_idx = index, .roles = {}, .open = part.open,
                                            .broken = part.is_broken() };
         if( info.location == "structure" ) {
@@ -34,15 +36,15 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
             layer.roles.push_back( vehicle_render_role::glass );
         }
         if( info.has_flag( "OPAQUE" ) && !info.has_flag( "WINDSHIELD" ) &&
-            !info.has_flag( "OPENABLE" ) ) {
+            !openable ) {
             layer.roles.push_back( vehicle_render_role::opaque_structure );
         }
         // Stock vehicle doors are openable obstacles; window curtains and shutters are not.
         if( info.has_flag( "DOOR" ) || info.location == "door" ||
-            ( info.has_flag( "OPENABLE" ) && info.has_flag( "OBSTACLE" ) ) ) {
+            ( openable && info.has_flag( "OBSTACLE" ) ) ) {
             layer.roles.push_back( vehicle_render_role::door );
         }
-        if( info.has_flag( "OPENABLE" ) ) {
+        if( openable ) {
             layer.roles.push_back( vehicle_render_role::openable );
         }
         if( info.has_flag( "WHEEL" ) ) {
@@ -56,8 +58,11 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
         if( accessory ) {
             layer.roles.push_back( vehicle_render_role::roof_accessory );
         }
-        if( info.has_flag( "BOARDABLE" ) || info.has_flag( "AISLE" ) || info.has_flag( "SEAT" ) ||
-            info.has_flag( "BED" ) || ( info.has_flag( "OPENABLE" ) && part.open ) ) {
+        // A closed door's BOARDABLE flag does not expose a walkable floor. Other floor parts
+        // on this mount can still supply the interior independently of the door.
+        if( ( !openable || open ) &&
+            ( info.has_flag( "BOARDABLE" ) || info.has_flag( "AISLE" ) || info.has_flag( "SEAT" ) ||
+              info.has_flag( "BED" ) || open ) ) {
             layer.roles.push_back( vehicle_render_role::interior );
         }
         if( layer.roles.empty() ) {
@@ -100,8 +105,8 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
         data.is_openable |= has_role( vehicle_render_role::openable );
         data.is_door |= has_role( vehicle_render_role::door );
         data.is_opaque_wall |= has_role( vehicle_render_role::opaque_structure );
-        data.is_tall_cabin |= info.has_flag( "WINDSHIELD" ) || info.has_flag( "OPAQUE" ) ||
-                              ( info.has_flag( "OBSTACLE" ) && !half_panel && !part.open );
+        data.is_tall_cabin |= !open && ( info.has_flag( "WINDSHIELD" ) || info.has_flag( "OPAQUE" ) ||
+                                         ( info.has_flag( "OBSTACLE" ) && !half_panel ) );
         data.is_interior |= has_role( vehicle_render_role::interior );
         data.is_cargo |= info.has_flag( "CARGO" );
     }

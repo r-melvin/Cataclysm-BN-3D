@@ -229,9 +229,12 @@ auto has_layer_role(
 } // namespace
 
 TEST_CASE("r3d_open_door_stops_being_a_tall_wall", "[r3d][vehicle]") {
+    const auto id =
+        GENERATE("door", "door_opaque", "door_sliding", "door_trunk", "hatch", "hatch_opaque");
+    CAPTURE(id);
     auto veh = vehicle(vproto_id("none"), 0, 0);
     const auto mount = tripoint_mnt_veh::zero();
-    const auto parts = install_all(veh, mount, {"frame_horizontal", "door"});
+    const auto parts = install_all(veh, mount, {"frame_horizontal", id});
     const auto door = parts[1];
     REQUIRE(veh.part_info(door).has_flag("OPENABLE"));
 
@@ -242,10 +245,16 @@ TEST_CASE("r3d_open_door_stops_being_a_tall_wall", "[r3d][vehicle]") {
     CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::openable));
     CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::door));
     CHECK(profile.is_door);
-    // The stock "door" part is also BOARDABLE, so even a closed door counts as interior and floor.
-    CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::interior));
-    CHECK(profile.is_interior);
-    CHECK(r3d::vehicle_surface_height(veh, mount) == Approx(r3d::chassis_floor_h));
+    // BOARDABLE on a closed door describes game movement, not an exposed interior floor.
+    CHECK_FALSE(has_layer_role(profile, door, r3d::vehicle_render_role::interior));
+    CHECK_FALSE(profile.is_interior);
+    // Door pockets are real cargo: their contents still rest on the chassis floor.
+    // Sliding and trunk doors have no cargo or floor of their own.
+    const auto closed_surface =
+        id == std::string_view("door_sliding") || id == std::string_view("door_trunk")
+            ? 0.0f
+            : r3d::chassis_floor_h;
+    CHECK(r3d::vehicle_surface_height(veh, mount) == Approx(closed_surface));
 
     veh.part(door).open = true;
     profile = r3d::vehicle_profile(veh, mount);
@@ -257,6 +266,23 @@ TEST_CASE("r3d_open_door_stops_being_a_tall_wall", "[r3d][vehicle]") {
     CHECK(std::ranges::any_of(profile.layers, [door](const auto& layer) {
         return layer.part_idx == door && layer.open;
     }));
+    CHECK(r3d::vehicle_surface_height(veh, mount) == Approx(r3d::chassis_floor_h));
+}
+
+TEST_CASE("r3d_closed_door_preserves_an_independent_floor_on_its_mount", "[r3d][vehicle]") {
+    const auto floor = GENERATE("seat", "aisle_horizontal", "trunk_flat");
+    CAPTURE(floor);
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    const auto mount = tripoint_mnt_veh::zero();
+    const auto parts = install_all(veh, mount, {"frame_horizontal", floor, "door_sliding"});
+    const auto door = parts.back();
+    REQUIRE_FALSE(veh.cpart(door).open);
+    const auto profile = r3d::vehicle_profile(veh, mount);
+    CHECK_FALSE(has_layer_role(profile, door, r3d::vehicle_render_role::interior));
+    CHECK((
+        has_layer_role(profile, parts[1], r3d::vehicle_render_role::interior) || profile.is_cargo));
+    CHECK(profile.is_tall_cabin);
+    CHECK(profile.height == Approx(r3d::vehicle_cabin_h));
     CHECK(r3d::vehicle_surface_height(veh, mount) == Approx(r3d::chassis_floor_h));
 }
 
