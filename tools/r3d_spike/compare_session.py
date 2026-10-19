@@ -104,6 +104,12 @@ def render_art_gallery(capture, assets_root=None):
     asset_base = assets_root if assets_root and assets_root.is_dir() else ROOT / "gfx"
     indexes = {name: tile_sprite_index(asset_base / name / "tile_config.json")
                for name in ("HitButton_iso", "UltimateCataclysm")}
+    profile_path = (assets_root / "presentation_profiles.json") if assets_root else ROOT / "data/raw/r3d/presentation_profiles.json"
+    authored_profiles = {}
+    if profile_path.is_file():
+        profile_data = json.loads(profile_path.read_text())
+        for profile in profile_data.get("profiles", []):
+            authored_profiles[(profile.get("category"), profile.get("id"))] = profile
     copied = {}
     cards = []
     unique_records = {}
@@ -200,12 +206,41 @@ def render_art_gallery(capture, assets_root=None):
             pictures.append(f'<figure><figcaption>{html.escape(tileset)}</figcaption><div class="sprite" style="width:{width*scale}px;height:{height*scale}px;background-size:{atlas_width*scale}px {atlas_height*scale}px;background-image:url(\'{html.escape(source)}\');background-position:-{x*scale}px -{y*scale}px"></div></figure>')
         placements = sum(1 for candidate in records
                          if candidate["category"] == record["category"] and candidate["id"] == record["id"])
+        profile_category = {"item": "item", "furniture": "furniture", "terrain": "terrain"}.get(record["category"], record["category"])
+        profile = authored_profiles.get((profile_category, record["id"]))
+        profile_details = ""
+        if profile:
+            size = profile.get("size", [0, 0, 0])
+            anchor = profile.get("support_anchor", [0.5, 0.5, 0])
+            regions = profile.get("material_regions", [])
+            region_list = "".join(f'<li>{html.escape(region.get("name", "region"))}: {html.escape(region.get("role", "unassigned"))} (palette {html.escape(", ".join(map(str, region.get("palette_indices", []))))})</li>' for region in regions)
+            forward, right, up = (value if value > 0 else 1.0 for value in size)
+            scale = 72 / max(forward, right, up)
+            footprint_width, footprint_depth, elevation_width, elevation_height = (
+                forward * scale, right * scale, forward * scale, up * scale)
+            footprint_x = 46 - footprint_width / 2
+            footprint_y = 58 - footprint_depth / 2
+            support_x = footprint_x + footprint_width * anchor[0]
+            support_y = footprint_y + footprint_depth * (1 - anchor[1])
+            elevation_x = 152
+            elevation_bottom = 94
+            elevation_support_x = elevation_x + elevation_width * anchor[0]
+            elevation_support_y = elevation_bottom - elevation_height * anchor[2]
+            diagram = (f'<svg class="profile-diagram" viewBox="0 0 250 116" role="img" aria-label="Top footprint and side elevation with support anchors">'
+                       f'<text x="8" y="12">TOP · F {forward:g} × R {right:g}</text>'
+                       f'<rect x="{footprint_x:g}" y="{footprint_y:g}" width="{footprint_width:g}" height="{footprint_depth:g}" fill="#30465b" stroke="#9cf"/>'
+                       f'<path d="M{support_x - 5:g} {support_y:g}h10m-5 -5v10" stroke="#ff6868" stroke-width="2"/>'
+                       f'<text x="8" y="108">SIDE · F {forward:g} × U {up:g}</text>'
+                       f'<rect x="{elevation_x}" y="{elevation_bottom - elevation_height:g}" width="{elevation_width:g}" height="{elevation_height:g}" fill="#30465b" stroke="#9cf"/>'
+                       f'<path d="M{elevation_support_x - 5:g} {elevation_support_y:g}h10m-5 -5v10" stroke="#ff6868" stroke-width="2"/>'
+                       '</svg>')
+            profile_details = (f'<section class="profile"><strong>Presentation profile</strong><p>Size F/R/U: {html.escape(", ".join(map(str, size)))} tiles; support anchor: {html.escape(", ".join(map(str, anchor)))}; sprite depth: {html.escape(str(profile.get("depth_fraction", "inferred")))}</p>{diagram}<p class="anchor-legend">Red crosses mark support anchors; F = forward, R = right, U = up.</p><ul>{region_list}</ul></section>')
         views = [f'<a href="../view_3d_yaw_{angle}.png"><img loading="lazy" width="240" src="../view_3d_yaw_{angle}.png">3D yaw {angle*45-45}°</a>' for angle in range(8)]
         views.append('<a href="../view_2d.png"><img loading="lazy" width="240" src="../view_2d.png">2D checkpoint</a>')
-        sections.append(f'<article><h3>{html.escape(record["category"])}: <code>{html.escape(record["id"])}</code></h3><p>{placements} placement(s); example tile ({record["x"]}, {record["y"]}); support anchor ({record["support_x"]}, {record["support_y"]}).</p><div class="sprites">{"".join(pictures)}</div><div class="views">' + " ".join(views) + '</div></article>')
+        sections.append(f'<article><h3>{html.escape(record["category"])}: <code>{html.escape(record["id"])}</code></h3><p>{placements} placement(s); example tile ({record["x"]}, {record["y"]}); support anchor ({record["support_x"]}, {record["support_y"]}).</p><div class="sprites">{"".join(pictures)}</div>{profile_details}<div class="views">' + " ".join(views) + '</div></article>')
     state_table = "".join(f'<tr><td><code>{html.escape(family)}</code></td><td>{", ".join(states)}</td><td>{", ".join(state for state in states if state in observed) or "none"}</td></tr>' for family, states, observed in state_rows)
     page = ('<!doctype html><meta charset="utf-8"><title>Renderer art gallery</title>'
-            '<style>body{font:14px system-ui;background:#161616;color:#eee;margin:2rem}a{color:#9cf}article{border-top:1px solid #555;padding:1rem 0}.sprites{display:flex;gap:1rem;min-height:120px;align-items:start}.sprite{image-rendering:pixelated;background-repeat:no-repeat}figure{margin:0}figcaption{margin-bottom:.4rem}.views{display:flex;gap:.7rem;flex-wrap:wrap}.views a{display:grid;gap:.3rem}.views img{height:auto;border:1px solid #555}table{border-collapse:collapse}td,th{border:1px solid #555;padding:.4rem;text-align:left}</style>'
+            '<style>body{font:14px system-ui;background:#161616;color:#eee;margin:2rem}a{color:#9cf}article{border-top:1px solid #555;padding:1rem 0}.sprites{display:flex;gap:1rem;min-height:120px;align-items:start}.sprite{image-rendering:pixelated;background-repeat:no-repeat}figure{margin:0}figcaption{margin-bottom:.4rem}.profile{border-left:3px solid #9cf;padding:.1rem .8rem;margin:.8rem 0}.profile p{margin:.4rem 0}.profile-diagram{width:min(100%,500px);background:#20242a;border:1px solid #555}.profile-diagram text{fill:#ddd;font:9px system-ui}.anchor-legend{color:#f88}.profile ul{display:flex;gap:1.5rem;flex-wrap:wrap;margin:.3rem 0}.views{display:flex;gap:.7rem;flex-wrap:wrap}.views a{display:grid;gap:.3rem}.views img{height:auto;border:1px solid #555}table{border-collapse:collapse}td,th{border:1px solid #555;padding:.4rem;text-align:left}</style>'
             '<h1>Sprite-to-view gallery</h1><p>Source atlas sprites are paired with the same-state 2D image and eight 3D camera poses. Red lines mark the renderer placement origin and its tile-ground support anchor; the grid is in map coordinates.</p>'
             '<p>Anchor map legend: grey terrain, amber furniture, blue loose items; red square is the tile-ground support anchor.</p>'
             '<img src="support-map.svg" style="max-width:100%;image-rendering:pixelated"><h2>Open / closed / broken sprite coverage</h2><table><tr><th>Family</th><th>States in shipped tileset</th><th>States seen in checkpoint</th></tr>' + state_table + '</table><h2>Visible placements</h2>' + "\n".join(sections))
@@ -463,6 +498,7 @@ def main():
     asset_snapshot.mkdir()
     for tileset in ("HitButton_iso", "UltimateCataclysm"):
         copy_tree(ROOT / "gfx" / tileset, asset_snapshot / tileset)
+    shutil.copy2(ROOT / "data/raw/r3d/presentation_profiles.json", asset_snapshot / "presentation_profiles.json")
     for name in CONFIG_FILES:
         src = args.userdir / "config" / name
         if src.is_file() and not src.is_symlink():

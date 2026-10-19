@@ -1,7 +1,9 @@
 #include "catch/catch.hpp"
 #include "r3d_item_profiles.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <limits>
 
 TEST_CASE("r3d_cylinder_items_use_repeated_sprite_geometry", "[r3d][items]") {
     for (const auto id :
@@ -56,7 +58,7 @@ TEST_CASE("r3d_voxel_item_menu_option_switches_tank_geometry", "[r3d][items][til
 
     auto cache = r3d::tile_info_cache{};
     const auto cam = r3d::camera{};
-    const auto view = r3d::entity_view{
+    auto view = r3d::entity_view{
         .tiles = *tilecontext,
         .cache = cache,
         .cam = cam,
@@ -97,7 +99,7 @@ TEST_CASE("r3d_voxel_item_option_extrudes_generic_item_sprites", "[r3d][items][t
     here.add_item(origin, item::spawn("rock", calendar::turn));
 
     auto cache = r3d::tile_info_cache{};
-    const auto view = r3d::entity_view{
+    auto view = r3d::entity_view{
         .tiles = *tilecontext,
         .cache = cache,
         .cam = r3d::camera{},
@@ -157,7 +159,7 @@ TEST_CASE(
 
     auto cache = r3d::tile_info_cache{};
     const auto cam = r3d::camera{};
-    const auto view = r3d::entity_view{
+    auto view = r3d::entity_view{
         .tiles = *tilecontext,
         .cache = cache,
         .cam = cam,
@@ -169,9 +171,41 @@ TEST_CASE(
         .item_vox_models = &assets};
 
     const auto authored = r3d::build_entity_mesh(view);
+    const auto profiles = r3d::presentation_profile_map{
+        {"item:carbondioxide_tank",
+         {.size = {0.48f, 0.34f, 0.5f}, .support_anchor = {0.25f, 0.75f, 0.2f},
+          .material_regions = {}}}};
+    view.presentation_profiles = &profiles;
+    const auto profiled = r3d::build_entity_mesh(view);
     get_options().get_option("R3D_VOXEL_ITEMS").setValue("false");
     const auto fallback = r3d::build_entity_mesh(view);
     CHECK(authored.vertices.size() == fallback.vertices.size() + 20);
     CHECK(authored.indices.size() == fallback.indices.size() + 30);
+    REQUIRE(profiled.vertices.size() == authored.vertices.size());
+    auto authored_height = 0.0f;
+    auto profiled_height = 0.0f;
+    const auto same_vertex = [](const r3d::vertex& left, const r3d::vertex& right) {
+        return left.x == right.x && left.y == right.y && left.z == right.z && left.u == right.u
+            && left.v == right.v;
+    };
+    auto item_start = size_t{0};
+    while (item_start < fallback.vertices.size()
+           && same_vertex(authored.vertices[item_start], fallback.vertices[item_start])) {
+        ++item_start;
+    }
+    REQUIRE(item_start + 24 <= authored.vertices.size());
+    for (auto index = item_start; index < item_start + 24; ++index) {
+        authored_height = std::max(authored_height, authored.vertices[index].z);
+        profiled_height = std::max(profiled_height, profiled.vertices[index].z);
+    }
+    auto authored_bottom = std::numeric_limits<float>::max();
+    auto profiled_bottom = std::numeric_limits<float>::max();
+    for (auto index = item_start; index < item_start + 24; ++index) {
+        authored_bottom = std::min(authored_bottom, authored.vertices[index].z);
+        profiled_bottom = std::min(profiled_bottom, profiled.vertices[index].z);
+    }
+    CHECK(authored_height - authored_bottom == Approx(1.0f));
+    CHECK(profiled_height - profiled_bottom == Approx(0.5f));
+    CHECK(profiled_bottom == Approx(authored_bottom - 0.1f));
 }
 #endif

@@ -119,6 +119,7 @@ struct state {
     tile_info_cache cache;
     std::unordered_map<std::string, vox_asset> vehicle_vox_parts;
     std::unordered_map<std::string, vox_asset> item_vox_models;
+    presentation_profile_map presentation_profiles;
     std::unordered_map<chunk_key, chunk_gpu, chunk_key_hash> chunks;
     camera cam;
     unsigned epoch = 0;
@@ -1445,6 +1446,17 @@ auto draw( const draw_options &options ) -> bool
         const auto asset_root = std::filesystem::path( PATH_INFO::datadir() ) / "raw" / "r3d";
         s.vehicle_vox_parts = load_vox_assets( s.device, asset_root / "vehicle_parts" );
         s.item_vox_models = load_vox_assets( s.device, asset_root / "items" );
+        try {
+            auto profiles = std::ifstream( asset_root / "presentation_profiles.json" );
+            if( profiles ) {
+                s.presentation_profiles = load_presentation_profiles( profiles );
+            } else {
+                s.presentation_profiles.clear();
+            }
+        } catch( const std::exception &e ) {
+            s.presentation_profiles.clear();
+            DebugLog( DL::Warn, DC::Main ) << "r3d: presentation profiles not loaded: " << e.what();
+        }
         s.voxel_assets_loaded = true;
     }
 
@@ -1637,7 +1649,8 @@ auto draw( const draw_options &options ) -> bool
     }, .markers = {}, .uprights = std::move( upright_list ), .surface = [&s, &here]( const tripoint_bub_ms & p )
     -> float {
         return surface_height( s, here, p );
-    }, .vehicle_vox_parts = &s.vehicle_vox_parts, .item_vox_models = &s.item_vox_models };
+    }, .vehicle_vox_parts = &s.vehicle_vox_parts, .item_vox_models = &s.item_vox_models,
+    .presentation_profiles = &s.presentation_profiles };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
     {
         const auto queued = cata_tiles::frame_markers( tilecontext->get_frame_markers() );

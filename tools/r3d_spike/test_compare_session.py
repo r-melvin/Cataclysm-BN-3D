@@ -29,19 +29,28 @@ class SessionPackagingTest(unittest.TestCase):
                 "placements (category id x y support_x support_y):\n"
                 "terrain t_floor 10 20 10 20\n"
                 "furniture f_chair 11 20 11 20\n"
-                "terrain t_door_c 12 20 12 20\n")
+                "terrain t_door_c 12 20 12 20\n"
+                "item carbondioxide_tank 13 20 13 20\n")
             gfx = root / "gfx"
             for tileset in ("HitButton_iso", "UltimateCataclysm"):
                 directory = gfx / tileset
                 directory.mkdir(parents=True)
                 image = bytes.fromhex("89504e470d0a1a0a0000000d49484452") + struct.pack(">II", 16, 16)
                 (directory / "atlas.png").write_bytes(image)
-                tiles = [{"id": "f_chair", "fg": 1}, {"id": "t_door_c", "fg": 2},
+                tiles = [{"id": "f_chair", "fg": 1}, {"id": "carbondioxide_tank", "fg": 1},
+                         {"id": "t_door_c", "fg": 2},
                          {"id": "t_door_o", "fg": 3}, {"id": "t_door_b", "fg": 4}]
                 (directory / "tile_config.json").write_text(json.dumps({
                     "tile_info": [{"width": 8, "height": 8}],
                     "tiles-new": [{"file": "atlas.png", "sprite_width": 8,
                                    "sprite_height": 8, "tiles": tiles}]}))
+            profile_path = root / "data/raw/r3d/presentation_profiles.json"
+            profile_path.parent.mkdir(parents=True)
+            profile_path.write_text(json.dumps({"version": 1, "profiles": [{
+                "category": "item", "id": "carbondioxide_tank", "size": [0.48, 0.34, 0.86],
+                "support_anchor": [0.5, 0.5, 0], "depth_fraction": 0.38,
+                "material_regions": [{"name": "tank_shell", "role": "painted metal",
+                                      "palette_indices": [1]}]}]}))
             with mock.patch.object(session_tool, "ROOT", root):
                 session_tool.render_art_gallery(capture)
             page = (capture / "art-gallery/index.html").read_text()
@@ -50,6 +59,11 @@ class SessionPackagingTest(unittest.TestCase):
             self.assertIn("States seen in checkpoint", page)
             self.assertIn("closed", page)
             self.assertIn("closed, open, broken", page)
+            self.assertIn("Presentation profile", page)
+            self.assertIn('<svg class="profile-diagram"', page)
+            self.assertIn("support anchors", page)
+            self.assertIn("tank_shell", page)
+            self.assertIn("painted metal", page)
             self.assertIn("<td>closed</td>", page)
             self.assertTrue((capture / "art-gallery/support-map.svg").is_file())
             self.assertTrue(list((capture / "art-gallery/sprites").glob("*.png")))
@@ -196,6 +210,7 @@ assert json.loads((user / "config/options.json").read_text()) == [{"name": "USE_
 assert not (user / "save").exists()
 assert (session / "art-assets/HitButton_iso/tile_config.json").is_file()
 assert (session / "art-assets/UltimateCataclysm/tile_config.json").is_file()
+assert (session / "art-assets/presentation_profiles.json").is_file()
 (captures / "session-status.txt").write_text("Capture support initialized; waiting for a character.")
 ''')
             binary.chmod(0o755)
@@ -207,6 +222,9 @@ assert (session / "art-assets/UltimateCataclysm/tile_config.json").is_file()
                 config = checkout / "gfx" / tileset / "tile_config.json"
                 config.parent.mkdir(parents=True)
                 config.write_text("{}")
+            profile_file = checkout / "data/raw/r3d/presentation_profiles.json"
+            profile_file.parent.mkdir(parents=True)
+            profile_file.write_text('{"version":1,"profiles":[]}')
             shaders = checkout / "data/shaders"
             shaders.mkdir(parents=True)
             for suffix in ("spv", "msl", "dxil"):

@@ -1,0 +1,17 @@
+{
+  "//": "Shared renderer and art-gallery metadata. size is [forward, right, up] in tile units; support_anchor is the corresponding normalized model-space contact point. Palette indices refer to MagicaVoxel palette slots (zero stays transparent).",
+  "version": 1,
+  "profiles": [
+    {
+      "category": "item",
+      "id": "carbondioxide_tank",
+      "size": [0.48, 0.34, 0.86],
+      "support_anchor": [0.5, 0.5, 0.0],
+      "depth_fraction": 0.38,
+      "material_regions": [
+        { "name": "tank_shell", "role": "painted metal", "palette_indices": [1] },
+        { "name": "valve", "role": "dark metal", "palette_indices": [2] }
+      ]
+    }
+  ]
+}

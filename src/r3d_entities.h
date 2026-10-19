@@ -13,6 +13,7 @@
 #include "coordinates.h"
 #include "r3d_camera.h"
 #include "r3d_mesh.h"
+#include "r3d_presentation_profiles.h"
 #include "r3d_vox.h"
 
 class cata_tiles;
@@ -62,6 +63,8 @@ struct entity_view {
     const std::unordered_map<std::string, vox_asset> *vehicle_vox_parts = nullptr;
     /// Optional MagicaVoxel models keyed by item type ID.
     const std::unordered_map<std::string, vox_asset> *item_vox_models = nullptr;
+    /// Optional shared proportions, support anchors, and material-region annotations.
+    const presentation_profile_map *presentation_profiles = nullptr;
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.

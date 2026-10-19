@@ -62,6 +62,17 @@ single-sprite extrusion idea from
 [2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer) to the
 renderer; no external code or art is included.
 
+Authored asset proportions and contact points are defined in
+`data/raw/r3d/presentation_profiles.json`. A profile names a category and asset
+ID, gives optional forward/right/up dimensions in map tiles, and marks the
+normalized point that should touch its support surface. Zero dimensions retain
+the inferred sprite or VOX size. Sprite depth can be specified directly with a
+right-axis size or as a width-relative `depth_fraction`. Material-region names
+and VOX palette slots are included for authoring and comparison; they are
+currently shown as annotations in the gallery rather than changing palette
+colors. Comparison packages preserve the profile file and render a scaled top
+footprint and side elevation beside the source sprite and captured views.
+
 ## Comparison reports
 
 BN ships the `HitButton_iso` reference and `UltimateCataclysm` tilesets; no external

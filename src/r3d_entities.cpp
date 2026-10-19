@@ -566,6 +566,11 @@ struct emit_sprite_volume_options {
     float z_base;
     uint32_t color;
     float depth_fraction;
+    float width = 0.0f;
+    float height = 0.0f;
+    float anchor_forward = 0.5f;
+    float anchor_right = 0.5f;
+    float anchor_up = 0.0f;
 };
 
 /// Extrudes opaque sprite pixels and builds side faces only along their silhouette boundary.
@@ -579,17 +584,20 @@ auto emit_sprite_volume( const emit_sprite_volume_options &options ) -> void
     if( surface.faces.empty() ) {
         return;
     }
-    const auto width = static_cast<float>( std::clamp( sprite.size_x, 0.25f, 1.0f ) );
-    const auto height = static_cast<float>( std::clamp( sprite.size_y, 0.25f, 1.5f ) );
+    auto width = static_cast<float>( std::clamp( sprite.size_x, 0.25f, 1.0f ) );
+    auto height = static_cast<float>( std::clamp( sprite.size_y, 0.25f, 1.5f ) );
+    if( options.width > 0.0f ) { width = std::clamp( options.width, 0.05f, 8.0f ); }
+    if( options.height > 0.0f ) { height = std::clamp( options.height, 0.05f, 8.0f ); }
     const auto depth = static_cast<float>( width * options.depth_fraction );
-    const auto x_origin = static_cast<float>( options.cx - width * 0.5f );
-    const auto y_front = static_cast<float>( options.cy - depth * 0.5f );
-    const auto y_back = static_cast<float>( options.cy + depth * 0.5f );
+    const auto x_origin = static_cast<float>( options.cx - width * options.anchor_forward );
+    const auto y_front = static_cast<float>( options.cy - depth * options.anchor_right );
+    const auto y_back = static_cast<float>( options.cy + depth * ( 1.0f - options.anchor_right ) );
     const auto point_x = [width, x_origin, &surface]( float x ) {
         return x_origin + width * x / static_cast<float>( surface.width );
     };
     const auto point_z = [height, &options, &surface]( float y ) {
-        return options.z_base + height * ( 1.0f - y / static_cast<float>( surface.height ) );
+        return options.z_base - height * options.anchor_up +
+               height * ( 1.0f - y / static_cast<float>( surface.height ) );
     };
     for( const auto &face : surface.faces ) {
         const auto x0 = point_x( face.x0 );
@@ -1798,7 +1806,21 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                 }
                 const auto id = std::string( ( *stack.begin() )->typeId().str() );
                 const tile_info &sprite = view.cache.named( { .category = C_ITEM, .id = id, .tiles = view.tiles } );
-                const auto profile = item_profile( id );
+                auto profile = item_profile( id );
+                const auto profile_key = presentation_profile_key( "item", id );
+                const auto authored_profile = view.presentation_profiles ?
+                                              view.presentation_profiles->find( profile_key ) :
+                                              presentation_profile_map::const_iterator {};
+                const auto has_authored_profile = view.presentation_profiles &&
+                                                  authored_profile != view.presentation_profiles->end();
+                if( has_authored_profile && authored_profile->second.depth_fraction > 0.0f ) {
+                    profile.depth_fraction = authored_profile->second.depth_fraction;
+                }
+                if( has_authored_profile && authored_profile->second.size[0] > 0.0f &&
+                    authored_profile->second.size[1] > 0.0f ) {
+                    profile.depth_fraction = authored_profile->second.size[1] /
+                                             authored_profile->second.size[0];
+                }
                 const vox_asset *vox_item = nullptr;
                 if( view.item_vox_models ) {
                     const auto found = view.item_vox_models->find( id );
@@ -1808,14 +1830,23 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                 }
                 if( get_option<bool>( "R3D_VOXEL_ITEMS" ) && vox_item ) {
                     const auto &model = vox_item->model;
-                    const auto size = fit_vox_model_to_unit_cube( model );
+                    auto size = fit_vox_model_to_unit_cube( model );
+                    auto anchor = std::array<float, 3> { 0.5f, 0.5f, 0.0f };
+                    if( has_authored_profile ) {
+                        const auto &art = authored_profile->second;
+                        if( art.size[0] > 0.0f ) { size.x = art.size[0]; }
+                        if( art.size[1] > 0.0f ) { size.y = art.size[1]; }
+                        if( art.size[2] > 0.0f ) { size.z = art.size[2]; }
+                        anchor = art.support_anchor;
+                    }
                     if( size.x > 0.0f && size.y > 0.0f && size.z > 0.0f ) {
                         const auto z_base = frame_z( p ) + view.surface( p ) + 0.02f;
                         emit_vox_model( { .sink = sink, .asset = *vox_item,
                                           .transform = { .pivot_sx = frame_x( p ), .pivot_sy = frame_y( p ) },
-                                          .f_min = -size.x * 0.5f, .f_max = size.x * 0.5f,
-                                          .r_min = -size.y * 0.5f, .r_max = size.y * 0.5f,
-                                          .z_min = z_base, .z_max = z_base + size.z,
+                                          .f_min = -size.x * anchor[0], .f_max = size.x * ( 1.0f - anchor[0] ),
+                                          .r_min = -size.y * anchor[1], .r_max = size.y * ( 1.0f - anchor[1] ),
+                                          .z_min = z_base - size.z * anchor[2],
+                                          .z_max = z_base + size.z * ( 1.0f - anchor[2] ),
                                           .color = light } );
                     }
                 } else if( get_option<bool>( "R3D_VOXEL_ITEMS" ) &&
@@ -1823,7 +1854,12 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                     sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
                                           .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
-                                          .color = light, .depth_fraction = profile.depth_fraction } );
+                                          .color = light, .depth_fraction = profile.depth_fraction,
+                                          .width = has_authored_profile ? authored_profile->second.size[0] : 0.0f,
+                                          .height = has_authored_profile ? authored_profile->second.size[2] : 0.0f,
+                                          .anchor_forward = has_authored_profile ? authored_profile->second.support_anchor[0] : 0.5f,
+                                          .anchor_right = has_authored_profile ? authored_profile->second.support_anchor[1] : 0.5f,
+                                          .anchor_up = has_authored_profile ? authored_profile->second.support_anchor[2] : 0.0f } );
                 } else {
                     // Items without a usable transparent sprite stay as camera-facing art.
                     emit_billboard( { .sink = sink, .layers = { &sprite }, .right_world = right, .up_world = up,

@@ -35,7 +35,11 @@ sprites from both shipped tilesets and links to the checkpoint's eight 3D poses
 and 2D reference. Its `support-map.svg` shows placement origins and tile-ground
 anchors in map coordinates. The door/window matrix lists open, closed and broken
 sprites available in the shipped tilesets and marks the states actually present
-in the checkpoint. Separate gameplay checkpoints are needed to compare rendered
+in the checkpoint. Items with entries in
+`data/raw/r3d/presentation_profiles.json` also show a scaled top footprint and
+side elevation with their support point, plus material-region names and VOX
+palette slots. The profile file is bundled with the tileset sources so gallery
+values match the renderer build. Separate gameplay checkpoints are needed to compare rendered
 geometry for states absent from this scene.
 No complete marker is written if saving or either renderer fails. A genuine disk-write
 failure may show the normal game save error dialog; dismiss it normally. The
