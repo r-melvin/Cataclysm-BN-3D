@@ -10,6 +10,7 @@
 #include "r3d_entities.h"
 #include "r3d_math.h"
 #include "r3d_shapes.h"
+#include "r3d_vehicle_camera.h"
 #include "r3d_wall_rules.h"
 #include "units_angle.h"
 
@@ -76,10 +77,10 @@ TEST_CASE( "r3d_camera_screen_ray_round_trips_projection", "[r3d]" )
     const r3d::mat4 vp = cam.view_projection( aspect );
     for( float nx : {
              -0.8f, 0.0f, 0.5f
-             } ) {
+         } ) {
         for( float ny : {
                  -0.6f, 0.2f, 0.9f
-                 } ) {
+             } ) {
             const r3d::ray r = cam.screen_ray( nx, ny, aspect );
             // Any point along the ray must project back to the same screen position.
             const r3d::vec3 p = r.origin + r.dir * 20.0f;
@@ -212,7 +213,7 @@ TEST_CASE( "r3d_camera_rotation_matches_movement_directions", "[r3d]" )
 {
     for( int direction : {
              -1, 1
-             } ) {
+         } ) {
         r3d::camera cam;
         for( int step = 1; step <= 16; ++step ) {
             cam.rotate_steps( direction );
@@ -732,58 +733,27 @@ TEST_CASE( "r3d_vehicle_height_tiers_are_ordered", "[r3d]" )
 
 TEST_CASE( "r3d_vehicle_heading_to_camera_yaw", "[r3d]" )
 {
-    // CDDA vehicle angles: 270 deg is North (yaw = 0), 0 deg is East (yaw = -pi/2),
-    // 90 deg is South (yaw = pi), 180 deg is West (yaw = +pi/2).
-    const auto to_yaw = []( units::angle veh_face ) -> float {
-        auto yaw = static_cast<float>( units::to_radians( 270_degrees - veh_face ) );
-        constexpr auto two_pi = static_cast<float>( 2.0 * M_PI );
-        yaw = std::fmod( yaw, two_pi );
-        if( yaw > static_cast<float>( M_PI ) ) {
-            yaw -= two_pi;
-        } else if( yaw < static_cast<float>( -M_PI ) ) {
-            yaw += two_pi;
-        }
-        return yaw;
-    };
+    CHECK( approx( r3d::vehicle_heading_to_yaw( 270_degrees ), 0.0f ) );
+    CHECK( approx( r3d::vehicle_heading_to_yaw( 0_degrees ), static_cast<float>( -M_PI * 0.5 ) ) );
+    CHECK( approx( std::abs( r3d::vehicle_heading_to_yaw( 90_degrees ) ),
+                   static_cast<float>( M_PI ) ) );
+    CHECK( approx( r3d::vehicle_heading_to_yaw( 180_degrees ), static_cast<float>( M_PI * 0.5 ) ) );
 
-    CHECK( approx( to_yaw( 270_degrees ), 0.0f ) );
-    CHECK( approx( to_yaw( 0_degrees ), static_cast<float>( -M_PI * 0.5 ) ) );
-    CHECK( approx( std::abs( to_yaw( 90_degrees ) ), static_cast<float>( M_PI ) ) );
-    CHECK( approx( to_yaw( 180_degrees ), static_cast<float>( M_PI * 0.5 ) ) );
-
-    // Camera facing test: with yaw looking North, forward_eighths() must return 0
-    r3d::camera cam;
-    cam.yaw = to_yaw( 270_degrees );
+    auto cam = r3d::camera{};
+    cam.yaw = r3d::vehicle_heading_to_yaw( 270_degrees );
     CHECK( cam.forward_eighths() == 0 );
-
-    // Yaw looking East (2)
-    cam.yaw = to_yaw( 0_degrees );
+    cam.yaw = r3d::vehicle_heading_to_yaw( 0_degrees );
     CHECK( cam.forward_eighths() == 2 );
-
-    // Yaw looking South (4)
-    cam.yaw = to_yaw( 90_degrees );
+    cam.yaw = r3d::vehicle_heading_to_yaw( 90_degrees );
     CHECK( cam.forward_eighths() == 4 );
-
-    // Yaw looking West (6)
-    cam.yaw = to_yaw( 180_degrees );
+    cam.yaw = r3d::vehicle_heading_to_yaw( 180_degrees );
     CHECK( cam.forward_eighths() == 6 );
-
-    // Angle delta wrapping across boundary
-    const auto wrap_delta = []( float delta ) -> float {
-        constexpr auto two_pi = static_cast<float>( 2.0 * M_PI );
-        while( delta > static_cast<float>( M_PI ) ) {
-            delta -= two_pi;
-        }
-        while( delta < static_cast<float>( -M_PI ) ) {
-            delta += two_pi;
-        }
-        return delta;
-    };
 
     const auto yaw_south_pos = static_cast<float>( M_PI - 0.05f );
     const auto yaw_south_neg = static_cast<float>( -M_PI + 0.05f );
-    CHECK( approx( wrap_delta( yaw_south_neg - yaw_south_pos ), 0.1f ) );
-    CHECK( approx( wrap_delta( yaw_south_pos - yaw_south_neg ), -0.1f ) );
+    CHECK( approx( r3d::wrap_angle( yaw_south_neg - yaw_south_pos ), 0.1f ) );
+    CHECK( approx( r3d::wrap_angle( yaw_south_pos - yaw_south_neg ), -0.1f ) );
+    CHECK( approx( r3d::wrap_angle( static_cast<float>( 5.0 * M_PI ) ), static_cast<float>( M_PI ) ) );
 }
 
 TEST_CASE( "r3d_vehicle_rigid_body_local_to_scene", "[r3d]" )
@@ -791,13 +761,14 @@ TEST_CASE( "r3d_vehicle_rigid_body_local_to_scene", "[r3d]" )
     const auto pivot_sx = 15.5f;
     const auto pivot_sy = 25.5f;
 
-    auto transform = [pivot_sx, pivot_sy]( float f, float r, units::angle face_dir ) -> std::array<float, 2> {
+    auto transform = [pivot_sx, pivot_sy]( float f, float r,
+    units::angle face_dir ) -> std::array<float, 2> {
         const auto theta = static_cast<float>( units::to_radians( face_dir ) );
         const auto cos_th = static_cast<float>( std::cos( theta ) );
         const auto sin_th = static_cast<float>( std::sin( theta ) );
         return std::array<float, 2>{
-            pivot_sx + f * cos_th - r * sin_th,
-            pivot_sy + f * sin_th + r * cos_th
+            pivot_sx + f *cos_th - r * sin_th,
+            pivot_sy + f *sin_th + r *cos_th
         };
     };
 
@@ -828,8 +799,8 @@ TEST_CASE( "r3d_vehicle_rigid_body_local_to_scene", "[r3d]" )
     CHECK( approx( p_south_fwd[1], pivot_sy + 2.0f ) );
 
     // Rigid-body invariant: distance between local points is preserved under rotation
-    const auto pt_a_local = std::array<float, 2>{ 1.5f, -0.8f };
-    const auto pt_b_local = std::array<float, 2>{ -2.0f, 1.2f };
+    const auto pt_a_local = std::array<float, 2> { 1.5f, -0.8f };
+    const auto pt_b_local = std::array<float, 2> { -2.0f, 1.2f };
     const auto local_dx = pt_a_local[0] - pt_b_local[0];
     const auto local_dy = pt_a_local[1] - pt_b_local[1];
     const auto local_dist = std::sqrt( local_dx * local_dx + local_dy * local_dy );
@@ -854,7 +825,7 @@ TEST_CASE( "r3d_vehicle_directional_side_shading", "[r3d]" )
         const auto ny = local_f * sin_th + local_r * cos_th;
         const auto x_shade = ( nx >= 0.0f ) ? 0.725f : 0.588f; // East 0.73, West 0.59
         const auto y_shade = ( ny >= 0.0f ) ? 0.831f : 0.647f; // South 0.83, North 0.65
-        return std::clamp( nx * nx * x_shade + ny * ny * y_shade, 0.4f, 1.0f );
+        return std::clamp( nx *nx * x_shade + ny *ny * y_shade, 0.4f, 1.0f );
     };
 
     // When vehicle faces North (270 deg):
@@ -919,20 +890,21 @@ TEST_CASE( "r3d_vehicle_pivot_anchor_alignment", "[r3d]" )
     const auto pivot_scene_x = 20.5f;
     const auto pivot_scene_y = 30.5f;
 
-    const auto to_scene = [pivot_anchor, pivot_scene_x, pivot_scene_y]( const point &mount, units::angle dir ) -> std::array<float, 2> {
+    const auto to_scene = [pivot_anchor, pivot_scene_x, pivot_scene_y]( const point & mount,
+    units::angle dir ) -> std::array<float, 2> {
         const auto rel_f = static_cast<float>( mount.x - pivot_anchor.x );
         const auto rel_r = static_cast<float>( mount.y - pivot_anchor.y );
         const auto theta = static_cast<float>( units::to_radians( dir ) );
         const auto cos_th = static_cast<float>( std::cos( theta ) );
         const auto sin_th = static_cast<float>( std::sin( theta ) );
         return std::array<float, 2>{
-            pivot_scene_x + rel_f * cos_th - rel_r * sin_th,
-            pivot_scene_y + rel_f * sin_th + rel_r * cos_th
+            pivot_scene_x + rel_f *cos_th - rel_r * sin_th,
+            pivot_scene_y + rel_f *sin_th + rel_r *cos_th
         };
     };
 
     // Reference CDDA rotation calculation (vehicle::rotate_to_world)
-    const auto cdda_rotate_to_world = [pivot_anchor]( const point &mount, units::angle dir ) -> point {
+    const auto cdda_rotate_to_world = [pivot_anchor]( const point & mount, units::angle dir ) -> point {
         const auto rel = mount - pivot_anchor;
         const auto deg = ( static_cast<int>( std::lround( units::to_degrees( dir ) ) ) % 360 + 360 ) % 360;
         switch( deg ) {
@@ -949,7 +921,7 @@ TEST_CASE( "r3d_vehicle_pivot_anchor_alignment", "[r3d]" )
         }
     };
 
-    const auto test_mounts = std::vector<point>{
+    const auto test_mounts = std::vector<point> {
         point( 2, 1 ),   // At pivot
         point( 4, 1 ),   // Front hood
         point( 0, 1 ),   // Rear bumper
@@ -958,7 +930,7 @@ TEST_CASE( "r3d_vehicle_pivot_anchor_alignment", "[r3d]" )
         point( -1, 0 ),  // Rear-left bumper
     };
 
-    const auto angles = std::vector<units::angle>{ 0_degrees, 90_degrees, 180_degrees, 270_degrees };
+    const auto angles = std::vector<units::angle> { 0_degrees, 90_degrees, 180_degrees, 270_degrees };
 
     for( const auto &dir : angles ) {
         for( const auto &mount : test_mounts ) {

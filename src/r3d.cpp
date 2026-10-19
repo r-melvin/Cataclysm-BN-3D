@@ -47,6 +47,7 @@
 #include "r3d_camera.h"
 #include "r3d_dda.h"
 #include "r3d_entities.h"
+#include "r3d_vehicle_camera.h"
 #include "r3d_vox.h"
 #include "r3d_scene_rules.h"
 #include "r3d_shapes.h"
@@ -1601,31 +1602,14 @@ auto draw( const draw_options &options ) -> bool
     const auto is_controlling = vp && vp->vehicle().player_in_control( you );
     if( !s.comparison_camera && is_controlling ) {
         const auto veh_face = vp->vehicle().face.dir();
-        auto veh_yaw = static_cast<float>( units::to_radians( 270_degrees - veh_face ) );
-        constexpr auto two_pi = static_cast<float>( 2.0 * M_PI );
-        veh_yaw = std::fmod( veh_yaw, two_pi );
-        if( veh_yaw > static_cast<float>( M_PI ) ) {
-            veh_yaw -= two_pi;
-        } else if( veh_yaw < static_cast<float>( -M_PI ) ) {
-            veh_yaw += two_pi;
-        }
-
+        const auto veh_yaw = vehicle_heading_to_yaw( veh_face );
         if( !s.was_controlling_vehicle ) {
             s.cam.yaw = veh_yaw;
-            s.last_vehicle_yaw = veh_yaw;
             s.was_controlling_vehicle = true;
         } else {
-            auto delta = veh_yaw - s.last_vehicle_yaw;
-            while( delta > static_cast<float>( M_PI ) ) {
-                delta -= two_pi;
-            }
-            while( delta < static_cast<float>( -M_PI ) ) {
-                delta += two_pi;
-            }
-            s.cam.yaw += delta;
-            s.cam.yaw = std::fmod( s.cam.yaw, two_pi );
-            s.last_vehicle_yaw = veh_yaw;
+            s.cam.yaw = wrap_angle( s.cam.yaw + wrap_angle( veh_yaw - s.last_vehicle_yaw ) );
         }
+        s.last_vehicle_yaw = veh_yaw;
     } else if( !s.comparison_camera ) {
         s.was_controlling_vehicle = false;
     }
