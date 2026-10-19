@@ -603,14 +603,30 @@ auto emit_box( const emit_box_options &options ) -> void
             }
         };
         for( auto i = size_t( 0 ); i < post.size(); ++i ) {
-            const auto c = corners_t{{ { post[i][0], post[i][1], zs }, { post[i][2], post[i][3], zs },
-                    { post[i][2], post[i][3], z0 }, { post[i][0], post[i][1], z0 }
+            constexpr auto foot_shade_factor = 0.72f;
+            const auto foot_height = static_cast<float>( std::min( 0.07f, ( zs - z0 ) * 0.45f ) );
+            const auto foot_top = static_cast<float>( z0 + foot_height );
+            const auto uv_split = static_cast<float>( ( zs - foot_top ) / ( zs - z0 ) );
+            auto upper_uv = side_uv;
+            upper_uv[2][1] = static_cast<float>( sv0 + ( sv1 - sv0 ) * uv_split );
+            upper_uv[3][1] = upper_uv[2][1];
+            auto foot_uv = side_uv;
+            foot_uv[0][1] = upper_uv[2][1];
+            foot_uv[1][1] = upper_uv[2][1];
+            const auto upper = corners_t{{ { post[i][0], post[i][1], zs }, { post[i][2], post[i][3], zs },
+                    { post[i][2], post[i][3], foot_top }, { post[i][0], post[i][1], foot_top }
                 }
             };
             // Legs stand in the seat's shadow: darker than the sides above them.
             auto leg_ref = light_ref( refs[i + 1] );
             leg_ref.shade = static_cast<uint8_t>( leg_ref.shade * 2 / 3 );
-            sink.add( { .sprite = s, .corners = c, .uvs = side_uv, .ref = leg_ref } );
+            sink.add( { .sprite = s, .corners = upper, .uvs = upper_uv, .ref = leg_ref } );
+            const auto foot = corners_t{{ { post[i][0], post[i][1], foot_top }, { post[i][2], post[i][3], foot_top },
+                    { post[i][2], post[i][3], z0 }, { post[i][0], post[i][1], z0 }
+                }
+            };
+            leg_ref.shade = static_cast<uint8_t>( leg_ref.shade * foot_shade_factor );
+            sink.add( { .sprite = s, .corners = foot, .uvs = foot_uv, .ref = leg_ref } );
         }
     }
 }
@@ -1784,6 +1800,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                         const auto half_width = static_cast<float>( cache.wall_half_width() );
                         constexpr auto sill = static_cast<float>( 0.35f );
                         constexpr auto lintel = static_cast<float>( 0.9f );
+                        constexpr auto recess_shade = 178;
                         const auto x0 = static_cast<float>( wall_along_y ? 0.5f - half_width : 0.0f );
                         const auto x1 = static_cast<float>( wall_along_y ? 0.5f + half_width : 1.0f );
                         const auto y0 = static_cast<float>( wall_along_y ? 0.0f : 0.5f - half_width );
@@ -1803,13 +1820,17 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                                 emit_wall_section( { .sink = sink, .t = material, .x = lx, .y = ly, .face = face,
                                                      .bottom = lintel, .top = ts.height, .left = 0.0f, .right = 1.0f, .ref = ref, .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1 } );
                                 emit_wall_section( { .sink = sink, .t = material, .x = lx, .y = ly, .face = face,
-                                                     .bottom = sill, .top = lintel, .left = 0.0f, .right = 0.1f, .ref = ref, .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1 } );
+                                                     .bottom = sill, .top = lintel, .left = 0.0f, .right = 0.1f,
+                                                     .ref = light_ref( wall_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = recess_shade } ) ),
+                                                     .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1 } );
                                 emit_wall_section( { .sink = sink, .t = material, .x = lx, .y = ly, .face = face,
-                                                     .bottom = sill, .top = lintel, .left = 0.9f, .right = 1.0f, .ref = ref, .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1 } );
+                                                     .bottom = sill, .top = lintel, .left = 0.9f, .right = 1.0f,
+                                                     .ref = light_ref( wall_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = recess_shade } ) ),
+                                                     .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1 } );
                             }
                         }
                         emit_wall_cap( { .sink = sink, .t = *surround, .x = lx, .y = ly, .z = sill, .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1,
-                                         .ref = wall_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ) } );
+                                         .ref = wall_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = recess_shade } ) } );
                         emit_wall_cap( { .sink = sink, .t = *surround, .x = lx, .y = ly, .z = ts.height, .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1,
                                          .ref = wall_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ) } );
                         if( terrain.backdrop.valid ) {
