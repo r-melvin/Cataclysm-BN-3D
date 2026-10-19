@@ -49,7 +49,7 @@ auto orient_sprite_alpha( const orient_sprite_alpha_options &options ) -> sprite
             const auto sy = std::clamp( static_cast<int>( source_y * static_cast<float>( height ) ), 0,
                                         height - 1 );
             output.pixels[static_cast<size_t>( y * output_width + x )] =
-                options.alpha[static_cast<size_t>( sy * width + sx )];
+                      options.alpha[static_cast<size_t>( sy * width + sx )];
         }
     }
     return output;

@@ -43,7 +43,7 @@ inline auto normalize( const vec3 &a ) -> vec3
 struct mat4 {
     std::array<float, 16> m{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 
-    auto at( int row, int col ) -> float& {
+    auto at( int row, int col ) -> float & {
         return m[col * 4 + row];
     }
     auto at( int row, int col ) const -> float {

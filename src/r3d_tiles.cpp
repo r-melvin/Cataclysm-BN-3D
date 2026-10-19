@@ -154,9 +154,9 @@ std::optional<texture_draw_data>
         .uv1 = { ( rect.x + rect.w ) / width, ( rect.y + rect.h ) / height },
         .owner = owner,
         .size_x = rect.w / std::max( 1, tileset_ptr->get_tile_width() ),
-        .size_y = rect.h / std::max( 1, tileset_ptr->get_tile_height() ),
-        .quarter_turns = indices->size() == 1 && !request.background ? std::max( rotation, 0 ) % 4 : 0,
-        .flip = !request.background && rotation == -1,
+                      .size_y = rect.h / std::max( 1, tileset_ptr->get_tile_height() ),
+                      .quarter_turns = indices->size() == 1 && !request.background ? std::max( rotation, 0 ) % 4 : 0,
+                      .flip = !request.background && rotation == -1,
         .alpha_mask = {},
         .facing = std::max( rotation, 0 ) % 4,
         .offset_x = picked->offset.x,
@@ -181,8 +181,8 @@ auto cata_tiles::get_orientation( const orientation_request &request ) -> void
         if( f->connects( group ) ) { get_furn_connect_values( p, subtile, rotation, group, {} ); }
         else {
             const auto neighbors = std::array<int, 4> { here.furn( p + point_rel_ms::south() ).to_i(),
-                       here.furn( p + point_rel_ms::east() ).to_i(), here.furn( p + point_rel_ms::west() ).to_i(),
-                       here.furn( p + point_rel_ms::north() ).to_i()
+                    here.furn( p + point_rel_ms::east() ).to_i(), here.furn( p + point_rel_ms::west() ).to_i(),
+                    here.furn( p + point_rel_ms::north() ).to_i()
                                                       };
             get_tile_values_with_ter( p, f.to_i(), neighbors.data(), subtile, rotation );
         }

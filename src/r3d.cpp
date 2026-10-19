@@ -267,8 +267,8 @@ auto release_chunk( state &s, chunk_gpu &c ) -> void
 
 auto release_all_chunks( state &s ) -> void
 {
-for( auto &entry : s.chunks ) {
-    release_chunk( s, entry.second );
+    for( auto &entry : s.chunks ) {
+        release_chunk( s, entry.second );
     }
     s.chunks.clear();
 }
@@ -294,7 +294,7 @@ auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
     const auto mesh_started = std::chrono::steady_clock::now();
     auto mesh = chunk_mesh( build_chunk_mesh( { .pos = pos, .lookup = lookup, .cache = s.cache, .tiles = *tilecontext } ) );
     stats.mesh_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
-        mesh_started ).count();
+                     mesh_started ).count();
     stats.vertices += mesh.vertices.size();
     stats.indices += mesh.indices.size();
     release_chunk( s, c );
@@ -316,13 +316,13 @@ auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
         !s.device.upload( { .dst = c.positions, .data = mesh.vertices.data(), .size = vertex_bytes } ) ||
         !s.device.upload( { .dst = c.indices, .data = mesh.indices.data(), .size = index_bytes } ) ) {
         stats.upload_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
-            upload_started ).count();
+                           upload_started ).count();
         ++stats.failed;
         release_chunk( s, c );
         return false;
     }
     stats.upload_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
-        upload_started ).count();
+                       upload_started ).count();
     ++stats.rebuilt;
     stats.upload_bytes += static_cast<uint64_t>( vertex_bytes ) + index_bytes;
     c.gpu_bytes = static_cast<uint64_t>( vertex_bytes ) + light_bytes + index_bytes;
@@ -453,17 +453,17 @@ auto load_vox_assets( gpu &device,
 auto column_height( state &s, const map &here, const tripoint_bub_ms &p ) -> float
 {
     if( !here.inbounds( p ) ) {
-    return 0.0f;
-}
-const auto &t_info = s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } );
+        return 0.0f;
+    }
+    const auto &t_info = s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } );
     if( t_info.open_door ) {
-    const auto furn_h = s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh.height;
+        const auto furn_h = s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh.height;
         return std::min( std::max( floor_height, furn_h ), 1.0f );
     }
     const auto t = shape( t_info.sh );
     auto h = static_cast<float>( t.height );
     if( t.kind == shape_kind::floor ) {
-    h = std::max( h, s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh.height );
+        h = std::max( h, s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh.height );
     }
     return std::min( h, 1.0f );
 }
@@ -482,36 +482,36 @@ auto unseen_indoor_light() -> uint32_t
 auto surface_height( state &s, const map &here, const tripoint_bub_ms &p ) -> float
 {
     if( !here.inbounds( p ) ) {
-    return floor_height;
-}
-if( here.veh_at( p ) ) {
-    return floor_height + chassis_floor_h;
-}
-const auto t = shape( s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } ).sh );
-if( t.kind != shape_kind::floor ) {
-    return floor_height;
-}
-const auto f = shape( s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh );
-return f.kind == shape_kind::prism || f.kind == shape_kind::block ?
-       std::max( t.height, f.height ) : t.height;
+        return floor_height;
+    }
+    if( here.veh_at( p ) ) {
+        return floor_height + chassis_floor_h;
+    }
+    const auto t = shape( s.cache.terrain( { .id = here.ter( p ), .tiles = *tilecontext } ).sh );
+    if( t.kind != shape_kind::floor ) {
+        return floor_height;
+    }
+    const auto f = shape( s.cache.furniture( { .id = here.furn( p ), .tiles = *tilecontext } ).sh );
+    return f.kind == shape_kind::prism || f.kind == shape_kind::block ?
+           std::max( t.height, f.height ) : t.height;
 }
 
 // Turns the game's own visibility knowledge into a light colour per tile: lit tiles are shown
 // normally, unseen but remembered ones dim and bluish, everything else black.
 struct light_sampler {
-const map &here;
-const visibility_variables &vvc;
-const avatar &you;
-// Lowest level whose visibility cache the game keeps up to date for this view (see
-// map::update_visibility_cache); anything below can only show what is remembered.
-int vision_floor = -OVERMAP_DEPTH;
-// Levels above this have no visibility cache of their own (the game only computes up to
-// the viewed level); they take the light of the ground below them.
-int vision_top = OVERMAP_HEIGHT;
-int view_z = 0;
+    const map &here;
+    const visibility_variables &vvc;
+    const avatar &you;
+    // Lowest level whose visibility cache the game keeps up to date for this view (see
+    // map::update_visibility_cache); anything below can only show what is remembered.
+    int vision_floor = -OVERMAP_DEPTH;
+    // Levels above this have no visibility cache of their own (the game only computes up to
+    // the viewed level); they take the light of the ground below them.
+    int vision_top = OVERMAP_HEIGHT;
+    int view_z = 0;
 
-// Whether any of the eight tiles around p is seen or remembered.
-auto borders_known( const tripoint_bub_ms &p ) const -> bool {
+    // Whether any of the eight tiles around p is seen or remembered.
+    auto borders_known( const tripoint_bub_ms &p ) const -> bool {
         for( auto dy = static_cast<int>( -1 ); dy <= 1; ++dy ) {
             for( auto dx = static_cast<int>( -1 ); dx <= 1; ++dx ) {
                 if( dx == 0 && dy == 0 ) {
@@ -522,8 +522,8 @@ auto borders_known( const tripoint_bub_ms &p ) const -> bool {
                     continue;
                 }
                 const auto ll = lit_level( here.access_cache( n.z() ).visibility_cache[here.access_cache(
-                        n.z() ).idx(
-                        n.x(), n.y() )] );
+                                               n.z() ).idx(
+                                               n.x(), n.y() )] );
                 const auto vis = visibility_type( here.get_visibility( ll, vvc ) );
                 if( vis == VIS_CLEAR || vis == VIS_LIT ||
                     !you.get_terrain_tile( bub_to_abs( n ) ).tile.empty() ) {
@@ -559,8 +559,8 @@ auto borders_known( const tripoint_bub_ms &p ) const -> bool {
                     0, 0 );
         }
         const auto ll = lit_level( here.access_cache( p.z() ).visibility_cache[here.access_cache(
-                p.z() ).idx(
-                p.x(), p.y() )] );
+                                       p.z() ).idx(
+                                       p.x(), p.y() )] );
         const auto vis = visibility_type( here.get_visibility( ll, vvc ) );
         auto r = static_cast<float>( 0.0f );
         auto g = static_cast<float>( 0.0f );
@@ -681,8 +681,8 @@ auto update_chunk_light( const update_chunk_light_options &options ) -> void
         const auto gx = static_cast<int>( std::clamp( r.lx + r.dx + 1, 0, border - 1 ) );
         const auto gy = static_cast<int>( std::clamp( r.ly + r.dy + 1, 0, border - 1 ) );
         auto tile = static_cast<uint32_t>( grid[std::clamp( static_cast<int>( r.dz ), 0,
-            1 )][static_cast<size_t>
-                                           ( gy * border + gx )] );
+                                                1 )][static_cast<size_t>
+                                                        ( gy * border + gx )] );
         // A side lit by the tile it faces would go black when that tile is out of sight (behind
         // lockers, the far side of a wall) although the thing itself is seen: then it takes its
         // own tile's light.
@@ -704,7 +704,7 @@ auto update_chunk_light( const update_chunk_light_options &options ) -> void
     const auto light_bytes = static_cast<uint32_t>( c.light.size() * sizeof( uint32_t ) );
     s.device.upload( { .dst = c.lights, .data = c.light.data(), .size = light_bytes, .cycle = true } );
     stats.light_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
-        light_started ).count();
+                      light_started ).count();
     stats.upload_bytes += light_bytes;
 }
 
@@ -746,8 +746,8 @@ auto set_cutaway( const set_cutaway_options &options ) -> void
     constexpr auto keep_below = static_cast<float>( 0.3f );
     const auto base = static_cast<float>( floor_height );
     const auto middle = vec3( tile_to_world( { .x = static_cast<float>( p.x() - center.x() ) + 0.5f,
-        .y = static_cast<float>( p.y() - center.y() ) + 0.5f,
-        .z = base + cutaway_stub_height } ) );
+                              .y = static_cast<float>( p.y() - center.y() ) + 0.5f,
+                              .z = base + cutaway_stub_height } ) );
     const auto at = vec3( transform_point( view_proj, middle ) );
     const auto side = vec3( transform_point( view_proj, middle + cam.ground_right() * radius ) );
     u.cut[0] = at.x;
@@ -956,8 +956,8 @@ auto dump_view( const std::string &path, const tripoint_bub_ms &center ) -> void
                 continue;
             }
             const auto ll = lit_level( here.access_cache( p.z() ).visibility_cache[here.access_cache(
-                    p.z() ).idx(
-                    p.x(), p.y() )] );
+                                           p.z() ).idx(
+                                           p.x(), p.y() )] );
             const auto vis = visibility_type( here.get_visibility( ll, vvc ) );
             const auto seen = static_cast<bool>( vis == VIS_CLEAR || vis == VIS_LIT );
             out << ( seen ? 'S' : !you.get_terrain_tile( bub_to_abs( p ) ).tile.empty() ? 'M' : '.' );
@@ -991,7 +991,7 @@ auto dump_view( const std::string &path, const tripoint_bub_ms &center ) -> void
                 continue;
             }
             const auto ll = lit_level( here.access_cache( p.z() ).visibility_cache[here.access_cache(
-                    p.z() ).idx( p.x(), p.y() )] );
+                                           p.z() ).idx( p.x(), p.y() )] );
             const auto vis = visibility_type( here.get_visibility( ll, vvc ) );
             if( vis != VIS_CLEAR && vis != VIS_LIT ) {
                 continue;
@@ -1065,10 +1065,10 @@ struct comparison_view_guard {
         st().comparison_camera = false;
         // Flush the restored atlas before resuming the player's world view.
         if( const auto &r = get_sdl_renderer() ) {
-        SDL_RenderPresent( r.get() );
+            SDL_RenderPresent( r.get() );
         }
         for( auto i = static_cast<int>( 0 ); i < 40; ++i ) {
-        g->invalidate_main_ui_adaptor();
+            g->invalidate_main_ui_adaptor();
             ui_manager::redraw();
         }
         attempted = true;
@@ -1111,9 +1111,8 @@ auto compare_capture( bool gameplay_boundary ) -> void
     };
     const auto now = std::chrono::steady_clock::now();
     const auto status = []( const std::string & message ) -> void {
-        if( session )
-    {
-        std::ofstream( std::filesystem::path( session ) / "session-status.txt" ) << message << '\n';
+        if( session ) {
+            std::ofstream( std::filesystem::path( session ) / "session-status.txt" ) << message << '\n';
         }
     };
     static auto started = false;
@@ -1285,7 +1284,7 @@ auto compare_capture( bool gameplay_boundary ) -> void
         }
         const auto restored = static_cast<bool>( original_view.restore() );
         const auto resumed = static_cast<bool>( !session || ( restored &&
-            capture( base + "_resumed.png" ) ) );
+                                                capture( base + "_resumed.png" ) ) );
         rng_get_engine() = old_rng;
         if( session ) {
             const auto complete = static_cast<bool>( ok_before && ok_2d && ok_3d && restored && resumed );
@@ -1413,7 +1412,7 @@ auto pick( float x, float y ) -> std::optional<tripoint_bub_ms>
     const auto ndc_y = static_cast<float>( 1.0f - ( y - v.y ) / v.h * 2.0f );
     constexpr auto max_pick_distance = static_cast<float>( 400.0f );
     const auto hit = voxel_hit( pick_cell( { .cam = v.cam, .ndc_x = ndc_x, .ndc_y = ndc_y, .aspect = v.w / v.h, .max_t = max_pick_distance, .height = height,
-        .floor_z = floor_height } ) );
+                                           .floor_z = floor_height } ) );
     if( !hit.hit ) {
         return std::nullopt;
     }
@@ -1546,7 +1545,7 @@ auto draw( const draw_options &options ) -> bool
     ++s.frame;
     const auto render_started = std::chrono::steady_clock::now();
     static const auto debug_chunk_work = static_cast<bool>( std::getenv( "CATA_R3D_DEBUG_CHUNKS" ) !=
-        nullptr );
+                                         nullptr );
     maybe_take_screenshot( s );
     if( !s.env_camera_applied ) {
         apply_env_camera( s.cam );
@@ -1587,8 +1586,8 @@ auto draw( const draw_options &options ) -> bool
     constexpr auto max_levels_above = static_cast<int>( 5 );
     const auto overhead = tripoint_bub_ms( center + tripoint_rel_ms( 0, 0, 1 ) );
     const auto open_sky = static_cast<bool>( !multi_z || !here.inbounds( overhead ) ||
-        s.cache.terrain( { .id = here.ter( overhead ), .tiles = *tilecontext } ).sh.kind ==
-        shape_kind::empty );
+                          s.cache.terrain( { .id = here.ter( overhead ), .tiles = *tilecontext } ).sh.kind ==
+                          shape_kind::empty );
     const auto z_hi = static_cast<int>( multi_z &&
                                         open_sky ? std::min( view_z + max_levels_above, OVERMAP_HEIGHT ) :
                                         view_z );
@@ -1697,7 +1696,7 @@ auto draw( const draw_options &options ) -> bool
                 }
                 if( c.built ) {
                     const auto chunk_base = tripoint_bub_ms( center.x() + ( chunk_origin.x() - origin.x() ),
-                        center.y() + ( chunk_origin.y() - origin.y() ), z );
+                                            center.y() + ( chunk_origin.y() - origin.y() ), z );
                     for( const upright_sprite &u : c.uprights ) {
                         upright_list.push_back( { .pos = chunk_base + tripoint_rel_ms( static_cast<int>( u.lx ), static_cast<int>( u.ly ), 0 ), .z_base = u.z_base,
                                                   .info = u.info } );
@@ -1721,7 +1720,7 @@ auto draw( const draw_options &options ) -> bool
     {
         const auto queued = cata_tiles::frame_markers( tilecontext->get_frame_markers() );
         const auto add_markers = [ &s, &here, &entities_view ]( const std::vector<tripoint_bub_ms> &where,
-            const std::string & id,
+                                 const std::string & id,
         bool box ) -> void {
             append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = where, .id = id, .box = box } );
         };
@@ -1734,26 +1733,26 @@ auto draw( const draw_options &options ) -> bool
     }
     const auto vehicles = chunk_mesh( build_vehicle_mesh( entities_view ) );
     const auto draw_vehicles = static_cast<bool>( !vehicles.empty() &&
-        upload_dynamic( { .s = s, .buffer = s.veh_positions, .capacity = s.veh_position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                          .data = vehicles.vertices.data(),
-                          .bytes = static_cast<uint32_t>( vehicles.vertices.size() * sizeof( vertex ) ) } ) &&
-        upload_dynamic( { .s = s, .buffer = s.veh_lights, .capacity = s.veh_light_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                          .data = vehicles.light.data(),
-                          .bytes = static_cast<uint32_t>( vehicles.light.size() * sizeof( uint32_t ) ) } ) &&
-        upload_dynamic( { .s = s, .buffer = s.veh_indices, .capacity = s.veh_index_bytes, .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                          .data = vehicles.indices.data(),
-                          .bytes = static_cast<uint32_t>( vehicles.indices.size() * sizeof( uint32_t ) ) } ) );
+                               upload_dynamic( { .s = s, .buffer = s.veh_positions, .capacity = s.veh_position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                       .data = vehicles.vertices.data(),
+                                       .bytes = static_cast<uint32_t>( vehicles.vertices.size() * sizeof( vertex ) ) } ) &&
+                               upload_dynamic( { .s = s, .buffer = s.veh_lights, .capacity = s.veh_light_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                       .data = vehicles.light.data(),
+                                       .bytes = static_cast<uint32_t>( vehicles.light.size() * sizeof( uint32_t ) ) } ) &&
+                               upload_dynamic( { .s = s, .buffer = s.veh_indices, .capacity = s.veh_index_bytes, .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                                       .data = vehicles.indices.data(),
+                                       .bytes = static_cast<uint32_t>( vehicles.indices.size() * sizeof( uint32_t ) ) } ) );
     const auto entities = chunk_mesh( build_entity_mesh( entities_view ) );
     const auto draw_entities = static_cast<bool>( !entities.empty() &&
-        upload_dynamic( { .s = s, .buffer = s.dyn_positions, .capacity = s.dyn_position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                          .data = entities.vertices.data(),
-                          .bytes = static_cast<uint32_t>( entities.vertices.size() * sizeof( vertex ) ) } ) &&
-        upload_dynamic( { .s = s, .buffer = s.dyn_lights, .capacity = s.dyn_light_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                          .data = entities.light.data(),
-                          .bytes = static_cast<uint32_t>( entities.light.size() * sizeof( uint32_t ) ) } ) &&
-        upload_dynamic( { .s = s, .buffer = s.dyn_indices, .capacity = s.dyn_index_bytes, .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                          .data = entities.indices.data(),
-                          .bytes = static_cast<uint32_t>( entities.indices.size() * sizeof( uint32_t ) ) } ) );
+                               upload_dynamic( { .s = s, .buffer = s.dyn_positions, .capacity = s.dyn_position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                       .data = entities.vertices.data(),
+                                       .bytes = static_cast<uint32_t>( entities.vertices.size() * sizeof( vertex ) ) } ) &&
+                               upload_dynamic( { .s = s, .buffer = s.dyn_lights, .capacity = s.dyn_light_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                       .data = entities.light.data(),
+                                       .bytes = static_cast<uint32_t>( entities.light.size() * sizeof( uint32_t ) ) } ) &&
+                               upload_dynamic( { .s = s, .buffer = s.dyn_indices, .capacity = s.dyn_index_bytes, .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                                       .data = entities.indices.data(),
+                                       .bytes = static_cast<uint32_t>( entities.indices.size() * sizeof( uint32_t ) ) } ) );
 
     auto avatar_silhouette = chunk_mesh{};
     auto draw_avatar_silhouette = static_cast<bool>( false );
@@ -1762,15 +1761,15 @@ auto draw( const draw_options &options ) -> bool
         silhouette_view.avatar_only = true;
         avatar_silhouette = build_entity_mesh( silhouette_view );
         draw_avatar_silhouette = static_cast<bool>( !avatar_silhouette.empty() &&
-            upload_dynamic( { .s = s, .buffer = s.silhouette_positions, .capacity = s.silhouette_position_bytes,
-                              .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.vertices.data(),
-                              .bytes = static_cast<uint32_t>( avatar_silhouette.vertices.size() * sizeof( vertex ) ) } ) &&
-            upload_dynamic( { .s = s, .buffer = s.silhouette_lights, .capacity = s.silhouette_light_bytes,
-                              .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.light.data(),
-                              .bytes = static_cast<uint32_t>( avatar_silhouette.light.size() * sizeof( uint32_t ) ) } ) &&
-            upload_dynamic( { .s = s, .buffer = s.silhouette_indices, .capacity = s.silhouette_index_bytes,
-                              .usage = SDL_GPU_BUFFERUSAGE_INDEX, .data = avatar_silhouette.indices.data(),
-                              .bytes = static_cast<uint32_t>( avatar_silhouette.indices.size() * sizeof( uint32_t ) ) } ) );
+                                 upload_dynamic( { .s = s, .buffer = s.silhouette_positions, .capacity = s.silhouette_position_bytes,
+                                         .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.vertices.data(),
+                                         .bytes = static_cast<uint32_t>( avatar_silhouette.vertices.size() * sizeof( vertex ) ) } ) &&
+                                 upload_dynamic( { .s = s, .buffer = s.silhouette_lights, .capacity = s.silhouette_light_bytes,
+                                         .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.light.data(),
+                                         .bytes = static_cast<uint32_t>( avatar_silhouette.light.size() * sizeof( uint32_t ) ) } ) &&
+                                 upload_dynamic( { .s = s, .buffer = s.silhouette_indices, .capacity = s.silhouette_index_bytes,
+                                         .usage = SDL_GPU_BUFFERUSAGE_INDEX, .data = avatar_silhouette.indices.data(),
+                                         .bytes = static_cast<uint32_t>( avatar_silhouette.indices.size() * sizeof( uint32_t ) ) } ) );
     }
 
     if( !s.device.begin_pass( 0.05f, 0.05f, 0.07f ) ) {

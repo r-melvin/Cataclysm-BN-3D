@@ -406,7 +406,7 @@ auto emit_pane( const emit_pane_options &options ) -> void
     const auto uv = uvs_t{{ { s.u0, s.v0 }, { s.u1, s.v0 }, { s.u1, s.v1 }, { s.u0, s.v1 } }};
     for( const float side : {
              -half_thickness, half_thickness
-             } ) {
+         } ) {
         const auto c = corners_t( along_x ?
         corners_t{{ { cx - half_width, cy + side, z_top }, { cx + half_width, cy + side, z_top }, { cx + half_width, cy + side, z_base }, { cx - half_width, cy + side, z_base } }} :
         corners_t{{ { cx + side, cy + half_width, z_top }, { cx + side, cy - half_width, z_top }, { cx + side, cy - half_width, z_base }, { cx + side, cy + half_width, z_base } }} );
@@ -1158,7 +1158,7 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
     if( !traits.window ) {
         const auto id_str = std::string( t.id.str() );
         const auto looks_like = std::string( t.looks_like );
-        const auto has_name_match = [&id_str, &looks_like]( const std::string &sub ) -> bool {
+        const auto has_name_match = [&id_str, &looks_like]( const std::string & sub ) -> bool {
             return id_str.find( sub ) != std::string::npos || looks_like.find( sub ) != std::string::npos;
         };
         const auto is_excluded = has_name_match( "manhole" ) || has_name_match( "hatch" ) ||
@@ -1386,7 +1386,7 @@ struct chunk_tile_lookup {
     };
     static constexpr auto wall_bits = std::array<uint8_t, 4> {{ face_north, face_south, face_west, face_east }};
 
-    auto terrain_at( int lx, int ly ) const -> const tile_info* {
+    auto terrain_at( int lx, int ly ) const -> const tile_info * {
         const submap *sm = self;
         if( lx < 0 ) {
             sm = west;
@@ -1461,7 +1461,7 @@ struct chunk_tile_lookup {
                            .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = face_shade[0] } ) } );
     }
 
-    auto wall_at( const tripoint_bub_ms &p ) const -> const tile_info* {
+    auto wall_at( const tripoint_bub_ms &p ) const -> const tile_info * {
         return here.inbounds( p ) ? &cache.terrain( { .id = here.ter( p ), .tiles = tiles } ) : nullptr;
     }
 
@@ -1516,7 +1516,7 @@ struct chunk_tile_lookup {
         int dy;
     };
 
-    auto face_material( const face_material_options &options ) const -> const tile_info& {
+    auto face_material( const face_material_options &options ) const -> const tile_info & {
         const auto &bub = options.bub;
         const auto &wall = options.wall;
         auto dx = options.dx;
@@ -1565,11 +1565,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
 
     // Terrain of a tile of this level, which may lie in a horizontal neighbour (one tile out).
 
-
     // Furniture of a tile of this level, which may lie in a horizontal neighbour (one tile out).
-
-
-
 
     // Occupancy of this level including a one tile border, and of the level above.
     std::array<shape, border *border> level;
@@ -1618,15 +1614,10 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
     // Some mapgen corners include a one-tile inward buttress. A thin wall needs
     // just the connected outside corner, rather than a spur jutting into the room.
 
-
-
-
-
     auto sink = quad_sink{};
     auto mesh_uprights = std::vector<upright_sprite> {};
     // Floor for a tile that stands in a wall line (pane, see-through block): a neighbour's floor
     // on an open side (inside or out), else the ground.
-
 
     for( auto ly = static_cast<int>( 0 ); ly < side; ++ly ) {
         for( auto lx = static_cast<int>( 0 ); lx < side; ++lx ) {

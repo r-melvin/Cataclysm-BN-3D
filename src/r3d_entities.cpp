@@ -263,7 +263,6 @@ auto emit_marker_box( const emit_marker_box_options &options ) -> void
     }
 }
 
-
 struct point_f {
     float x = 0.0f;
     float y = 0.0f;
@@ -379,13 +378,14 @@ auto emit_vehicle_wheel( const emit_vehicle_wheel_options &options ) -> void
         const auto b_max = options.transform.apply( b[0], options.r_max );
         const auto b_min = options.transform.apply( b[0], options.r_min );
         const auto corners = corners_t{{ { a_min.x, a_min.y, a[1] }, { a_max.x, a_max.y, a[1] },
-                                         { b_max.x, b_max.y, b[1] }, { b_min.x, b_min.y, b[1] } }};
+                { b_max.x, b_max.y, b[1] }, { b_min.x, b_min.y, b[1] }
+            }};
         const auto mid_angle = 2.0f * std::numbers::pi_v<float> *
                                ( static_cast<float>( index ) + 0.5f ) / static_cast<float>( segments );
         const auto normal_f = std::cos( mid_angle );
         const auto vertical_light = 0.86f + std::max( 0.0f, std::sin( mid_angle ) ) * 0.12f;
         const auto shade = compute_side_shade( normal_f, 0.0f, options.cos_th,
-                            options.sin_th ) * vertical_light;
+                                               options.sin_th ) * vertical_light;
         options.sink.add_colored( { .sprite = options.sprite, .corners = corners, .uvs = solid_uv,
                                     .ref = light_ref{},
                                     .color = no_pull( modulate_light( tire_color, shade ) ) } );
@@ -393,16 +393,16 @@ auto emit_vehicle_wheel( const emit_vehicle_wheel_options &options ) -> void
 
     const auto emit_cap = [&]( const int side ) {
         const auto r_face = static_cast<float>( side > 0 ? options.r_max + 0.003f :
-                                options.r_min - 0.003f );
+                                                options.r_min - 0.003f );
         const auto center = options.transform.apply( options.center_forward, r_face );
         const auto shade = compute_side_shade( 0.0f, static_cast<float>( side ), options.cos_th,
-                            options.sin_th );
+                                               options.sin_th );
         const auto tire_tint = no_pull( modulate_light( tire_color, shade ) );
         const auto hub_tint = no_pull( modulate_light( hub_color, shade ) );
         const auto hub_radius_forward = static_cast<float>( options.radius_forward * 0.46f );
         const auto hub_radius_z = static_cast<float>( options.radius_z * 0.46f );
         const auto emit_disk = [&]( const float radius_forward, const float radius_z,
-                                    const uint32_t tint, const float r_surface ) {
+        const uint32_t tint, const float r_surface ) {
             const auto disk = wheel_outline( { .segments = segments,
                                                .center_forward = options.center_forward,
                                                .center_z = center_z,
@@ -419,13 +419,16 @@ auto emit_vehicle_wheel( const emit_vehicle_wheel_options &options ) -> void
                                           ( center_z + radius_z - z ) / ( 2.0f * radius_z ) );
                 };
                 const auto triangle = corners_t{{ { center.x, center.y, center_z },
-                                                  { p0.x, p0.y, disk[index][1] },
-                                                  { p1.x, p1.y, disk[next][1] },
-                                                  { p1.x, p1.y, disk[next][1] } }};
-                const auto triangle_uv = uvs_t{{ map_sprite_uv( options.sprite, 0.5f, 0.5f ),
-                                                 uv_at( disk[index][0], disk[index][1] ),
-                                                 uv_at( disk[next][0], disk[next][1] ),
-                                                 uv_at( disk[next][0], disk[next][1] ) }};
+                        { p0.x, p0.y, disk[index][1] },
+                        { p1.x, p1.y, disk[next][1] },
+                        { p1.x, p1.y, disk[next][1] }
+                    }};
+                const auto triangle_uv = uvs_t{{
+                        map_sprite_uv( options.sprite, 0.5f, 0.5f ),
+                        uv_at( disk[index][0], disk[index][1] ),
+                        uv_at( disk[next][0], disk[next][1] ),
+                        uv_at( disk[next][0], disk[next][1] )
+                    }};
                 options.sink.add_colored( { .sprite = options.sprite, .corners = triangle,
                                             .uvs = triangle_uv, .ref = light_ref{}, .color = tint } );
             }
@@ -611,9 +614,12 @@ auto emit_sprite_volume( const emit_sprite_volume_options &options ) -> void
             const auto y = face.face == sprite_voxel_face::front ? y_front : y_back;
             corners = {{ { x0, y, z0 }, { x1, y, z0 }, { x1, y, z1 }, { x0, y, z1 } }};
             const auto uv_top_left = map_sprite_uv( sprite, face.x0 / surface.width, face.z0 / surface.height );
-            const auto uv_top_right = map_sprite_uv( sprite, face.x1 / surface.width, face.z0 / surface.height );
-            const auto uv_bottom_right = map_sprite_uv( sprite, face.x1 / surface.width, face.z1 / surface.height );
-            const auto uv_bottom_left = map_sprite_uv( sprite, face.x0 / surface.width, face.z1 / surface.height );
+            const auto uv_top_right = map_sprite_uv( sprite, face.x1 / surface.width,
+                                      face.z0 / surface.height );
+            const auto uv_bottom_right = map_sprite_uv( sprite, face.x1 / surface.width,
+                                         face.z1 / surface.height );
+            const auto uv_bottom_left = map_sprite_uv( sprite, face.x0 / surface.width,
+                                        face.z1 / surface.height );
             uvs = {{ uv_top_left, uv_top_right, uv_bottom_right, uv_bottom_left }};
             shade = face.face == sprite_voxel_face::front ? 0.82f : 0.65f;
         } else {
@@ -917,10 +923,10 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     const auto &info = view.cache.named( {
                         .category = C_VEHICLE_PART,
                         .id = "vp_" + id.str(),
-                        .tiles = view.tiles,
-                        .subtile = subtile,
-                        .rota = rota,
-                        .allow_unknown = false
+                                        .tiles = view.tiles,
+                                        .subtile = subtile,
+                                        .rota = rota,
+                                        .allow_unknown = false
                     } );
                     if( info.sprite.valid || info.backdrop.valid ) {
                         main_sprite_opt = info;
@@ -943,10 +949,10 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     const auto &info = view.cache.named( {
                         .category = C_VEHICLE_PART,
                         .id = "vp_" + id.str(),
-                        .tiles = view.tiles,
-                        .subtile = subtile,
-                        .rota = rota,
-                        .allow_unknown = false
+                                        .tiles = view.tiles,
+                                        .subtile = subtile,
+                                        .rota = rota,
+                                        .allow_unknown = false
                     } );
                     if( info.sprite.valid || info.backdrop.valid ) {
                         roof_sprite_opt = info;
@@ -962,7 +968,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                    : ( best_body_spr ? best_body_spr : cell_spr );
             auto wheel_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
             const vox_asset *wheel_vox = nullptr;
-            const auto wheel_layer = std::ranges::find_if( cell.layers, []( const auto &layer ) {
+            const auto wheel_layer = std::ranges::find_if( cell.layers, []( const auto & layer ) {
                 return std::ranges::find( layer.roles, vehicle_render_role::wheel ) != layer.roles.end();
             } );
             if( wheel_layer != cell.layers.end() ) {
@@ -985,15 +991,15 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     }
                     const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
                     const auto dir_deg = static_cast<int>( std::lround( units::to_degrees(
-                                              wheel_part.direction ) ) );
+                            wheel_part.direction ) ) );
                     const auto rota = ( ( dir_deg / 90 ) % 4 + 4 ) % 4;
                     const auto &info = view.cache.named( {
                         .category = C_VEHICLE_PART,
                         .id = "vp_" + id.str(),
-                        .tiles = view.tiles,
-                        .subtile = subtile,
-                        .rota = rota,
-                        .allow_unknown = false
+                                        .tiles = view.tiles,
+                                        .subtile = subtile,
+                                        .rota = rota,
+                                        .allow_unknown = false
                     } );
                     if( info.sprite.valid || info.backdrop.valid ) {
                         wheel_sprite_opt = info;
@@ -1761,8 +1767,8 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
 
     auto in_range = [ &view ]( const tripoint_bub_ms & p, int radius ) -> bool {
         return p.z() >= view.z_lo && p.z() <= view.z_hi &&
-        std::abs( p.x() - view.center.x() ) <= radius &&
-        std::abs( p.y() - view.center.y() ) <= radius;
+                std::abs( p.x() - view.center.x() ) <= radius &&
+                std::abs( p.y() - view.center.y() ) <= radius;
     };
     auto frame_x = [ &view ]( const tripoint_bub_ms & p ) -> float {
         return static_cast<float>( p.x() - view.center.x() ) + 0.5f;
@@ -1850,15 +1856,15 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                         const auto z_base = frame_z( p ) + view.surface( p ) + 0.02f;
                         emit_vox_model( { .sink = sink, .asset = *vox_item,
                                           .transform = { .pivot_sx = frame_x( p ), .pivot_sy = frame_y( p ) },
-                                          .f_min = -size.x * anchor[0], .f_max = size.x * ( 1.0f - anchor[0] ),
-                                          .r_min = -size.y * anchor[1], .r_max = size.y * ( 1.0f - anchor[1] ),
-                                          .z_min = z_base - size.z * anchor[2],
+                                          .f_min = -size.x *anchor[0], .f_max = size.x * ( 1.0f - anchor[0] ),
+                                          .r_min = -size.y *anchor[1], .r_max = size.y * ( 1.0f - anchor[1] ),
+                                          .z_min = z_base - size.z *anchor[2],
                                           .z_max = z_base + size.z * ( 1.0f - anchor[2] ),
                                           .color = light } );
                     }
                 } else if( get_option<bool>( "R3D_VOXEL_ITEMS" ) &&
-                    profile.geometry == item_geometry::sprite_volume && !sprite.backdrop.valid &&
-                    sprite.main().alpha_mask ) {
+                           profile.geometry == item_geometry::sprite_volume && !sprite.backdrop.valid &&
+                           sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
                                           .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
                                           .color = light, .depth_fraction = profile.depth_fraction,

@@ -58,7 +58,7 @@ class gpu
         auto ready() const -> bool {
             return device_ != nullptr && block_pipeline_ != nullptr;
         }
-        auto renderer() const -> SDL_Renderer* {
+        auto renderer() const -> SDL_Renderer * {
             return renderer_;
         }
 

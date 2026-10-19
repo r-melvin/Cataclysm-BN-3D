@@ -88,7 +88,7 @@ struct tile_info {
     bool see_through = false; // transparent terrain (fences, bars): the floor shows through it
 
     /// The layer that represents the tile when only one can be drawn (upright sprites).
-    auto main() const -> const sprite_ref& {
+    auto main() const -> const sprite_ref & {
         return sprite.valid ? sprite : backdrop;
     }
 };

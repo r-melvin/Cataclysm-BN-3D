@@ -60,16 +60,16 @@ auto load_presentation_profiles( std::istream &input ) -> presentation_profile_m
         };
         if( !valid_positive_size( profile.size ) || profile.depth_fraction < 0.0f ||
             profile.depth_fraction > 4.0f ||
-            !std::ranges::all_of( profile.support_anchor, []( const float coordinate ) {
-                return coordinate >= 0.0f && coordinate <= 1.0f;
-            } ) ) {
+        !std::ranges::all_of( profile.support_anchor, []( const float coordinate ) {
+        return coordinate >= 0.0f && coordinate <= 1.0f;
+    } ) ) {
             entry.throw_error( "size and support anchor values are outside their valid range" );
         }
         if( entry.has_array( "material_regions" ) ) {
             for( const JsonObject &region : entry.get_array( "material_regions" ) ) {
                 auto material = presentation_material_region {
                     .name = region.get_string( "name" ),
-                    .role = region.get_string( "role" ),
+                                  .role = region.get_string( "role" ),
                     .palette_indices = {}
                 };
                 if( region.has_array( "palette_indices" ) ) {
@@ -79,8 +79,8 @@ auto load_presentation_profiles( std::istream &input ) -> presentation_profile_m
                     region.throw_error( "material region name must not be empty" );
                 }
                 if( std::ranges::any_of( material.palette_indices, []( const int index ) {
-                    return index <= 0 || index > 255;
-                } ) ) {
+                return index <= 0 || index > 255;
+            } ) ) {
                     region.throw_error( "palette indices must be in the range 1 to 255" );
                 }
                 profile.material_regions.push_back( std::move( material ) );

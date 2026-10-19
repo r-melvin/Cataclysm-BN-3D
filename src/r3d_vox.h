@@ -9,7 +9,8 @@
 #    include <string>
 #    include <vector>
 
-namespace r3d {
+namespace r3d
+{
 
 struct vox_color {
     uint8_t r = 255;
@@ -64,13 +65,13 @@ struct vox_surface {
 };
 
 /// Read a single-model MagicaVoxel file; malformed chunks and scene-graph files are rejected.
-auto read_vox_model(std::span<const uint8_t> bytes) -> std::expected<vox_model, std::string>;
+auto read_vox_model( std::span<const uint8_t> bytes ) -> std::expected<vox_model, std::string>;
 
 /// Return model dimensions scaled proportionally to fit within a 1x1x1 unit cube.
-auto fit_vox_model_to_unit_cube(const vox_model& model) -> vox_model_unit_size;
+auto fit_vox_model_to_unit_cube( const vox_model &model ) -> vox_model_unit_size;
 
 /// Build a greedy surface mesh, merging adjacent exterior faces with matching direction and color.
-auto extract_vox_surface(const vox_model& model) -> std::expected<vox_surface, std::string>;
+auto extract_vox_surface( const vox_model &model ) -> std::expected<vox_surface, std::string>;
 
 } // namespace r3d
 

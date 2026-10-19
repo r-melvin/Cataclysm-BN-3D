@@ -54,7 +54,6 @@ struct vehicle_render_profile {
     uint32_t light = 0;
 };
 
-
 /// Classify actual installed parts; roofs do not turn quarterpanels into full walls.
 auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> vehicle_render_profile;
 

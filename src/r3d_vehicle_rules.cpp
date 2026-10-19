@@ -135,10 +135,10 @@ auto panel_outline( const panel_outline_options &options ) -> std::vector<std::a
 auto wheel_outline( const wheel_outline_options &options ) -> std::vector<std::array<float, 2>>
 {
     const auto segments = std::max( options.segments, 3 );
-    auto result = std::vector<std::array<float, 2>>{};
+    auto result = std::vector<std::array<float, 2>> {};
     result.reserve( static_cast<size_t>( segments ) );
     for( auto index = 0; index < segments; ++index ) {
-        const auto angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>( index ) /
+        const auto angle = 2.0f * std::numbers::pi_v<float> *static_cast<float>( index ) /
                            static_cast<float>( segments );
         result.push_back( { options.center_forward + std::cos( angle ) * options.radius_forward,
                             options.center_z + std::sin( angle ) * options.radius_z } );
