@@ -1716,7 +1716,10 @@ auto draw( const draw_options &options ) -> bool
 
     auto avatar_silhouette = chunk_mesh{};
     auto draw_avatar_silhouette = static_cast<bool>( false );
-    if( get_option<bool>( "R3D_AVATAR_SILHOUETTE" ) ) {
+    // The silhouette shows the player behind walls; not while driving (the cab hides them by
+    // design) or when the player's own tile is unlit.
+    if( get_option<bool>( "R3D_AVATAR_SILHOUETTE" ) && !is_controlling &&
+        entities_view.light( you.bub_pos() ) != pack_light( 0, 0, 0 ) ) {
         // Flip the flag instead of copying the view and its upright/marker vectors.
         entities_view.avatar_only = true;
         avatar_silhouette = build_entity_mesh( entities_view );
@@ -1763,6 +1766,24 @@ auto draw( const draw_options &options ) -> bool
                                    .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
+    // Before creatures, so one standing in front of the wall covers the silhouette.
+    if( draw_avatar_silhouette ) {
+        s.device.bind_avatar_silhouette_pipeline();
+        const auto silhouette_toward = vec3( normalize( s.cam.eye() - s.cam.stretched_target() ) );
+        uniforms.offset[0] = 0.0f;
+        uniforms.offset[1] = 0.0f;
+        uniforms.offset[2] = 0.0f;
+        uniforms.pull[0] = silhouette_toward.x;
+        uniforms.pull[1] = silhouette_toward.y;
+        uniforms.pull[2] = silhouette_toward.z / s.cam.z_scale;
+        uniforms.pull[3] = max_billboard_pull;
+        uniforms.cut[3] = 0.0f;
+        for( const mesh_batch &b : avatar_silhouette.batches ) {
+            s.device.draw_block( { .positions = s.silhouette.positions, .lights = s.silhouette.lights,
+                                   .indices = s.silhouette.indices, .first_index = b.first_index,
+                                   .index_count = b.index_count, .sheet = b.sheet, .uniforms = uniforms } );
+        }
+    }
     if( draw_entities ) {
         s.device.bind_entity_pipeline();
         uniforms.cut[3] = 0.0f; // creatures in front of the player stay
@@ -1779,23 +1800,6 @@ auto draw( const draw_options &options ) -> bool
         for( const mesh_batch &b : entities.batches ) {
             s.device.draw_block( { .positions = s.dyn.positions, .lights = s.dyn.lights, .indices = s.dyn.indices, .first_index = b.first_index, .index_count = b.index_count,
                                    .sheet = b.sheet, .uniforms = uniforms } );
-        }
-    }
-    if( draw_avatar_silhouette ) {
-        s.device.bind_avatar_silhouette_pipeline();
-        const auto silhouette_toward = vec3( normalize( s.cam.eye() - s.cam.stretched_target() ) );
-        uniforms.offset[0] = 0.0f;
-        uniforms.offset[1] = 0.0f;
-        uniforms.offset[2] = 0.0f;
-        uniforms.pull[0] = silhouette_toward.x;
-        uniforms.pull[1] = silhouette_toward.y;
-        uniforms.pull[2] = silhouette_toward.z / s.cam.z_scale;
-        uniforms.pull[3] = max_billboard_pull;
-        uniforms.cut[3] = 0.0f;
-        for( const mesh_batch &b : avatar_silhouette.batches ) {
-            s.device.draw_block( { .positions = s.silhouette.positions, .lights = s.silhouette.lights,
-                                   .indices = s.silhouette.indices, .first_index = b.first_index,
-                                   .index_count = b.index_count, .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
     SDL_Texture *const result = s.device.end_frame();
