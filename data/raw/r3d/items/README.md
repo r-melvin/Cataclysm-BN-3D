@@ -23,6 +23,8 @@ that touches the ground. Each profile names a `category` and exact asset `id`;
 `size` is `[forward, right, up]` in map-tile units, and `support_anchor` is the
 same three axes in normalized model coordinates. An omitted or zero size axis
 keeps the model's inferred sprite or VOX dimension. `depth_fraction` controls
-sprite silhouette extrusion. `material_regions` names palette-index groups for
+sprite silhouette extrusion; when set it takes precedence over the depth implied
+by `size` (right / forward), which applies only if `depth_fraction` is omitted
+or zero and both axes are authored. `material_regions` names palette-index groups for
 the art gallery and future material-aware rendering. The comparison capture
 copies this file into its art assets so profile values remain reproducible.

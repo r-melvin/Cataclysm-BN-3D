@@ -72,7 +72,9 @@ Authored asset proportions and contact points are defined in
 ID, gives optional forward/right/up dimensions in map tiles, and marks the
 normalized point that should touch its support surface. Zero dimensions retain
 the inferred sprite or VOX size. Sprite depth can be specified directly with a
-right-axis size or as a width-relative `depth_fraction`. Material-region names
+right-axis size or as a width-relative `depth_fraction`; an authored
+`depth_fraction` takes precedence over the depth implied by `size` (right /
+forward), which in turn overrides the built-in default. Material-region names
 and VOX palette slots are included for authoring and comparison; they are
 currently shown as annotations in the gallery rather than changing palette
 colors. Comparison packages preserve the profile file and render a scaled top

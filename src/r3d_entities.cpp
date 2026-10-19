@@ -1798,13 +1798,11 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                               presentation_profile_map::const_iterator {};
                 const auto has_authored_profile = view.presentation_profiles &&
                                                   authored_profile != view.presentation_profiles->end();
-                if( has_authored_profile && authored_profile->second.depth_fraction > 0.0f ) {
-                    profile.depth_fraction = authored_profile->second.depth_fraction;
-                }
-                if( has_authored_profile && authored_profile->second.size[0] > 0.0f &&
-                    authored_profile->second.size[1] > 0.0f ) {
-                    profile.depth_fraction = authored_profile->second.size[1] /
-                                             authored_profile->second.size[0];
+                if( has_authored_profile ) {
+                    profile.depth_fraction = resolve_item_depth_fraction( {
+                        .fallback = profile.depth_fraction,
+                        .authored_fraction = authored_profile->second.depth_fraction,
+                        .size = authored_profile->second.size } );
                 }
                 const vox_asset *vox_item = nullptr;
                 if( view.item_vox_models ) {

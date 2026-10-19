@@ -24,4 +24,15 @@ auto item_profile( std::string_view id ) -> item_render_profile
     return { .geometry = item_geometry::sprite_volume, .depth_fraction = default_depth };
 }
 
+auto resolve_item_depth_fraction( const item_depth_options &options ) -> float
+{
+    if( options.authored_fraction > 0.0f ) {
+        return options.authored_fraction;
+    }
+    if( options.size[0] > 0.0f && options.size[1] > 0.0f ) {
+        return options.size[1] / options.size[0];
+    }
+    return options.fallback;
+}
+
 } // namespace r3d
