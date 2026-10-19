@@ -26,5 +26,6 @@ keeps the model's inferred sprite or VOX dimension. `depth_fraction` controls
 sprite silhouette extrusion; when set it takes precedence over the depth implied
 by `size` (right / forward), which applies only if `depth_fraction` is omitted
 or zero and both axes are authored. `material_regions` names palette-index groups for
-the art gallery and future material-aware rendering. The comparison capture
+the art gallery and future material-aware rendering; the renderer currently
+ignores these annotations. The comparison capture
 copies this file into its art assets so profile values remain reproducible.

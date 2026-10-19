@@ -5,7 +5,8 @@
 #include <string>
 
 TEST_CASE(
-    "r3d_presentation_profiles_load_shared_dimensions_anchors_and_materials", "[r3d][profiles]") {
+    "r3d_presentation_profiles_load_dimensions_and_anchors_alongside_gallery_metadata",
+    "[r3d][profiles]") {
     auto input = std::istringstream(R"({
         "version": 1,
         "profiles": [{
@@ -26,23 +27,12 @@ TEST_CASE(
     CHECK(profile.size[2] == Approx(0.86f));
     CHECK((profile.support_anchor == std::array<float, 3>{0.5f, 0.5f, 0.0f}));
     CHECK(profile.depth_fraction == Approx(0.38f));
-    REQUIRE(profile.material_regions.size() == 1);
-    CHECK(profile.material_regions.front().name == "tank_shell");
-    CHECK(profile.material_regions.front().role == "painted metal");
-    CHECK((profile.material_regions.front().palette_indices == std::vector<int>{1, 2}));
 }
 
-TEST_CASE("r3d_presentation_profiles_reject_invalid_anchors_and_palette_slots", "[r3d][profiles]") {
+TEST_CASE("r3d_presentation_profiles_reject_invalid_anchors", "[r3d][profiles]") {
     const auto invalid_anchor = std::string(R"({ "version": 1, "profiles": [{
         "category": "item", "id": "bad", "support_anchor": [1.1, 0.5, 0]
     }] })");
     auto anchor_input = std::istringstream(invalid_anchor);
     CHECK_THROWS(r3d::load_presentation_profiles(anchor_input));
-
-    auto palette_input = std::istringstream(R"({ "version": 1, "profiles": [{
-        "category": "item", "id": "bad", "material_regions": [{
-            "name": "shell", "palette_indices": [0]
-        }]
-    }] })");
-    CHECK_THROWS(r3d::load_presentation_profiles(palette_input));
 }

@@ -198,8 +198,7 @@ TEST_CASE(
     const auto authored = r3d::build_entity_mesh(view);
     const auto profiles = r3d::presentation_profile_map{
         {"item:carbondioxide_tank",
-         {.size = {0.48f, 0.34f, 0.5f}, .support_anchor = {0.25f, 0.75f, 0.2f},
-          .material_regions = {}}}};
+         {.size = {0.48f, 0.34f, 0.5f}, .support_anchor = {0.25f, 0.75f, 0.2f}}}};
     view.presentation_profiles = &profiles;
     const auto profiled = r3d::build_entity_mesh(view);
     get_options().get_option("R3D_VOXEL_ITEMS").setValue("false");

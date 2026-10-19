@@ -1,9 +1,7 @@
 #include "r3d_presentation_profiles.h"
 
 #include <algorithm>
-#include <ranges>
 #include <stdexcept>
-#include <string_view>
 #include <utility>
 
 #include "json.h"
@@ -55,8 +53,7 @@ auto load_presentation_profiles( std::istream &input ) -> presentation_profile_m
         auto profile = presentation_profile {
             .size = read_vec3( entry, "size", {} ),
             .support_anchor = read_vec3( entry, "support_anchor", { 0.5f, 0.5f, 0.0f } ),
-            .depth_fraction = static_cast<float>( entry.get_float( "depth_fraction", 0.0 ) ),
-            .material_regions = {}
+            .depth_fraction = static_cast<float>( entry.get_float( "depth_fraction", 0.0 ) )
         };
         if( !valid_positive_size( profile.size ) || profile.depth_fraction < 0.0f ||
             profile.depth_fraction > 4.0f ||
@@ -65,26 +62,9 @@ auto load_presentation_profiles( std::istream &input ) -> presentation_profile_m
     } ) ) {
             entry.throw_error( "size and support anchor values are outside their valid range" );
         }
-        if( entry.has_array( "material_regions" ) ) {
-            for( const JsonObject &region : entry.get_array( "material_regions" ) ) {
-                auto material = presentation_material_region {
-                    .name = region.get_string( "name" ),
-                                  .role = region.get_string( "role" ),
-                    .palette_indices = {}
-                };
-                if( region.has_array( "palette_indices" ) ) {
-                    material.palette_indices = region.get_int_array( "palette_indices" );
-                }
-                if( material.name.empty() ) {
-                    region.throw_error( "material region name must not be empty" );
-                }
-                if( std::ranges::any_of( material.palette_indices, []( const int index ) {
-                return index <= 0 || index > 255;
-            } ) ) {
-                    region.throw_error( "palette indices must be in the range 1 to 255" );
-                }
-                profile.material_regions.push_back( std::move( material ) );
-            }
+        // Gallery annotations stay in the shared JSON, but have no runtime material consumer.
+        if( entry.has_member( "material_regions" ) ) {
+            static_cast<void>( entry.get_member( "material_regions" ) );
         }
         profiles.insert_or_assign( presentation_profile_key( category, id ), std::move( profile ) );
     }

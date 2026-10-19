@@ -6,23 +6,15 @@
 #include <istream>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 namespace r3d
 {
 
-struct presentation_material_region {
-    std::string name;
-    std::string role;
-    std::vector<int> palette_indices;
-};
-
-/// Authored proportions and contact/material annotations shared by the renderer and art gallery.
+/// Runtime proportions and contact anchors from the profiles shared with the art gallery.
 struct presentation_profile {
     std::array<float, 3> size{}; // forward, right, up in map-tile units; zero means infer
     std::array<float, 3> support_anchor{ 0.5f, 0.5f, 0.0f }; // normalized model coordinates
     float depth_fraction = 0.0f; // sprite extrusion depth as a fraction of its width
-    std::vector<presentation_material_region> material_regions;
 };
 
 using presentation_profile_map = std::unordered_map<std::string, presentation_profile>;
