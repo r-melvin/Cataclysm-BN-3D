@@ -73,34 +73,12 @@ so parts on different levels overwrite each other. Key cells by the full mount,
 offset each cell's geometry by its mount z, and make the neighbour lookups
 (walls, trim, bumpers, roofs) level-aware.
 
-## Find why vehicle meshes differ between runs
-
-With a seeded RNG, `build_vehicle_mesh` for the same spawned vehicle gives the
-same vertex counts but different vertex positions on each run of the same
-binary. Find the source (atlas-dependent sprite trim bounds, uninitialised
-data, or unordered container iteration) and make geometry deterministic so
-vehicle geometry can be regression-tested by hash.
-
-## Measure 3D renderer frame cost
-
-Record `CATA_R3D_DEBUG_CHUNKS=1` frame timings for a parked vehicle, a moving
-vehicle and a crowded scene. Use them to decide whether per-vehicle mesh
-caching (deferred; see
-[`r3d_review_2026_10.md`](docs/en/dev/research/r3d_review_2026_10.md)) or other
-per-frame work is worth optimising.
-
 ## Visual regression checks for the 3D renderer
 
 Turn the comparison captures in `tools/r3d_spike/` into screenshot diffs of a
 few fixed scenes (vehicles with roofs, wheels and shaped panels; voxel items;
 the avatar silhouette), so geometry refactors such as merging the front and
 rear windshield paths can be checked without manual play.
-
-## Confirm CI runs the `[r3d]` tests
-
-Locally the tests only start with `CATA_TEST_COMPUTE_ACCELERATION=cpu`. Check
-whether CI hits the same SDL_GPU initialisation failure and silently skips
-them; set the variable in CI if so.
 
 ## Fix `vehicle_profile` classification quirks
 

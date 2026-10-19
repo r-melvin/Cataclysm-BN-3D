@@ -102,6 +102,7 @@ deno task dprint fmt
 
 - **astyle version (all agents, including Codex)**: astyle 3.6.x mis-indents the body of every function with a trailing return type (`auto f() -> void { ... }` bodies drop to column 0), so `cmake --build build --target format` and plain `astyle` corrupt `src/*.cpp`. Format top-level C++ with astyle 3.4.7 instead: `uvx --from astyle-py python tools/r3d_spike/astyle_347.py <files>`. Check `astyle --version` before using the system binary; never commit a diff that moves function bodies to column 0.
 - **Local build quirks**: if `mold` is missing, configure with `cmake --preset linux-full -DLINKER=lld` (re-running the preset without it resets the linker). If SDL_GPU device creation fails in tests, run them with `CATA_TEST_COMPUTE_ACCELERATION=cpu`.
+- **No CI on this fork**: GitHub Actions does not run here. Before pushing renderer changes, run `CATA_TEST_COMPUTE_ACCELERATION=cpu ./out/build/linux-full/tests/cata_test-tiles "[r3d]"` locally and report the result; do not wait on `gh pr checks`.
 - **3D renderer findings**: see [r3d review and status](./docs/en/dev/research/r3d_review_2026_10.md) for known renderer defects, deferred work and `vehicle_profile` quirks before changing `src/r3d_*`.
 
 - **Verify**: Build and fix any issues. Do not skip the game binary target when validating code changes; build `cataclysm-bn-tiles` together with tests.

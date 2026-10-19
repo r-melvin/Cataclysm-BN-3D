@@ -65,8 +65,9 @@ behind creatures; cargo tiles use the chassis floor), 6, and most of 4–5.
 
 Open:
 
-- Vehicle mesh caching: deferred until a frame-time measurement (`CATA_R3D_DEBUG_CHUNKS=1`) shows the vehicle
-  build matters; a correct cache key covers view centre, per-tile light, vehicle state and options.
+- Vehicle mesh caching: dropped. Measured on RelWithDebInfo, five vehicles (car, pickup, SUV, bus, semi;
+  ~9k vertices) build in 0.46 ms per frame and the entity mesh in 0.21 ms, about 3% of a 60 fps frame. GPU
+  submission was not measured (needs interactive play).
 - Front/rear windshield merge: left as is; the side-cheek winding differs between them and only one test
   covers that geometry.
 - Multi-level vehicles: moved to `BACKLOG.md`.
@@ -74,3 +75,7 @@ Open:
   as interior, and the corner of a mount with two shaped panels depends on install order.
 - Local astyle 3.6.19 mis-indents functions with trailing return types; format r3d sources with
   `tools/r3d_spike/astyle_347.py` (astyle 3.4.7).
+- Mesh determinism (checked): the same seeded vehicle yields the same quads every run; only their order
+  changes, because `quad_sink::finish` sorts by texture-sheet pointer. Geometry regression checks must compare
+  quads as a sorted set, not hash the raw vertex buffer. Unseeded vehicle spawns also vary (random damage).
+- CI: GitHub Actions has never run on this fork and will not (no paid CI). `[r3d]` tests run locally only.
