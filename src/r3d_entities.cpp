@@ -870,11 +870,14 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
         }
 
         auto cells = std::map<point, vehicle_render_profile> {};
-        // A vehicle is one rigid model: once any mount is visible, retain all its parts.
-        const auto is_visible = std::ranges::any_of( occupied_mounts, [&]( const auto & mount ) {
+        // Terrain memory and unexplored-room tints do not establish live vehicle visibility.
+        const auto mount_visible = [&]( const auto & mount ) {
             const auto p = veh.mount_to_bubble( mount );
-            return here.inbounds( p ) && view.light( p ) != pack_light( 0, 0, 0 );
-        } );
+            return here.inbounds( p ) && ( view.vehicle_mount_visible ?
+                                           view.vehicle_mount_visible( p ) : view.light( p ) != pack_light( 0, 0, 0 ) );
+        };
+        // Preserve the rigid model once a mount is actually perceived.
+        const auto is_visible = std::ranges::any_of( occupied_mounts, mount_visible );
         if( !is_visible ) { continue; }
         for( const auto &mount : occupied_mounts ) {
             const auto p = veh.mount_to_bubble( mount );
@@ -1572,7 +1575,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             }
 
             // 4. Cargo Highlight
-            if( cell.main_part_idx >= 0 ) {
+            if( cell.main_part_idx >= 0 && mount_visible( cell.mount ) ) {
                 const auto cargo = vpart_position( veh, cell.main_part_idx ).part_with_feature( "CARGO", true );
                 if( cargo && !veh.get_items( cargo->part_index() ).empty() ) {
                     const auto &highlight = view.cache.named( { .category = C_NONE, .id = "highlight", .tiles = view.tiles } );

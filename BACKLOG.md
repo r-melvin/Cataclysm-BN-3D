@@ -168,16 +168,34 @@ Sources: [diagnostics](docs/en/dev/guides/renderer_3d.md),
 
 ## R3D-09: Audit complete-vehicle visibility and knowledge boundaries
 
-**Status: correctness investigation, not a confirmed visibility fix.** Once a
-mount is renderable, the renderer retains the rigid vehicle and dims unlit
-mounts. Tests establish completeness, not that unknown parts behind blockers
-can never be disclosed.
+**Status: partial correctness fix implemented; acceptance/information policy
+still open.** Live vehicle activation now uses BN's `map::pl_sees` perception
+cache, rather than presentation RGB. Memory, unexplored-room tints and detectable
+bright light cannot activate an otherwise unseen vehicle. Perceived low-light
+mounts can activate it independently of tint. Cargo-content markers require
+current perception at their own mount. The explicit fullbright debug override
+is retained. A real map/vehicle regression test covers these distinctions.
+
+The existing complete rigid-body model and dim unlit mounts are preserved once
+a mount is perceived. This does not prove that previously unknown structural
+details behind blockers cannot be disclosed. Review that continuity policy
+alongside native 2D's live-vehicle-outside-FOV presentation before changing it;
+the new activation/content fixes do not close this audit.
 
 Distinguish dark-but-visible, remembered and unknown tiles using BN knowledge
 contracts. Check opaque blockers, map edges, partial sight, night vision and
 unseen contents with R3D-07 fixtures. Preserve legitimate model continuity
 without exposing unavailable information. Do not equate black light with
 unknown terrain or silently change game rules.
+
+The seeded combined `[r3d],[vision]` run exposed four native vision failures:
+`vision_wall_obstructs_light`, `vision_single_tile_skylight`,
+`vision_see_out_of_vehicle`, and `vision_see_into_vehicle`. Rebuilding committed
+`698f3c7` without the visibility changes reproduced the same 14 failed assertions
+in the same four cases (`--rng-seed 0`). Investigate those native visibility
+expectations independently; do not suppress them or change BN perception to
+make the renderer test green. Private logs: `/tmp/bn-backlog-visibility-baseline-tests.log`
+and `/tmp/bn-backlog-renderer-vision-tests.log` (temporary evidence).
 
 Source: [vehicle visibility research](docs/en/dev/research/vehicle_rendering_research.md).
 

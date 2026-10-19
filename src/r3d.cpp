@@ -1732,7 +1732,11 @@ auto draw( const draw_options &options ) -> bool
     -> float {
         return surface_height( s, here, p );
     }, .vehicle_vox_parts = &s.vehicle_vox_parts, .item_vox_models = &s.item_vox_models,
-    .presentation_profiles = &s.presentation_profiles };
+    .presentation_profiles = &s.presentation_profiles, .vehicle_mount_visible = [&here]( const tripoint_bub_ms & p )
+    {
+        static const auto fullbright = static_cast<bool>( std::getenv( "CATA_R3D_FULLBRIGHT" ) != nullptr );
+        return here.inbounds( p ) && ( fullbright || here.pl_sees( p, -1 ) );
+    } };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
     {
         const auto queued = cata_tiles::frame_markers( tilecontext->get_frame_markers() );

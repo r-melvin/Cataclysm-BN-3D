@@ -37,7 +37,7 @@ struct entity_view {
     tripoint_bub_ms center; // the viewed tile, which is the origin of the scene frame
     int z_lo = 0;
     int z_hi = 0;
-    /// Light colour (RGBA8, see pack_light) of a tile; black means it cannot be seen.
+    /// Presentation colour (RGBA8); may include remembered or unexplored terrain tints.
     std::function<uint32_t( const tripoint_bub_ms & )> light;
 
     /// UI marker (cursor, highlight, line) laid on top of a tile's surface, always unlit.
@@ -67,6 +67,9 @@ struct entity_view {
     const presentation_profile_map *presentation_profiles = nullptr;
     /// Build only the avatar's existing sprite layers for the occlusion-silhouette pass.
     bool avatar_only = false;
+    /// Current BN perception, separate from terrain tint. Required by live vehicle views;
+    /// synthetic mesh fixtures may omit this and use their supplied light instead.
+    std::function<bool( const tripoint_bub_ms & )> vehicle_mount_visible = {};
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.

@@ -473,6 +473,8 @@ TEST_CASE("r3d_surface_height_follows_floor_parts_not_frames_or_panels", "[r3d][
 #if defined(TILES)
 #    include "cata_tiles.h"
 #    include "cata_utility.h"
+#    include "game.h"
+#    include "item.h"
 #    include "map/map.h"
 #    include "map_helpers.h"
 #    include "path_info.h"
@@ -667,5 +669,74 @@ TEST_CASE("r3d_adjacent_shaped_panels_skip_shared_side_walls", "[r3d][vehicle][t
     const auto adjacent = mesh_vertices(1);
     REQUIRE(apart > 0);
     CHECK(adjacent < apart);
+}
+TEST_CASE(
+    "r3d_live_vehicle_visibility_uses_perception_not_terrain_tint",
+    "[r3d][vehicle][tiles][visibility]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto& here = get_map();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    g->place_player(origin + point_west);
+    auto* const veh = here.add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh != nullptr);
+    for (auto x = 0; x < 3; ++x) {
+        REQUIRE(
+            veh->install_part(tripoint_mnt_veh(x, 0, 0), vpart_id("frame_horizontal"), true) >= 0);
+    }
+    const auto cargo_index = veh->install_part(tripoint_mnt_veh(2, 0, 0), vpart_id("trunk"), true);
+    REQUIRE(cargo_index >= 0);
+    here.build_map_cache(0);
+    here.update_visibility_cache(0);
+    REQUIRE(here.get_visibility_variables_cache().variables_set);
+    auto& perception = here.access_cache(0);
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    auto tint = r3d::pack_light(255, 255, 255);
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [&tint](const tripoint_bub_ms& /*p*/) { return tint; },
+        .markers = {},
+        .uprights = {},
+        .surface = {},
+        .vehicle_mount_visible = [&here](const tripoint_bub_ms& p) { return here.pl_sees(p, -1); }};
+    // Bright-only means the player detects light there, not the vehicle itself.
+    for (const auto level :
+         {lit_level::DARK, lit_level::MEMORIZED, lit_level::BLANK, lit_level::BRIGHT_ONLY}) {
+        std::ranges::fill(perception.visibility_cache, level);
+        for (const auto color :
+             {r3d::pack_light(255, 255, 255), r3d::pack_light(205, 188, 160),
+              r3d::pack_light(1, 1, 1)}) {
+            tint = color;
+            CHECK(r3d::build_vehicle_mesh(view).empty());
+        }
+    }
+    std::ranges::fill(perception.visibility_cache, lit_level::DARK);
+    perception.visibility_cache[perception.idx(origin.x(), origin.y())] = lit_level::LOW;
+    // Perceived low-light geometry remains even if its presentation colour is black.
+    tint = r3d::pack_light(0, 0, 0);
+    const auto partial = r3d::build_vehicle_mesh(view);
+    REQUIRE_FALSE(partial.empty());
+    std::ranges::fill(perception.visibility_cache, lit_level::LIT);
+    const auto full = r3d::build_vehicle_mesh(view);
+    CHECK(partial.vertices.size() == full.vertices.size());
+    CHECK(partial.indices == full.indices);
+    std::ranges::fill(perception.visibility_cache, lit_level::DARK);
+    perception.visibility_cache[perception.idx(origin.x(), origin.y())] = lit_level::LOW;
+    REQUIRE_FALSE(veh->add_item(cargo_index, item::spawn("rock")));
+    // Contents cannot change the presentation of an unseen cargo mount.
+    const auto hidden_cargo = r3d::build_vehicle_mesh(view);
+    CHECK(hidden_cargo.vertices.size() == partial.vertices.size());
+    CHECK(hidden_cargo.indices == partial.indices);
+    const auto cargo_pos = veh->mount_to_bubble(tripoint_mnt_veh(2, 0, 0));
+    perception.visibility_cache[perception.idx(cargo_pos.x(), cargo_pos.y())] = lit_level::LOW;
+    CHECK(r3d::build_vehicle_mesh(view).vertices.size() > hidden_cargo.vertices.size());
 }
 #endif
