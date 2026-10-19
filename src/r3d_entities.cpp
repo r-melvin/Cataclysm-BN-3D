@@ -1253,70 +1253,47 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         sink.add_colored( { .sprite = s, .corners = cheek_c, .uvs = solid_uv, .ref = light_ref{}, .color = cheek_col } );
                     }
                 }
-            } else if( is_front_bumper && main_sprite_opt.has_value() && main_sprite_opt->get().main().valid ) {
-                // Front bumper tile: flat section + beveled nose to vehicle_bumper_h with outer corner chamfer
+            } else if( ( is_front_bumper || is_rear_bumper ) && main_sprite_opt.has_value() &&
+                       main_sprite_opt->get().main().valid ) {
+                // Bumper tile: flat section + bevel down to vehicle_bumper_h at the outer end, with
+                // the outer corners chamfered. Quads list the forward edge first either way.
                 const auto &ms = main_sprite_opt->get().main();
-                const auto f_rear_bumper = f_bot;
-                const auto f_front_bumper = f_top;
-                const auto f_bevel = f_top - ( f_top - f_bot ) * 0.30f;
-                const auto is_chamfer_r = ( cell.mount.y() == max_y_front );
-                const auto is_chamfer_l = ( cell.mount.y() == min_y_front );
-                const auto front_r_x = is_chamfer_r ? ( f_front_bumper - 0.10f ) : f_front_bumper;
-                const auto front_r_y = is_chamfer_r ? ( r_r - 0.10f ) : r_r;
-                const auto front_l_x = is_chamfer_l ? ( f_front_bumper - 0.10f ) : f_front_bumper;
-                const auto front_l_y = is_chamfer_l ? ( r_l + 0.10f ) : r_l;
-
-                // Flat rear section
-                const auto p0 = transform.apply( f_bevel, r_l );
-                const auto p1 = transform.apply( f_bevel, r_r );
-                const auto p2 = transform.apply( f_rear_bumper, r_r );
-                const auto p3 = transform.apply( f_rear_bumper, r_l );
-                const auto c_flat = corners_t{{
-                        { p0.x, p0.y, z_base + vehicle_body_h }, { p1.x, p1.y, z_base + vehicle_body_h },
-                        { p2.x, p2.y, z_base + vehicle_body_h }, { p3.x, p3.y, z_base + vehicle_body_h }
-                    }};
-                sink.add_colored( { .sprite = ms, .corners = c_flat, .uvs = make_sprite_uvs( ms ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
-
-                // Beveled front nose down to vehicle_bumper_h
-                const auto p_front_l = transform.apply( front_l_x, front_l_y );
-                const auto p_front_r = transform.apply( front_r_x, front_r_y );
-                const auto c_bevel = corners_t{{
-                        { p_front_l.x, p_front_l.y, z_base + vehicle_bumper_h }, { p_front_r.x, p_front_r.y, z_base + vehicle_bumper_h },
-                        { p1.x, p1.y, z_base + vehicle_body_h }, { p0.x, p0.y, z_base + vehicle_body_h }
-                    }};
-                sink.add_colored( { .sprite = ms, .corners = c_bevel, .uvs = make_sprite_uvs( ms ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
-            } else if( is_rear_bumper && main_sprite_opt.has_value() && main_sprite_opt->get().main().valid ) {
-                // Rear bumper tile: flat section + beveled tail to vehicle_bumper_h with outer corner chamfer
-                const auto &ms = main_sprite_opt->get().main();
-                const auto f_front_bumper = f_top;
-                const auto f_rear_bumper = f_bot;
-                const auto f_bevel = f_bot + ( f_top - f_bot ) * 0.30f;
-                const auto is_chamfer_r = ( cell.mount.y() == max_y_rear );
-                const auto is_chamfer_l = ( cell.mount.y() == min_y_rear );
-                const auto rear_r_x = is_chamfer_r ? ( f_rear_bumper + 0.10f ) : f_rear_bumper;
-                const auto rear_r_y = is_chamfer_r ? ( r_r - 0.10f ) : r_r;
-                const auto rear_l_x = is_chamfer_l ? ( f_rear_bumper + 0.10f ) : f_rear_bumper;
-                const auto rear_l_y = is_chamfer_l ? ( r_l + 0.10f ) : r_l;
-
-                // Flat front section
-                const auto p0 = transform.apply( f_front_bumper, r_l );
-                const auto p1 = transform.apply( f_front_bumper, r_r );
-                const auto p2 = transform.apply( f_bevel, r_r );
-                const auto p3 = transform.apply( f_bevel, r_l );
-                const auto c_flat = corners_t{{
-                        { p0.x, p0.y, z_base + vehicle_body_h }, { p1.x, p1.y, z_base + vehicle_body_h },
-                        { p2.x, p2.y, z_base + vehicle_body_h }, { p3.x, p3.y, z_base + vehicle_body_h }
-                    }};
-                sink.add_colored( { .sprite = ms, .corners = c_flat, .uvs = make_sprite_uvs( ms ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
-
-                // Beveled rear tail down to vehicle_bumper_h
-                const auto p_rear_l = transform.apply( rear_l_x, rear_l_y );
-                const auto p_rear_r = transform.apply( rear_r_x, rear_r_y );
-                const auto c_bevel = corners_t{{
-                        { p3.x, p3.y, z_base + vehicle_body_h }, { p2.x, p2.y, z_base + vehicle_body_h },
-                        { p_rear_r.x, p_rear_r.y, z_base + vehicle_bumper_h }, { p_rear_l.x, p_rear_l.y, z_base + vehicle_bumper_h }
-                    }};
-                sink.add_colored( { .sprite = ms, .corners = c_bevel, .uvs = make_sprite_uvs( ms ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
+                const auto dir = is_front_bumper ? 1.0f : -1.0f;
+                const auto f_end = is_front_bumper ? f_top : f_bot;
+                const auto f_base = is_front_bumper ? f_bot : f_top;
+                const auto f_bevel = f_end - ( f_end - f_base ) * 0.30f;
+                const auto is_chamfer_r = cell.mount.y() == ( is_front_bumper ? max_y_front : max_y_rear );
+                const auto is_chamfer_l = cell.mount.y() == ( is_front_bumper ? min_y_front : min_y_rear );
+                const auto end_r = transform.apply( is_chamfer_r ? f_end - dir * 0.10f : f_end,
+                                                    is_chamfer_r ? r_r - 0.10f : r_r );
+                const auto end_l = transform.apply( is_chamfer_l ? f_end - dir * 0.10f : f_end,
+                                                    is_chamfer_l ? r_l + 0.10f : r_l );
+                const auto bevel_l = transform.apply( f_bevel, r_l );
+                const auto bevel_r = transform.apply( f_bevel, r_r );
+                const auto base_l = transform.apply( f_base, r_l );
+                const auto base_r = transform.apply( f_base, r_r );
+                const auto body_z = static_cast<float>( z_base + vehicle_body_h );
+                const auto bumper_z = static_cast<float>( z_base + vehicle_bumper_h );
+                const auto emit_quad = [&]( const corners_t &c ) {
+                    sink.add_colored( { .sprite = ms, .corners = c, .uvs = make_sprite_uvs( ms ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
+                };
+                const auto flat_hi = std::array{ is_front_bumper ? bevel_l : base_l, is_front_bumper ? bevel_r : base_r };
+                const auto flat_lo = std::array{ is_front_bumper ? base_l : bevel_l, is_front_bumper ? base_r : bevel_r };
+                emit_quad( corners_t{{
+                        { flat_hi[0].x, flat_hi[0].y, body_z }, { flat_hi[1].x, flat_hi[1].y, body_z },
+                        { flat_lo[1].x, flat_lo[1].y, body_z }, { flat_lo[0].x, flat_lo[0].y, body_z }
+                    }} );
+                if( is_front_bumper ) {
+                    emit_quad( corners_t{{
+                            { end_l.x, end_l.y, bumper_z }, { end_r.x, end_r.y, bumper_z },
+                            { bevel_r.x, bevel_r.y, body_z }, { bevel_l.x, bevel_l.y, body_z }
+                        }} );
+                } else {
+                    emit_quad( corners_t{{
+                            { bevel_l.x, bevel_l.y, body_z }, { bevel_r.x, bevel_r.y, body_z },
+                            { end_r.x, end_r.y, bumper_z }, { end_l.x, end_l.y, bumper_z }
+                        }} );
+                }
             } else if( cell.show_roof && cell.has_roof ) {
                 // 1a. Emit interior floor and parts under the roof
                 if( main_sprite_opt.has_value() && main_sprite_opt->get().main().valid ) {
