@@ -131,10 +131,18 @@ TEST_CASE("r3d_vehicle_profile_preserves_semantic_part_layers", "[r3d][vehicle]"
 #    include "cata_utility.h"
 #    include "map/map.h"
 #    include "map_helpers.h"
+#    include "path_info.h"
 #    include "r3d_entities.h"
 #    include "sdltiles.h"
 #    include "state_helpers.h"
 #    include "tile_helpers.h"
+
+#    include <cstdint>
+#    include <fstream>
+#    include <iterator>
+#    include <string>
+#    include <unordered_map>
+#    include <vector>
 
 TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle][tiles]") {
     const auto cleanup = on_out_of_scope([] { clear_all_state(); });
@@ -191,6 +199,22 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
                     && vertex.v >= wheel_art.v0 && vertex.v <= wheel_art.v1;
             })
         >= 100);
+    const auto vox_path = PATH_INFO::datadir() + "raw/r3d/vehicle_parts/wheel.vox";
+    auto vox_input = std::ifstream(vox_path, std::ios::binary);
+    REQUIRE(vox_input.good());
+    const auto vox_bytes = std::vector<uint8_t>(std::istreambuf_iterator<char>(vox_input), {});
+    const auto vox_model = r3d::read_vox_model(vox_bytes);
+    REQUIRE(vox_model.has_value());
+    const auto vox_surface = r3d::extract_vox_surface(*vox_model);
+    REQUIRE(vox_surface.has_value());
+    auto vox_palette = r3d::sprite_ref{};
+    vox_palette.valid = true;
+    const auto wheel_models = std::unordered_map<std::string, r3d::vox_asset>{
+        {"wheel", {.model = *vox_model, .surface = *vox_surface, .palette = vox_palette}}};
+    view.vehicle_vox_parts = &wheel_models;
+    const auto voxel_wheeled = r3d::build_vehicle_mesh(view);
+    CHECK(voxel_wheeled.vertices.size() > wheeled.vertices.size());
+    CHECK(voxel_wheeled.indices.size() > wheeled.indices.size());
     const auto& roof_art =
         cache.named({.category = C_VEHICLE_PART, .id = "vp_roof", .tiles = *tilecontext}).main();
     REQUIRE(roof_art.valid);

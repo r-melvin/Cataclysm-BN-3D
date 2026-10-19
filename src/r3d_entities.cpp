@@ -967,7 +967,15 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             } );
             if( wheel_layer != cell.layers.end() ) {
                 auto modifier = char{ 0 };
-                const auto &id = veh.part_id_string( wheel_layer->part_idx, false, modifier );
+                const auto wheel_idx = wheel_layer->part_idx;
+                const auto &wheel_part = veh.cpart( wheel_idx );
+                const auto &id = wheel_part.proxy_part_id.is_null() ? veh.part_info( wheel_idx ).id :
+                                 wheel_part.proxy_part_id;
+                if( veh.part_flag( wheel_idx, "OPENABLE" ) && wheel_part.open ) {
+                    modifier = 1;
+                } else if( wheel_part.is_broken() ) {
+                    modifier = 2;
+                }
                 if( !id.is_null() ) {
                     if( view.vehicle_vox_parts ) {
                         const auto vox_part = view.vehicle_vox_parts->find( id.str() );
@@ -975,7 +983,6 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             wheel_vox = &vox_part->second;
                         }
                     }
-                    const auto &wheel_part = veh.cpart( wheel_layer->part_idx );
                     const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
                     const auto dir_deg = static_cast<int>( std::lround( units::to_degrees(
                                               wheel_part.direction ) ) );
