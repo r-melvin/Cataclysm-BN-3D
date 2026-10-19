@@ -30,6 +30,13 @@ and eight orthographic 3D poses at 45-degree yaw intervals and 30-degree pitch.
 Isometric 2D has a fixed orientation; its reference is shared by all poses rather
 than pretending that 2D can rotate. `view_before.png` and `view_resumed.png` record the player view before and after
 the batch for restoration checks.
+The packaged `art-gallery/index.html` pairs visible placements with their source
+sprites from both shipped tilesets and links to the checkpoint's eight 3D poses
+and 2D reference. Its `support-map.svg` shows placement origins and tile-ground
+anchors in map coordinates. The door/window matrix lists open, closed and broken
+sprites available in the shipped tilesets and marks the states actually present
+in the checkpoint. Separate gameplay checkpoints are needed to compare rendered
+geometry for states absent from this scene.
 No complete marker is written if saving or either renderer fails. A genuine disk-write
 failure may show the normal game save error dialog; dismiss it normally. The
 checkpoint is aborted and its older disk save is never packaged as current state.

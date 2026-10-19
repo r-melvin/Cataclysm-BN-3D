@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import struct
 from pathlib import Path
 import subprocess
 import tempfile
@@ -19,6 +20,40 @@ spec.loader.exec_module(session_tool)
 
 
 class SessionPackagingTest(unittest.TestCase):
+    def test_art_gallery_pairs_sprites_support_anchors_and_state_coverage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            capture = root / "capture-0001"
+            capture.mkdir()
+            (capture / "view_map.txt").write_text(
+                "placements (category id x y support_x support_y):\n"
+                "terrain t_floor 10 20 10 20\n"
+                "furniture f_chair 11 20 11 20\n"
+                "terrain t_door_c 12 20 12 20\n")
+            gfx = root / "gfx"
+            for tileset in ("HitButton_iso", "UltimateCataclysm"):
+                directory = gfx / tileset
+                directory.mkdir(parents=True)
+                image = bytes.fromhex("89504e470d0a1a0a0000000d49484452") + struct.pack(">II", 16, 16)
+                (directory / "atlas.png").write_bytes(image)
+                tiles = [{"id": "f_chair", "fg": 1}, {"id": "t_door_c", "fg": 2},
+                         {"id": "t_door_o", "fg": 3}, {"id": "t_door_b", "fg": 4}]
+                (directory / "tile_config.json").write_text(json.dumps({
+                    "tile_info": [{"width": 8, "height": 8}],
+                    "tiles-new": [{"file": "atlas.png", "sprite_width": 8,
+                                   "sprite_height": 8, "tiles": tiles}]}))
+            with mock.patch.object(session_tool, "ROOT", root):
+                session_tool.render_art_gallery(capture)
+            page = (capture / "art-gallery/index.html").read_text()
+            self.assertIn("f_chair", page)
+            self.assertIn("t_door", page)
+            self.assertIn("States seen in checkpoint", page)
+            self.assertIn("closed", page)
+            self.assertIn("closed, open, broken", page)
+            self.assertIn("<td>closed</td>", page)
+            self.assertTrue((capture / "art-gallery/support-map.svg").is_file())
+            self.assertTrue(list((capture / "art-gallery/sprites").glob("*.png")))
+
     def test_packaging_round_trip_and_allowlist(self):
         with tempfile.TemporaryDirectory() as temporary:
             session = Path(temporary)
@@ -152,12 +187,15 @@ if "--version" in sys.argv:
     print("Renderer capture protocol: 1")
     sys.exit(0)
 assert os.environ["SDL_RENDER_DRIVER"] == "gpu"
+captures = Path(os.environ["CATA_R3D_COMPARE_SESSION"])
+session = captures.parent
 for key in ("CATA_R3D_COMPARE", "CATA_R3D_QUIT_AFTER_SHOT", "CATA_R3D_SCREENSHOT"):
     assert key not in os.environ
 user = Path(sys.argv[sys.argv.index("--userdir") + 1])
 assert json.loads((user / "config/options.json").read_text()) == [{"name": "USE_TILES", "value": "true"}, {"name": "RENDERER", "value": "gpu"}]
 assert not (user / "save").exists()
-captures = Path(os.environ["CATA_R3D_COMPARE_SESSION"])
+assert (session / "art-assets/HitButton_iso/tile_config.json").is_file()
+assert (session / "art-assets/UltimateCataclysm/tile_config.json").is_file()
 (captures / "session-status.txt").write_text("Capture support initialized; waiting for a character.")
 ''')
             binary.chmod(0o755)

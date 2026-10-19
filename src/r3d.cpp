@@ -926,6 +926,35 @@ auto dump_view( const std::string &path, const tripoint_bub_ms &center ) -> void
     for( const auto &e : legend ) {
         out << "  " << e.first << "  " << e.second << '\n';
     }
+    out << "\nplacements (category id x y support_x support_y):\n";
+    for( auto dy = static_cast<int>( -half_h ); dy <= half_h; ++dy ) {
+        for( auto dx = static_cast<int>( -half_w ); dx <= half_w; ++dx ) {
+            const auto p = tripoint_bub_ms( center + tripoint_rel_ms( dx, dy, 0 ) );
+            if( !here.inbounds( p ) ) {
+                continue;
+            }
+            const auto ll = lit_level( here.access_cache( p.z() ).visibility_cache[here.access_cache(
+                                           p.z() ).idx( p.x(), p.y() )] );
+            const auto vis = visibility_type( here.get_visibility( ll, vvc ) );
+            if( vis != VIS_CLEAR && vis != VIS_LIT ) {
+                continue;
+            }
+            const auto terrain = ter_id( here.ter( p ) );
+            out << "terrain " << terrain.id().str() << ' ' << p.x() << ' ' << p.y() << ' '
+                << p.x() << ' ' << p.y() << '\n';
+            const auto furniture = furn_id( here.furn( p ) );
+            if( furniture != furn_str_id::NULL_ID() ) {
+                out << "furniture " << furniture.id().str() << ' ' << p.x() << ' ' << p.y() << ' '
+                    << p.x() << ' ' << p.y() << '\n';
+            }
+            if( here.sees_some_items( p, you ) ) {
+                for( const auto *it : map_stack( get_map().i_at( p ) ) ) {
+                    out << "item " << it->typeId().str() << ' ' << p.x() << ' ' << p.y() << ' '
+                        << p.x() << ' ' << p.y() << '\n';
+                }
+            }
+        }
+    }
 }
 
 auto capture( const std::string &path ) -> bool

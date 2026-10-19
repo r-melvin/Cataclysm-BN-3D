@@ -2,6 +2,7 @@
 """Play in an isolated user directory, collect paired renderer checkpoints, and share ZIPs."""
 import argparse
 import contextlib
+import html
 import hashlib
 import json
 import os
@@ -9,16 +10,206 @@ from pathlib import Path
 import shutil
 import sqlite3
 import subprocess
+import struct
 import sys
 import tempfile
 import time
 import zipfile
+import re
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_FILES = ("options.json", "keybindings.json", "auto_pickup.json", "safemode.json",
                 "auto_note.json", "colors.json", "base_colors.json", "custom_colors.json")
 MAX_PAYLOAD = 24_000_000  # GitHub says 25 MB; reserve space for ZIP headers.
 CHUNK = 20_000_000
+
+
+def tile_sprite_index(config_path):
+    """Index tileset IDs to their source atlas cell and dimensions."""
+    config = json.loads(config_path.read_text())
+    result = {}
+
+    def first_sprite(value):
+        if isinstance(value, int):
+            return value
+        if isinstance(value, list):
+            for entry in value:
+                sprite = entry.get("sprite") if isinstance(entry, dict) else entry
+                if isinstance(sprite, int):
+                    return sprite
+        return None
+
+    for part in config.get("tiles-new", []):
+        atlas = config_path.parent / part["file"]
+        if not atlas.is_file():
+            continue
+        for tile in part.get("tiles", []):
+            ids = tile.get("id", [])
+            ids = ids if isinstance(ids, list) else [ids]
+            sprite = first_sprite(tile.get("fg"))
+            if sprite is None:
+                continue
+            for tile_id in ids:
+                if isinstance(tile_id, str):
+                    result.setdefault(tile_id, dict(atlas=atlas, sprite=sprite,
+                                                    width=part.get("sprite_width", config["tile_info"][0]["width"]),
+                                                    height=part.get("sprite_height", config["tile_info"][0]["height"])))
+            for additional in tile.get("additional_tiles", []):
+                extra_ids = additional.get("id", [])
+                extra_ids = extra_ids if isinstance(extra_ids, list) else [extra_ids]
+                extra_sprite = first_sprite(additional.get("fg"))
+                if extra_sprite is not None:
+                    for tile_id in ids:
+                        if not isinstance(tile_id, str):
+                            continue
+                        for extra_id in extra_ids:
+                            if isinstance(extra_id, str):
+                                result.setdefault(f"{tile_id}_{extra_id}", dict(
+                                    atlas=atlas, sprite=extra_sprite,
+                                    width=part.get("sprite_width", config["tile_info"][0]["width"]),
+                                    height=part.get("sprite_height", config["tile_info"][0]["height"])))
+    return result
+
+
+def placement_records(map_path):
+    """Read the stable, whitespace-delimited placement section in map.txt."""
+    records = []
+    in_placements = False
+    for line in map_path.read_text(errors="replace").splitlines():
+        if line.startswith("placements (category id x y support_x support_y):"):
+            in_placements = True
+            continue
+        if in_placements:
+            fields = line.split()
+            if len(fields) == 6:
+                try:
+                    records.append(dict(category=fields[0], id=fields[1], x=int(fields[2]),
+                                        y=int(fields[3]), support_x=int(fields[4]), support_y=int(fields[5])))
+                except ValueError:
+                    continue
+    return records
+
+
+def render_art_gallery(capture, assets_root=None):
+    """Create a sprite-to-render gallery and state/anchor reports for one checkpoint."""
+    map_path = capture / "view_map.txt"
+    if not map_path.is_file():
+        return
+    records = placement_records(map_path)
+    if not records:
+        return
+    gallery = capture / "art-gallery"
+    sprites = gallery / "sprites"
+    sprites.mkdir(parents=True, exist_ok=True)
+    asset_base = assets_root if assets_root and assets_root.is_dir() else ROOT / "gfx"
+    indexes = {name: tile_sprite_index(asset_base / name / "tile_config.json")
+               for name in ("HitButton_iso", "UltimateCataclysm")}
+    copied = {}
+    cards = []
+    unique_records = {}
+    for record in records:
+        unique_records.setdefault((record["category"], record["id"]), record)
+    for record in unique_records.values():
+        variants = []
+        for tileset, index in indexes.items():
+            sprite = index.get(record["id"])
+            if not sprite:
+                continue
+            atlas = sprite["atlas"]
+            rel = copied.get(atlas)
+            if rel is None:
+                rel = f"sprites/{len(copied):03d}-{atlas.name}"
+                shutil.copy2(atlas, gallery / rel)
+                copied[atlas] = rel
+            # Sprite IDs are zero-based cells in their source sheet.
+            with atlas.open("rb") as image:
+                header = image.read(24)
+            if header[:8] != b"\x89PNG\r\n\x1a\n":
+                continue
+            image_width, image_height = struct.unpack(">II", header[16:24])
+            columns = image_width // sprite["width"]
+            x = (sprite["sprite"] % columns) * sprite["width"]
+            y = (sprite["sprite"] // columns) * sprite["height"]
+            if x + sprite["width"] > image_width or y + sprite["height"] > image_height:
+                continue
+            variants.append((tileset, rel, x, y, sprite["width"], sprite["height"],
+                             image_width, image_height))
+        if variants:
+            cards.append((record, variants))
+
+    # Plot occupied map cells and their declared tile-ground support anchors.
+    min_x = min(record["x"] for record in records)
+    max_x = max(record["x"] for record in records)
+    min_y = min(record["y"] for record in records)
+    max_y = max(record["y"] for record in records)
+    cell = 22
+    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {(max_x-min_x+1)*cell} {(max_y-min_y+1)*cell}">',
+           '<style>text{font:8px monospace}.terrain{fill:#718096}.furniture{fill:#f6ad55}.item{fill:#63b3ed}</style>']
+    for x in range(min_x, max_x + 1):
+        for y in range(min_y, max_y + 1):
+            svg.append(f'<path d="M{(x-min_x)*cell} {(y-min_y)*cell}h{cell}v{cell}h-{cell}z" fill="none" stroke="#bbb" stroke-width=".5"/>')
+    for record in records:
+        px, py = (record["x"]-min_x)*cell, (record["y"]-min_y)*cell
+        color = record["category"] if record["category"] in ("terrain", "furniture", "item") else "terrain"
+        svg.append(f'<circle class="{color}" cx="{px+cell/2+4}" cy="{py+cell/2-4}" r="4"><title>{html.escape(record["category"]+": "+record["id"])}</title></circle>')
+        if record["category"] != "terrain":
+            sx, sy = (record["support_x"]-min_x)*cell+cell/2, (record["support_y"]-min_y)*cell+cell/2
+            svg.append(f'<path d="M{px+cell/2+4} {py+cell/2-4}L{sx} {sy}" stroke="#e53e3e" stroke-width="1"/><rect x="{sx-3}" y="{sy-3}" width="6" height="6" fill="none" stroke="#e53e3e"/>')
+    svg.append("</svg>")
+    (gallery / "support-map.svg").write_text("\n".join(svg))
+
+    # State sprite presence is derived from the packaged tilesets, and observed
+    # state IDs are marked separately from variants that need a gameplay capture.
+    state_groups = {}
+    for index in indexes.values():
+        for tile_id in index:
+            match = re.fullmatch(r"(t_(?:door|window)(?:_.+)?)(?:_(c|o|b|open|broken|closed))", tile_id)
+            if match:
+                family, state = match.groups()
+                label = {"c": "closed", "o": "open", "b": "broken", "open": "open", "broken": "broken", "closed": "closed"}[state]
+                state_groups.setdefault(family, set()).add(label)
+            for suffix, state in (("_open", "open"), ("_broken", "broken")):
+                if tile_id.startswith("t_window_") and tile_id.endswith(suffix):
+                    family = tile_id[:-len(suffix)]
+                    state_groups.setdefault(family, set()).add(state)
+                    if family in index:
+                        state_groups[family].add("closed")
+    observed_states = {}
+    observed_ids = {record["id"] for record in records}
+    for record in records:
+        match = re.fullmatch(r"(t_(?:door|window)(?:_.+)?)(?:_(c|o|b|open|broken|closed))", record["id"])
+        if match:
+            family, state = match.groups()
+            state = {"c": "closed", "o": "open", "b": "broken"}.get(state, state)
+            observed_states.setdefault(family, set()).add(state)
+    for index in indexes.values():
+        for tile_id in index:
+            if tile_id.startswith("t_window_") and tile_id in observed_ids:
+                observed_states.setdefault(tile_id, set()).add("closed")
+    state_rows = []
+    for family, available in sorted(state_groups.items()):
+        states = [state for state in ("closed", "open", "broken") if state in available]
+        if states:
+            state_rows.append((family, states, observed_states.get(family, set())))
+
+    sections = []
+    for record, variants in cards:
+        pictures = []
+        for tileset, source, x, y, width, height, atlas_width, atlas_height in variants:
+            scale = 4
+            pictures.append(f'<figure><figcaption>{html.escape(tileset)}</figcaption><div class="sprite" style="width:{width*scale}px;height:{height*scale}px;background-size:{atlas_width*scale}px {atlas_height*scale}px;background-image:url(\'{html.escape(source)}\');background-position:-{x*scale}px -{y*scale}px"></div></figure>')
+        placements = sum(1 for candidate in records
+                         if candidate["category"] == record["category"] and candidate["id"] == record["id"])
+        views = [f'<a href="../view_3d_yaw_{angle}.png"><img loading="lazy" width="240" src="../view_3d_yaw_{angle}.png">3D yaw {angle*45-45}°</a>' for angle in range(8)]
+        views.append('<a href="../view_2d.png"><img loading="lazy" width="240" src="../view_2d.png">2D checkpoint</a>')
+        sections.append(f'<article><h3>{html.escape(record["category"])}: <code>{html.escape(record["id"])}</code></h3><p>{placements} placement(s); example tile ({record["x"]}, {record["y"]}); support anchor ({record["support_x"]}, {record["support_y"]}).</p><div class="sprites">{"".join(pictures)}</div><div class="views">' + " ".join(views) + '</div></article>')
+    state_table = "".join(f'<tr><td><code>{html.escape(family)}</code></td><td>{", ".join(states)}</td><td>{", ".join(state for state in states if state in observed) or "none"}</td></tr>' for family, states, observed in state_rows)
+    page = ('<!doctype html><meta charset="utf-8"><title>Renderer art gallery</title>'
+            '<style>body{font:14px system-ui;background:#161616;color:#eee;margin:2rem}a{color:#9cf}article{border-top:1px solid #555;padding:1rem 0}.sprites{display:flex;gap:1rem;min-height:120px;align-items:start}.sprite{image-rendering:pixelated;background-repeat:no-repeat}figure{margin:0}figcaption{margin-bottom:.4rem}.views{display:flex;gap:.7rem;flex-wrap:wrap}.views a{display:grid;gap:.3rem}.views img{height:auto;border:1px solid #555}table{border-collapse:collapse}td,th{border:1px solid #555;padding:.4rem;text-align:left}</style>'
+            '<h1>Sprite-to-view gallery</h1><p>Source atlas sprites are paired with the same-state 2D image and eight 3D camera poses. Red lines mark the renderer placement origin and its tile-ground support anchor; the grid is in map coordinates.</p>'
+            '<p>Anchor map legend: grey terrain, amber furniture, blue loose items; red square is the tile-ground support anchor.</p>'
+            '<img src="support-map.svg" style="max-width:100%;image-rendering:pixelated"><h2>Open / closed / broken sprite coverage</h2><table><tr><th>Family</th><th>States in shipped tileset</th><th>States seen in checkpoint</th></tr>' + state_table + '</table><h2>Visible placements</h2>' + "\n".join(sections))
+    (gallery / "index.html").write_text(page)
 RESTORE = r'''#!/usr/bin/env python3
 """Run after extracting ALL numbered ZIPs into the same empty directory."""
 import hashlib, json
@@ -142,6 +333,7 @@ def package(session):
     with tempfile.TemporaryDirectory(prefix="r3d-package-") as temporary:
         staging = Path(temporary)
         for capture in completed:
+            render_art_gallery(capture, session / "art-assets")
             copy_tree(capture, staging / "captures" / capture.name)
         diagnostics = staging / "diagnostics"
         diagnostics.mkdir()
@@ -170,12 +362,18 @@ def package(session):
             "view_2d.png is the fixed HitButton_iso reference for every 3D pose in this checkpoint.\n"
             "view_3d_yaw_N.png uses yaw -45 + 45*N degrees, pitch 30, orthographic projection.\n"
             "view_before.png and view_resumed.png show the player view before/after the batch.\n"
+            "art-gallery/index.html pairs source sprites from both shipped tilesets with the checkpoint poses.\n"
+            "Its support-map.svg marks each placement origin and tile-ground anchor. The state table\n"
+            "lists open/closed/broken door and window sprites available in the tilesets and states\n"
+            "actually visible in this checkpoint.\n"
             "No turn or input is processed between screenshots. Capture briefly pauses play.\n\n"
             "For a useful issue, describe the bug, reproduction steps and expected behavior.\n"
             "Attach these ZIPs; game-report.txt records OS/build/graphics/language/mods.\n"
             "Inspect before sharing: saves/logs can contain character names, notes and paths.\n"
             "This bundle intentionally includes only completed snapshots of the selected world,\n"
-            "the game report, options, and session debug/crash/stdout logs.\n\n"
+            "the game report, options, and session debug/crash/stdout logs.\n"
+            "Each art-gallery contains source atlas images from the checkout's shipped tilesets;\n"
+            "custom tileset assets are not bundled.\n\n"
             "GitHub supports ZIP attachments up to 25 MB (images separately: 10 MB), checked\n"
             "2026-10-18: https://docs.github.com/en/get-started/writing-on-github/"
             "working-with-advanced-formatting/attaching-files\n"
@@ -261,6 +459,10 @@ def main():
     user = session / "user"
     (user / "config").mkdir(parents=True)
     (session / "captures").mkdir()
+    asset_snapshot = session / "art-assets"
+    asset_snapshot.mkdir()
+    for tileset in ("HitButton_iso", "UltimateCataclysm"):
+        copy_tree(ROOT / "gfx" / tileset, asset_snapshot / tileset)
     for name in CONFIG_FILES:
         src = args.userdir / "config" / name
         if src.is_file() and not src.is_symlink():
