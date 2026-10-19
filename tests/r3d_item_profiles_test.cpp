@@ -11,7 +11,6 @@ TEST_CASE("r3d_cylinder_items_use_repeated_sprite_geometry", "[r3d][items]") {
           "smoxygen_tank", "scuba_tank", "small_scuba_tank", "tinyweldtank", "weldtank",
           "gradcylinder"}) {
         const auto profile = r3d::item_profile(id);
-        CHECK(profile.geometry == r3d::item_geometry::sprite_volume);
         CHECK(
             profile.depth_fraction
             == Approx(
@@ -23,7 +22,6 @@ TEST_CASE("r3d_cylinder_items_use_repeated_sprite_geometry", "[r3d][items]") {
 
 TEST_CASE("r3d_unprofiled_items_use_shallow_sprite_volume", "[r3d][items]") {
     const auto profile = r3d::item_profile("unknown_item");
-    CHECK(profile.geometry == r3d::item_geometry::sprite_volume);
     CHECK(profile.depth_fraction == Approx(0.22f));
 }
 

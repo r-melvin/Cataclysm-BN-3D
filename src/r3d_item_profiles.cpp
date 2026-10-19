@@ -19,9 +19,9 @@ auto item_profile( std::string_view id ) -> item_render_profile
     if( std::ranges::find( upright_cylinders, id ) != upright_cylinders.end() ) {
         // One sprite is repeated around a shallow four-sided volume, as in single-sprite voxel tools.
         const auto depth = id == "small_scuba_tank" || id == "tinyweldtank" ? 0.28f : 0.38f;
-        return { .geometry = item_geometry::sprite_volume, .depth_fraction = depth };
+        return { .depth_fraction = depth };
     }
-    return { .geometry = item_geometry::sprite_volume, .depth_fraction = default_depth };
+    return { .depth_fraction = default_depth };
 }
 
 auto resolve_item_depth_fraction( const item_depth_options &options ) -> float

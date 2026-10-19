@@ -8,13 +8,7 @@
 namespace r3d
 {
 
-enum class item_geometry {
-    billboard,
-    sprite_volume
-};
-
 struct item_render_profile {
-    item_geometry geometry = item_geometry::billboard;
     float depth_fraction = 0.0f;
 };
 

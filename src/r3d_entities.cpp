@@ -1770,9 +1770,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                           .z_max = z_base + size.z * ( 1.0f - anchor[2] ),
                                           .color = light } );
                     }
-                } else if( voxel_items &&
-                           profile.geometry == item_geometry::sprite_volume && !sprite.backdrop.valid &&
-                           sprite.main().alpha_mask ) {
+                } else if( voxel_items && !sprite.backdrop.valid && sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
                                           .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
                                           .color = light, .depth_fraction = profile.depth_fraction,
