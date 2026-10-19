@@ -1746,6 +1746,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
     const auto toward = vec3( normalize( view.cam.eye() - view.cam.stretched_target() ) );
     const auto up = vec3( cross( right, vec3{ .x = 0.0f, .y = 0.0f, .z = 0.0f } - toward ) );
     const auto white = static_cast<uint32_t>( pack_light( 255, 255, 255 ) );
+    const auto voxel_items = static_cast<bool>( get_option<bool>( "R3D_VOXEL_ITEMS" ) );
 
     auto in_range = [ &view ]( const tripoint_bub_ms & p, int radius ) -> bool {
         return p.z() >= view.z_lo && p.z() <= view.z_hi &&
@@ -1802,11 +1803,11 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                 const auto id = std::string( ( *stack.begin() )->typeId().str() );
                 const tile_info &sprite = view.cache.named( { .category = C_ITEM, .id = id, .tiles = view.tiles } );
                 auto profile = item_profile( id );
-                const auto profile_key = presentation_profile_key( "item", id );
-                const auto authored_profile = view.presentation_profiles ?
-                                              view.presentation_profiles->find( profile_key ) :
+                const auto has_profiles = view.presentation_profiles && !view.presentation_profiles->empty();
+                const auto authored_profile = has_profiles ?
+                                              view.presentation_profiles->find( presentation_profile_key( "item", id ) ) :
                                               presentation_profile_map::const_iterator {};
-                const auto has_authored_profile = view.presentation_profiles &&
+                const auto has_authored_profile = has_profiles &&
                                                   authored_profile != view.presentation_profiles->end();
                 if( has_authored_profile ) {
                     profile.depth_fraction = resolve_item_depth_fraction( {
@@ -1821,7 +1822,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                         vox_item = &found->second;
                     }
                 }
-                if( get_option<bool>( "R3D_VOXEL_ITEMS" ) && vox_item ) {
+                if( voxel_items && vox_item ) {
                     const auto &model = vox_item->model;
                     auto size = fit_vox_model_to_unit_cube( model );
                     auto anchor = std::array<float, 3> { 0.5f, 0.5f, 0.0f };
@@ -1842,7 +1843,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                           .z_max = z_base + size.z * ( 1.0f - anchor[2] ),
                                           .color = light } );
                     }
-                } else if( get_option<bool>( "R3D_VOXEL_ITEMS" ) &&
+                } else if( voxel_items &&
                            profile.geometry == item_geometry::sprite_volume && !sprite.backdrop.valid &&
                            sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
