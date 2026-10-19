@@ -48,6 +48,9 @@ Install [uv](https://docs.astral.sh/uv/) for this fallback, or install
 `astyle-py==1.1.0` in the active Python 3 environment. The first `uvx` run needs
 network access; subsequent runs can use its cache. An incompatible system astyle
 is never used to format files. Missing dependencies produce setup instructions.
+Python 3 is also required with native astyle: both engines run through a wrapper
+that protects C++ raw string contents from reindentation. This preserves embedded
+help text, JSON, Lua and ASCII artwork while formatting their surrounding code.
 
 ### Using the helper
 

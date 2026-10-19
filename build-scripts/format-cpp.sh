@@ -77,7 +77,11 @@ fi
 if (( ${#astyle_sources[@]} > 0 )); then
     if command -v astyle >/dev/null 2>&1 &&
         [[ "$(astyle --version 2>&1)" == "Artistic Style Version 3.4.7" ]]; then
-        astyle --options=.astylerc -n "${astyle_sources[@]}"
+        if ! command -v python3 >/dev/null 2>&1; then
+            echo "error: Python 3 is required to protect C++ raw strings during formatting" >&2
+            exit 1
+        fi
+        python3 tools/r3d_spike/astyle_347.py --native "$(command -v astyle)" "${astyle_sources[@]}"
     elif command -v uvx >/dev/null 2>&1; then
         uvx --from astyle-py==1.1.0 python tools/r3d_spike/astyle_347.py "${astyle_sources[@]}"
     elif command -v python3 >/dev/null 2>&1; then

@@ -38,7 +38,7 @@ the Linux developer checks are:
 cmake --preset linux-full -DLINKER=lld
 cmake --build --preset linux-full --target cataclysm-bn-tiles cata_test-tiles -j8
 CATA_TEST_COMPUTE_ACCELERATION=cpu ./out/build/linux-full/tests/cata_test-tiles '[r3d]'
-python3 -m unittest discover -s tools/r3d_spike -p test_compare_session.py
+python3 -m unittest discover -s tools/r3d_spike -p 'test_*.py'
 python3 tools/r3d_spike/compare_session.py --help
 ```
 
@@ -68,7 +68,8 @@ The helper uses astyle 3.4.7 for top-level C++ because 3.6.x mis-indents
 trailing-return functions; tests and nested C++ use clang-format. Install
 [uv](https://docs.astral.sh/uv/) for the pinned astyle fallback, or install
 `astyle-py==1.1.0` in your Python environment. A native astyle 3.4.7 also works.
-The CMake `format` target uses the same selection. See [AGENTS.md](AGENTS.md).
+Both engines use a Python 3 wrapper to preserve raw string contents. The CMake
+`format` target uses the same selection. See [AGENTS.md](AGENTS.md).
 
 The separate [Go asset CLI](https://github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline)
 packs directional sprites, voxelizes directly to `.vox`, validates models and
