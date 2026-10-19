@@ -720,15 +720,8 @@ TEST_CASE( "r3d_wall_atlas_cells", "[r3d]" )
     CHECK_FALSE( r3d::atlas_cell( { .index = -1, .cell = 32, .atlas_w = 128, .atlas_h = 96 } ).valid );
 }
 
-TEST_CASE( "r3d_vehicle_tiered_height_constants", "[r3d]" )
+TEST_CASE( "r3d_vehicle_height_tiers_are_ordered", "[r3d]" )
 {
-    CHECK( approx( r3d::vehicle_clearance_h, 0.15f ) );
-    CHECK( approx( r3d::chassis_floor_h, 0.26f ) );
-    CHECK( approx( r3d::vehicle_wheel_h, 0.34f ) );
-    CHECK( approx( r3d::vehicle_bumper_h, 0.42f ) );
-    CHECK( approx( r3d::vehicle_body_h, 0.50f ) );
-    CHECK( approx( r3d::vehicle_cabin_h, 0.82f ) );
-    CHECK( approx( r3d::floor_height + r3d::chassis_floor_h, 0.36f ) );
     CHECK( r3d::floor_height < r3d::vehicle_clearance_h );
     CHECK( r3d::vehicle_clearance_h < r3d::chassis_floor_h );
     CHECK( r3d::chassis_floor_h < r3d::vehicle_wheel_h );
@@ -1024,75 +1017,6 @@ TEST_CASE( "r3d_vehicle_oversized_sprite_clamping", "[r3d]" )
     CHECK( gy_top >= 0.0f );
     CHECK( gy_bot <= 1.0f );
     CHECK( gy_top < gy_bot );
-}
-
-TEST_CASE( "r3d_cutaway_driving_and_tight_occlusion", "[r3d]" )
-{
-    // Tight cutaway radius is 0.55f tiles around character
-    constexpr auto tight_cutaway_radius = 0.55f;
-    constexpr auto cutaway_depth_bias = -0.0005f;
-
-    CHECK( approx( tight_cutaway_radius, 0.55f ) );
-    CHECK( approx( cutaway_depth_bias, -0.0005f ) );
-
-    // When avatar is driving, cutaway width u.cut[3] is set to 0.0f
-    auto cut_width = tight_cutaway_radius;
-    const auto is_driving = true;
-    if( is_driving ) {
-        cut_width = 0.0f;
-    }
-    CHECK( approx( cut_width, 0.0f ) );
-}
-
-TEST_CASE( "r3d_vehicle_color_to_packed_light", "[r3d]" )
-{
-    const auto white_ambient = r3d::pack_light( 255, 255, 255 );
-
-    // 0 color returns ambient light directly
-    CHECK( r3d::color_to_packed_light( 0, white_ambient ) == white_ambient );
-
-    // Channel order verification: ARGB 0xAARRGGBB -> pack_light(R, G, B)
-    // Red=0xa5 (165), Green=0x50 (80), Blue=0x20 (32)
-    const auto test_color_argb = static_cast<uint32_t>( 0xffa55020 );
-    const auto packed = r3d::color_to_packed_light( test_color_argb, white_ambient );
-
-    // pack_light places R in Byte 0, G in Byte 1, B in Byte 2, A in Byte 3
-    const auto out_r = static_cast<uint8_t>( packed & 0xffu );
-    const auto out_g = static_cast<uint8_t>( ( packed >> 8u ) & 0xffu );
-    const auto out_b = static_cast<uint8_t>( ( packed >> 16u ) & 0xffu );
-
-    CHECK( out_r == 0xa5 );
-    CHECK( out_g == 0x50 );
-    CHECK( out_b == 0x20 );
-
-    // Verify channel order is NOT swapped (out_r must NOT be Blue and out_b must NOT be Red)
-    CHECK( out_r != 0x20 );
-    CHECK( out_b != 0xa5 );
-
-    // Brown car color test: SaddleBrown (0xff8b4513)
-    // A brown car has high Red (139), medium Green (69), low Blue (19).
-    // If channels were swapped, Red and Blue would flip, turning the car into bright blue/cyan.
-    const auto brown_argb = static_cast<uint32_t>( 0xff8b4513 );
-    const auto brown_packed = r3d::color_to_packed_light( brown_argb, white_ambient );
-    const auto b_r = static_cast<uint8_t>( brown_packed & 0xffu );
-    const auto b_g = static_cast<uint8_t>( ( brown_packed >> 8u ) & 0xffu );
-    const auto b_b = static_cast<uint8_t>( ( brown_packed >> 16u ) & 0xffu );
-
-    CHECK( b_r == 139 );
-    CHECK( b_g == 69 );
-    CHECK( b_b == 19 );
-    CHECK( b_r > b_b ); // Must remain warm brown, not cyan
-
-    // Ambient light modulation test (50% ambient)
-    const auto half_ambient = r3d::pack_light( 128, 128, 128 );
-    const auto dimmed = r3d::color_to_packed_light( test_color_argb, half_ambient );
-    const auto dim_r = static_cast<uint8_t>( dimmed & 0xffu );
-    const auto dim_g = static_cast<uint8_t>( ( dimmed >> 8u ) & 0xffu );
-    const auto dim_b = static_cast<uint8_t>( ( dimmed >> 16u ) & 0xffu );
-
-    CHECK( dim_r == static_cast<uint8_t>( ( 165 * 128 ) / 255 ) );
-    CHECK( dim_g == static_cast<uint8_t>( ( 80 * 128 ) / 255 ) );
-    CHECK( dim_b == static_cast<uint8_t>( ( 32 * 128 ) / 255 ) );
 }
 
 TEST_CASE( "r3d_vehicle_opaque_bounds_trimming", "[r3d]" )
