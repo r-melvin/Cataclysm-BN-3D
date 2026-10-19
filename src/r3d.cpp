@@ -173,6 +173,7 @@ struct state {
     bool walls_on = false; // whether the cache was given the wall side rules and atlas
     bool voxel_assets_loaded = false;
     bool thin_walls = true;
+    bool voxel_items = false;
     bool plaster_atlas = false; // whether painted walls take the atlas plaster (see the option)
     bool comparison_camera = false;
     bool was_controlling_vehicle = false;
@@ -1526,6 +1527,11 @@ auto draw( const draw_options &options ) -> bool
         release_all_chunks( s );
         s.cache.set_thin_walls( want_thin_walls );
         s.thin_walls = want_thin_walls;
+    }
+    const auto want_voxel_items = static_cast<bool>( get_option<bool>( "R3D_VOXEL_ITEMS" ) );
+    if( want_voxel_items != s.voxel_items ) {
+        s.cache.set_voxel_items( want_voxel_items );
+        s.voxel_items = want_voxel_items;
     }
     const auto want_atlas = static_cast<bool>( get_option<bool>( "R3D_WALL_TEXTURES" ) );
     if( want_atlas != s.plaster_atlas ) {

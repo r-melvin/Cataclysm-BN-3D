@@ -104,6 +104,7 @@ TEST_CASE("r3d_voxel_item_menu_option_switches_tank_geometry", "[r3d][items][til
         .markers = {},
         .uprights = {},
         .surface = [](const tripoint_bub_ms& /*p*/) { return r3d::floor_height; }};
+    cache.set_voxel_items(true);
     const auto& art = cache.named(
         {.category = C_ITEM, .id = "carbondioxide_tank", .tiles = *tilecontext});
     REQUIRE(art.main().valid);
@@ -145,6 +146,7 @@ TEST_CASE("r3d_voxel_item_option_extrudes_generic_item_sprites", "[r3d][items][t
         .markers = {},
         .uprights = {},
         .surface = [](const tripoint_bub_ms& /*p*/) { return r3d::floor_height; }};
+    cache.set_voxel_items(true);
     const auto& art = cache.named({.category = C_ITEM, .id = "rock", .tiles = *tilecontext});
     REQUIRE(art.main().valid);
     REQUIRE_FALSE(art.backdrop.valid);
@@ -156,6 +158,12 @@ TEST_CASE("r3d_voxel_item_option_extrudes_generic_item_sprites", "[r3d][items][t
     const auto billboard = r3d::build_entity_mesh(view);
     CHECK(voxelized.vertices.size() > billboard.vertices.size() + 16);
     CHECK(voxelized.indices.size() > billboard.indices.size() + 24);
+
+    cache.set_voxel_items(false);
+    const auto& flat = cache.named({.category = C_ITEM, .id = "rock", .tiles = *tilecontext});
+    REQUIRE(flat.main().valid);
+    CHECK_FALSE(flat.main().alpha_mask);
+    CHECK_FALSE(flat.main().voxel_surface);
 }
 
 TEST_CASE(

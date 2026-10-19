@@ -86,7 +86,8 @@ auto traits_of( const map_data_common_t &d ) -> tile_traits
     return t;
 }
 
-auto to_sprite_ref( const texture_draw_data &data ) -> sprite_ref
+/// Only voxelised items read the alpha mask, so other sprites skip the reoriented copy.
+auto to_sprite_ref( const texture_draw_data &data, bool with_alpha = false ) -> sprite_ref
 {
     if( !data.texture ) {
         return {};
@@ -110,7 +111,7 @@ auto to_sprite_ref( const texture_draw_data &data ) -> sprite_ref
     ref.size_y = data.size_y;
     ref.top_color = data.top_color;
     ref.body_color = data.body_color;
-    if( data.alpha_mask ) {
+    if( with_alpha && data.alpha_mask ) {
         auto alpha = orient_sprite_alpha( { .width = data.dimensions.w, .height = data.dimensions.h,
                                             .alpha = *data.alpha_mask, .quarter_turns = data.quarter_turns,
                                             .flip = data.flip } );
@@ -153,6 +154,7 @@ struct resolve_layers_options {
     int rota = 0;
     const std::string &variant = "";
     bool allow_unknown = true;
+    bool voxel_items = false;
 };
 
 auto resolve_layers( const resolve_layers_options &options ) -> void
@@ -164,20 +166,21 @@ auto resolve_layers( const resolve_layers_options &options ) -> void
     auto subtile = options.subtile;
     auto rota = options.rota;
     const auto &variant = options.variant;
+    const auto with_alpha = options.voxel_items && category == C_ITEM;
 
     const auto origin = tripoint_bub_ms( 0, 0, 0 );
     if( const auto bg = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = id, .category = category, .pos = origin, .background = true, .subtile = subtile, .rotation = rota, .variant = variant } ) ) ) {
         out.backdrop = to_sprite_ref( *bg );
     }
     if( const auto fg = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = id, .category = category, .pos = origin, .background = false, .subtile = subtile, .rotation = rota, .variant = variant } ) ) ) {
-        out.sprite = to_sprite_ref( *fg );
+        out.sprite = to_sprite_ref( *fg, with_alpha );
     }
     if( options.allow_unknown && !out.backdrop.valid && !out.sprite.valid ) {
         if( const auto unknown = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = std::string( "unknown" ), .category = C_NONE, .pos = origin } ) ) ) {
             out.sprite = to_sprite_ref( *unknown );
         }
     }
-    if( category == C_ITEM && out.sprite.alpha_mask ) {
+    if( with_alpha && out.sprite.alpha_mask ) {
         const auto geometry = voxelize_sprite_alpha( out.sprite.alpha_width, out.sprite.alpha_height,
                               *out.sprite.alpha_mask );
         out.sprite.voxel_surface = std::make_shared<const sprite_voxel_surface>( geometry );
@@ -1110,6 +1113,14 @@ auto tile_info_cache::set_thin_walls( bool on ) -> void
     }
 }
 
+auto tile_info_cache::set_voxel_items( bool on ) -> void
+{
+    if( on != voxel_items_ ) {
+        voxel_items_ = on;
+        clear();
+    }
+}
+
 auto tile_info_cache::set_plaster_atlas( bool on ) -> void
 {
     if( on != plaster_atlas_ ) {
@@ -1286,7 +1297,7 @@ auto tile_info_cache::named( const named_options &options ) -> const tile_info &
         return it->second;
     }
     auto info = tile_info{};
-    resolve_layers( { .tiles = tiles, .id = id, .category = category, .out = info, .subtile = subtile, .rota = rota, .variant = variant, .allow_unknown = options.allow_unknown } );
+    resolve_layers( { .tiles = tiles, .id = id, .category = category, .out = info, .subtile = subtile, .rota = rota, .variant = variant, .allow_unknown = options.allow_unknown, .voxel_items = voxel_items_ } );
     return named_.emplace( key, info ).first->second;
 }
 

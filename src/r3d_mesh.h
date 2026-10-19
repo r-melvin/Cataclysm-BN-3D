@@ -126,6 +126,8 @@ class tile_info_cache
         /// Whether painted and plain walls take the atlas's plaster texture (true) or their own
         /// sprite read as a front elevation (false). Clears the cache when it changes.
         auto set_plaster_atlas( bool on ) -> void;
+        /// Whether item sprites keep their alpha mask and voxel surface. Clears when it changes.
+        auto set_voxel_items( bool on ) -> void;
         /// Switch wall profiles and clear cached geometry inputs.
         auto set_thin_walls( bool on ) -> void;
         auto wall_half_width() const -> float {
@@ -173,6 +175,7 @@ class tile_info_cache
         bool ground_loaded_ = false;
         std::shared_ptr<const wall_sides> wall_sides_;
         bool plaster_atlas_ = false;
+        bool voxel_items_ = false;
         bool thin_walls_ = true;
 };
 
