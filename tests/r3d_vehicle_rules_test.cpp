@@ -439,6 +439,15 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
     const auto partial = r3d::build_vehicle_mesh(view);
     CHECK(partial.vertices.size() == full.vertices.size());
     CHECK(partial.indices == full.indices);
+    // Unlit mounts are drawn dim, not with the light of the lit one.
+    const auto rgb_count = [](const auto& lights, uint32_t color) {
+        return std::ranges::count_if(lights, [color](uint32_t l) {
+            return (l & 0x00ffffffu) == (color & 0x00ffffffu);
+        });
+    };
+    const auto white = r3d::pack_light(255, 255, 255);
+    CHECK(rgb_count(partial.light, white) < rgb_count(full.light, white));
+    CHECK(rgb_count(partial.light, r3d::pack_light(70, 68, 74)) > 0);
     REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("roof"), true) >= 0);
     const auto roofed = r3d::build_vehicle_mesh(view);
     const auto wheel_mount = tripoint_mnt_veh(1, 0, 0);

@@ -754,6 +754,10 @@ auto vehicle_part_rota( const vehicle &veh, int part_idx ) -> int
     return ( ( dir_deg / 90 ) % 4 + 4 ) % 4;
 }
 
+/// Light for something the player sees on a tile that is not lit (a vehicle part beyond the
+/// light, a creature seen in the dark): dim, like unexplored floors, so it does not glow.
+const auto seen_in_dark_light = pack_light( 70, 68, 74 );
+
 struct vehicle_part_sprite_options {
     const entity_view &view;
     const vehicle &veh;
@@ -867,21 +871,17 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
 
         auto cells = std::map<point, vehicle_render_profile> {};
         // A vehicle is one rigid model: once any mount is visible, retain all its parts.
-        auto visible_light = std::optional<uint32_t> {};
-        for( const auto &mount : occupied_mounts ) {
+        const auto is_visible = std::ranges::any_of( occupied_mounts, [&]( const auto & mount ) {
             const auto p = veh.mount_to_bubble( mount );
-            if( here.inbounds( p ) ) {
-                const auto light = view.light( p );
-                if( light != pack_light( 0, 0, 0 ) ) { visible_light = light; break; }
-            }
-        }
-        if( !visible_light ) { continue; }
+            return here.inbounds( p ) && view.light( p ) != pack_light( 0, 0, 0 );
+        } );
+        if( !is_visible ) { continue; }
         for( const auto &mount : occupied_mounts ) {
             const auto p = veh.mount_to_bubble( mount );
             if( p.z() < view.z_lo || p.z() > view.z_hi ) { continue; }
             auto data = vehicle_profile( veh, mount );
             const auto light = here.inbounds( p ) ? view.light( p ) : pack_light( 0, 0, 0 );
-            data.light = light == pack_light( 0, 0, 0 ) ? *visible_light : light;
+            data.light = light == pack_light( 0, 0, 0 ) ? seen_in_dark_light : light;
             cells[point( mount.x(), mount.y() )] = data;
         }
 
@@ -1880,7 +1880,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
             }
         }
         emit_billboard( { .sink = sink, .layers = layers, .right_world = right, .up_world = up, .toward_world = toward, .z_scale = view.cam.z_scale, .cx = frame_x( p ), .cy = frame_y( p ),
-                          .z_base = frame_z( p ) + view.surface( p ), .color = color == pack_light( 0, 0, 0 ) ? white : color,
+                          .z_base = frame_z( p ) + view.surface( p ), .color = color == pack_light( 0, 0, 0 ) ? seen_in_dark_light : color,
                           .mirrored = mirrored } );
     }
     if( view.avatar_only ) {
