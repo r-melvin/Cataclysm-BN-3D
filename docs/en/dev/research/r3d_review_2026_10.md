@@ -57,3 +57,20 @@ Atomic commits; build `cataclysm-bn-tiles` + `cata_test-tiles` before each lands
    misnamed test files.
 
 Phase 4 follows phase 5 (both touch `r3d_entities.cpp`).
+
+## Status (2026-10-19)
+
+Done: phases 1, 2, 3 (dim unlit parts and creatures; silhouette hidden while driving, on unlit tiles and
+behind creatures; cargo tiles use the chassis floor), 6, and most of 4–5.
+
+Open:
+
+- Vehicle mesh caching: deferred until a frame-time measurement (`CATA_R3D_DEBUG_CHUNKS=1`) shows the vehicle
+  build matters; a correct cache key covers view centre, per-tile light, vehicle state and options.
+- Front/rear windshield merge: left as is; the side-cheek winding differs between them and only one test
+  covers that geometry.
+- Multi-level vehicles: moved to `BACKLOG.md`.
+- `vehicle_profile` oddities found by tests: the `door` role never fires for stock parts, a closed door counts
+  as interior, and the corner of a mount with two shaped panels depends on install order.
+- Local astyle 3.6.19 mis-indents functions with trailing return types; format r3d sources with
+  `tools/r3d_spike/astyle_347.py` (astyle 3.4.7).
