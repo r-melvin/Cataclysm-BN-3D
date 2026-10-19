@@ -11,6 +11,7 @@
 #include "itype.h"
 #include "mtype.h"
 #include "catacharset.h"
+#include "cursesport.h"
 #include "map/map.h"
 #include "map/mapdata.h"
 #include "map/field_type.h"
@@ -88,6 +89,28 @@ auto scan_sprite( texture_draw_data &data ) -> void
     };
     data.top_color = pack( colors[0] );
     data.body_color = pack( colors[1] );
+    // Sample a fully opaque body texel for closed solids, never a baked ground shadow.
+    auto best = 3 * 256 * 256;
+    for( auto y = min_y; y <= max_y; ++y ) {
+        for( auto x = min_x; x <= max_x; ++x ) {
+            auto r = Uint8{};
+            auto g = Uint8{};
+            auto b = Uint8{};
+            auto a = Uint8{};
+            if( !SDL_ReadSurfacePixel( surface.get(), x, y, &r, &g, &b, &a ) || a < 250 ) { continue; }
+            const auto dr = int( r ) - int( ( data.body_color >> 16 ) & 255 );
+            const auto dg = int( g ) - int( ( data.body_color >> 8 ) & 255 );
+            const auto db = int( b ) - int( data.body_color & 255 );
+            const auto distance = dr * dr + dg * dg + db * db;
+            if( distance < best ) {
+                best = distance;
+                data.solid_uv = std::array<float, 2> {
+                    data.uv0.first + ( x + 0.5f ) / surface->w *( data.uv1.first - data.uv0.first ),
+                        data.uv0.second + ( y + 0.5f ) / surface->h *( data.uv1.second - data.uv0.second )
+                };
+            }
+        }
+    }
 }
 }
 
@@ -95,22 +118,33 @@ auto cata_tiles::get_sprite_draw_data( const sprite_request &request ) ->
 std::optional<texture_draw_data>
 {
     auto lookup = find_tile_looks_like( request.id, request.category );
+    const auto placeholder = !lookup || lookup->id().starts_with( "unknown" );
     if( !lookup ) {
         auto symbol = uint32_t{};
+        auto color = c_white;
         if( request.category == C_TERRAIN && ter_str_id( request.id ).is_valid() ) {
             symbol = ter_str_id( request.id )->symbol();
+            color = ter_str_id( request.id )->color();
         } else if( request.category == C_FURNITURE && furn_str_id( request.id ).is_valid() ) {
             symbol = furn_str_id( request.id )->symbol();
+            color = furn_str_id( request.id )->color();
         } else if( request.category == C_MONSTER && mtype_id( request.id ).is_valid() ) {
             symbol = UTF8_getch( mtype_id( request.id )->sym );
+            color = mtype_id( request.id )->color;
         } else if( request.category == C_ITEM && itype_id( request.id ).is_valid() ) {
             symbol = UTF8_getch( itype_id( request.id )->sym );
+            color = itype_id( request.id )->color;
         } else if( request.category == C_FIELD && field_type_str_id( request.id ).is_valid() ) {
             symbol = field_type_str_id( request.id )->get_codepoint();
         }
         if( symbol > 0 && symbol < 256 ) {
-            const auto ascii = std::string{ 'A', 'S', 'C', 'I', 'I', '_', char( symbol ), char( -1 ), char( -1 ) };
-            lookup = find_tile_looks_like( ascii, C_NONE );
+            const auto foreground = cata_cursesport::colorpairs[color.to_color_pair_index()].FG +
+                                    ( color.is_bold() ? 8 : 0 );
+            for( const auto fg : { foreground, -1 } ) {
+                const auto ascii = std::string{ 'A', 'S', 'C', 'I', 'I', '_', char( symbol ), char( fg ), char( -1 ) };
+                lookup = find_tile_looks_like( ascii, C_NONE );
+                if( lookup ) { break; }
+            }
         }
         if( !lookup ) { return std::nullopt; }
     }
@@ -162,6 +196,7 @@ std::optional<texture_draw_data>
         .offset_x = picked->offset.x,
         .offset_y = picked->offset.y
     };
+    data.placeholder = placeholder;
     scan_sprite( data );
     return data;
 }
@@ -197,7 +232,7 @@ auto cata_tiles::get_orientation( const orientation_request &request ) -> void
 
 auto cata_tiles::get_character_layers( const Character &ch ) -> character_layers
 {
-    auto out = character_layers{ .mirrored = ch.facing == FD_LEFT };
+    auto out = character_layers{ .ids = {}, .mirrored = ch.facing == FD_LEFT };
     out.ids.emplace_back( ch.is_npc() ? ( ch.male ? "npc_male" : "npc_female" ) :
                           ( ch.male ? "player_male" : "player_female" ), C_NONE );
     for( const auto &overlay : ch.get_overlay_ids() ) {

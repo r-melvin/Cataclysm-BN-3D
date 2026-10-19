@@ -388,6 +388,7 @@ auto make_sprite_uvs( const sprite_ref &s ) -> uvs_t
 
 auto make_solid_uvs( const sprite_ref &s ) -> uvs_t
 {
+    if( s.solid_uv ) { return { *s.solid_uv, *s.solid_uv, *s.solid_uv, *s.solid_uv }; }
     const auto fx = static_cast<float>( std::clamp( ( s.opaque_x0 + s.opaque_x1 ) * 0.5f, 0.05f,
                                         0.95f ) );
     const auto fy = static_cast<float>( std::clamp( s.opaque_y0 * 0.4f + s.opaque_y1 * 0.6f, 0.05f,
@@ -1850,7 +1851,8 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                           .z_max = z_base + size.z * ( 1.0f - anchor[2] ),
                                           .color = light } );
                     }
-                } else if( voxel_items && !sprite.backdrop.valid && sprite.main().alpha_mask ) {
+                } else if( voxel_items && !sprite.backdrop.valid && !sprite.main().placeholder &&
+                           sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
                                           .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
                                           .color = light, .depth_fraction = profile.depth_fraction,

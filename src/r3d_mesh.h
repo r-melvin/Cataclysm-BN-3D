@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -16,6 +17,7 @@
 
 #include "coordinates.h"
 #include "r3d_furniture_profiles.h"
+#include "r3d_prop_geometry.h"
 #include "r3d_gpu.h"
 #include "r3d_presentation_profiles.h"
 #include "r3d_sprite_voxels.h"
@@ -51,6 +53,8 @@ struct sprite_ref {
     bool flip = false;     // mirrored horizontally
     uint32_t top_color = 0;  // average colours from the tileset loader (see sprite_scan)
     uint32_t body_color = 0;
+    std::optional<std::array<float, 2>> solid_uv{};
+    bool placeholder = false;
     std::shared_ptr<const std::vector<uint8_t>> alpha_mask{};
     int alpha_width = 0;
     int alpha_height = 0;
@@ -65,13 +69,16 @@ struct sprite_ref {
 
 struct tile_info {
     shape sh;
+    solid_prop prop = solid_prop::none;
+    bool stair_flight = false;
+    bool stairs_down = false;
     sprite_ref backdrop; // opaque background layer, drawn first when the tileset has one
     sprite_ref sprite;   // foreground layer (alpha tested, may be sparse)
     furniture_proportions proportions;
     float base_offset = 0.0f; // vertical contact offset for authored furniture
     float depth_scale = 1.0f; // furniture depth, anchored at its back after wall fitting
     bool tree  = false;   // the level above holds its treetop, which this sprite already shows
-    bool stairs = false;   // the level above holds its treetop, which this sprite already shows
+    bool stairs = false;   // native vertical transition, including ladders and hatches
     sprite_ref side;     // texture for the sides of a wall (see wall_sides), else invalid
     sprite_ref cap;      // the top of such a wall: a plain patch of the same texture
     sprite_ref front;    // optional authored furniture front; preserves native art when absent

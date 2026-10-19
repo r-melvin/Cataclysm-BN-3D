@@ -739,4 +739,75 @@ TEST_CASE(
     perception.visibility_cache[perception.idx(cargo_pos.x(), cargo_pos.y())] = lit_level::LOW;
     CHECK(r3d::build_vehicle_mesh(view).vertices.size() > hidden_cargo.vertices.size());
 }
+TEST_CASE("r3d_vehicle_solid_faces_sample_opaque_pixels", "[r3d][vehicle][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh != nullptr);
+    REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("halfboard_nw"), true) >= 0);
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    REQUIRE_FALSE(mesh.empty());
+    auto solid_faces = 0;
+    for (auto q = size_t{0}; q + 3 < mesh.vertices.size(); q += 4) {
+        const auto& first = mesh.vertices[q];
+        auto constant = true;
+        for (auto i = size_t{1}; i < 4; ++i) {
+            constant =
+                constant && mesh.vertices[q + i].u == first.u && mesh.vertices[q + i].v == first.v;
+        }
+        if (!constant) { continue; }
+        ++solid_faces;
+        auto matched = false;
+        for (auto rotation = 0; rotation < 4; ++rotation) {
+            const auto donor = tilecontext->get_sprite_draw_data(
+                {.id = "vp_halfboard_nw",
+                 .category = C_VEHICLE_PART,
+                 .pos = tripoint_bub_ms(0, 0, 0),
+                 .rotation = rotation,
+                 .variant = ""});
+            if (!donor || !donor->solid_uv || !donor->alpha_mask) { continue; }
+            if (first.u != (*donor->solid_uv)[0] || first.v != (*donor->solid_uv)[1]) { continue; }
+            auto sheet_matches = false;
+            for (const auto& batch : mesh.batches) {
+                for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+                    sheet_matches =
+                        sheet_matches || (mesh.indices[i] == q && batch.sheet == donor->texture);
+                }
+            }
+            if (!sheet_matches) { continue; }
+            matched = true;
+            const auto x = static_cast<int>(
+                (first.u - donor->uv0.first) / (donor->uv1.first - donor->uv0.first)
+                * donor->dimensions.w);
+            const auto y = static_cast<int>(
+                (first.v - donor->uv0.second) / (donor->uv1.second - donor->uv0.second)
+                * donor->dimensions.h);
+            REQUIRE(x >= 0);
+            REQUIRE(y >= 0);
+            REQUIRE(x < donor->dimensions.w);
+            REQUIRE(y < donor->dimensions.h);
+            CHECK((*donor->alpha_mask)[static_cast<size_t>(y * donor->dimensions.w + x)] != 0);
+        }
+        CHECK(matched);
+    }
+    CHECK(solid_faces > 0);
+}
+
 #endif

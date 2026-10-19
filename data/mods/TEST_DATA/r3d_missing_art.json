@@ -1,0 +1,24 @@
+[
+  {
+    "type": "furniture",
+    "id": "test_r3d_missing_art_furniture",
+    "name": "missing art test cabinet",
+    "description": "A renderer fixture with no native sprite, exercising readable glyph fallback.",
+    "symbol": "?",
+    "color": "white",
+    "move_cost_mod": -1,
+    "required_str": 8,
+    "flags": [ "CONTAINER", "TRANSPARENT" ]
+  },
+  {
+    "type": "GENERIC",
+    "id": "test_r3d_missing_art_item",
+    "name": "missing art test item",
+    "description": "A renderer fixture with no native sprite, exercising readable glyph fallback.",
+    "symbol": "?",
+    "color": "white",
+    "weight": "100 g",
+    "volume": "100 ml",
+    "material": [ "steel" ]
+  }
+]

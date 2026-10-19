@@ -179,3 +179,7 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Renderer texture checks must include missing-art coverage on a smaller bundled tileset (for example Hoder's `t_wall_w`), alongside Ultica; valid unknown sprites must not be mistaken for wall elevations/materials.
 - Native multitile edge rotation 1 is east-west; rotation 0 is north-south. Wall elevations must use the horizontal face art, verified against both the bound source sheet and crop.
 - Warning cleanup edits must be scoped to the compiler-reported function, not the first matching declaration in a file; repeated local names and parameters can be used in neighboring functions.
+
+- Terrain/furniture JSON symbols accept one byte or the named line symbols, not arbitrary UTF-8 or embedded NUL characters. Validate new renderer fixtures through native data loading before launching broad tests. Pin a real-art tileset for solid-prop tests; missing-art glyphs should remain readable upright markers.
+- Renderer tile caches include subtile and rotation in their keys. Mesh tests should compare the bound art and behavior rather than require pointer identity across differently oriented cache entries.
+- Automated Lua-console input can coalesce Return events. Preserve statement boundaries explicitly (or verify editor line breaks) before executing a pasted fixture.

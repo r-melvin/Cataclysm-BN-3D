@@ -334,4 +334,41 @@ TEST_CASE(
     here.i_clear(origin);
     CHECK(r3d::build_entity_mesh(view).empty());
 }
+
+TEST_CASE("r3d_missing_item_art_stays_readable_with_voxel_items_enabled", "[r3d][items][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto voxel_items = override_option("R3D_VOXEL_ITEMS", "true");
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    get_avatar().setpos(origin);
+    auto& here = get_map();
+    here.add_item(origin, item::spawn("test_r3d_missing_art_item", calendar::turn));
+    auto cache = r3d::tile_info_cache{};
+    cache.set_voxel_items(true);
+    const auto& art = cache.named(
+        {.category = C_ITEM, .id = "test_r3d_missing_art_item", .tiles = *tilecontext});
+    REQUIRE(art.main().valid);
+    REQUIRE(art.main().placeholder);
+    auto cam = r3d::camera{};
+    cam.mode = r3d::camera_mode::first_person;
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .surface = [](const tripoint_bub_ms& /*p*/) { return r3d::floor_height; }};
+    const auto enabled = r3d::build_entity_mesh(view);
+    REQUIRE_FALSE(enabled.empty());
+    get_options().get_option("R3D_VOXEL_ITEMS").setValue("false");
+    const auto disabled = r3d::build_entity_mesh(view);
+    CHECK(enabled.vertices.size() == disabled.vertices.size());
+    CHECK(enabled.indices == disabled.indices);
+    CHECK(here.i_at(origin).size() == 1);
+}
+
 #endif

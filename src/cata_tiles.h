@@ -19,10 +19,12 @@
 #include "weighted_list.h"
 #include "zone_draw_options.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -690,6 +692,10 @@ struct texture_draw_data {
     // average colours of its top and the rest (see sprite_scan)
     uint32_t top_color = 0;
     uint32_t body_color = 0;
+    /// Fully opaque body texel for closed solids; coordinates refer to the bound sheet.
+    std::optional<std::array<float, 2>> solid_uv{};
+    /// ASCII or missing-art marker, which must not be extruded as object artwork.
+    bool placeholder = false;
     // clockwise quarter turns the thing faces (its front away from south), whether the art is
     // turned (quarter_turns) or the tileset has a sprite drawn for that direction
     int facing = 0;

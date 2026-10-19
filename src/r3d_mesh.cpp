@@ -112,6 +112,8 @@ auto to_sprite_ref( const texture_draw_data &data, bool with_alpha = false ) -> 
     ref.size_y = data.size_y;
     ref.top_color = data.top_color;
     ref.body_color = data.body_color;
+    ref.solid_uv = data.solid_uv;
+    ref.placeholder = data.placeholder;
     if( with_alpha && data.alpha_mask ) {
         auto alpha = orient_sprite_alpha( { .width = data.dimensions.w, .height = data.dimensions.h,
                                             .alpha = *data.alpha_mask, .quarter_turns = data.quarter_turns,
@@ -217,11 +219,29 @@ auto resolve_layers( const resolve_layers_options &options ) -> void
         out.backdrop = to_sprite_ref( *bg );
     }
     if( const auto fg = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = id, .category = category, .pos = origin, .background = false, .subtile = subtile, .rotation = rota, .variant = variant } ) ) ) {
-        out.sprite = to_sprite_ref( *fg, with_alpha );
+        out.sprite = to_sprite_ref( *fg, with_alpha && !fg->placeholder );
     }
     if( options.allow_unknown && !out.backdrop.valid && !out.sprite.valid ) {
-        if( const auto unknown = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = std::string( "unknown" ), .category = C_NONE, .pos = origin, .variant = "" } ) ) ) {
-            out.sprite = to_sprite_ref( *unknown );
+        auto fallbacks = std::vector<std::string> {};
+        switch( category ) {
+            case C_FURNITURE:
+                fallbacks.emplace_back( "unknown_furniture" );
+                break;
+            case C_ITEM:
+                fallbacks.emplace_back( "unknown_item" );
+                break;
+            case C_MONSTER:
+                fallbacks.emplace_back( "unknown_monster" );
+                break;
+            default:
+                break;
+        }
+        fallbacks.emplace_back( "unknown" );
+        for( const auto &fallback : fallbacks ) {
+            if( const auto unknown = tiles.get_sprite_draw_data( { .id = fallback, .category = C_NONE, .pos = origin, .variant = "" } ) ) {
+                out.sprite = to_sprite_ref( *unknown );
+                break;
+            }
         }
     }
     if( with_alpha && out.sprite.alpha_mask ) {
@@ -626,6 +646,42 @@ auto emit_box( const emit_box_options &options ) -> void
                 { ox + sd.rx, oy + sd.ry, zs }, { ox + sd.lx, oy + sd.ly, zs }
             }
         };
+        if( depth_scale < 1.0f && sd.face == front ) {
+            // Close the wall infill with plain metal. Keep the door at one native tile
+            // width instead of stretching it across the extra corner-wall distance.
+            const auto along_x = ( facing & 1 ) == 0;
+            const auto start = along_x ? sd.lx : sd.ly;
+            const auto end = along_x ? sd.rx : sd.ry;
+            const auto span = end - start;
+            auto cuts = std::vector<float> { 0.0f, 1.0f };
+            if( std::abs( span ) > 0.001f ) {
+                for( const auto boundary : { 0.0f, 1.0f } ) {
+                    const auto fraction = ( boundary - start ) / span;
+                    if( fraction > 0.0f && fraction < 1.0f ) { cuts.push_back( fraction ); }
+                }
+            }
+            std::ranges::sort( cuts );
+            for( auto i = size_t{ 1 }; i < cuts.size(); ++i ) {
+                const auto a = cuts[i - 1];
+                const auto b = cuts[i];
+                auto panel = c;
+                for( const auto j : { 0, 3 } ) {
+                    panel[j][0] = ox + sd.lx + ( sd.rx - sd.lx ) * a;
+                    panel[j][1] = oy + sd.ly + ( sd.ry - sd.ly ) * a;
+                }
+                for( const auto j : { 1, 2 } ) {
+                    panel[j][0] = ox + sd.lx + ( sd.rx - sd.lx ) * b;
+                    panel[j][1] = oy + sd.ly + ( sd.ry - sd.ly ) * b;
+                }
+                const auto middle = start + span * ( a + b ) * 0.5f;
+                const auto door = middle >= 0.0f && middle <= 1.0f;
+                const auto authored = door && options.materials && options.materials->front.valid;
+                const auto &source = authored ? options.materials->front : s;
+                sink.add( { .sprite = source, .corners = panel,
+                            .uvs = authored ? material_face_uvs( source ) : door ? side_uv : plain_uv, .ref = refs[sd.ref] } );
+            }
+            continue;
+        }
         // A slab's sides are its own wood (the lid's colour), lit like any side.
         const auto *material = options.materials ?
                                ( sd.face == front ? &options.materials->front : &options.materials->side ) : nullptr;
@@ -1343,6 +1399,8 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
     info.tree = traits.tree;
     info.stairs = t.has_flag( TFLAG_GOES_UP ) ||
                   t.has_flag( TFLAG_GOES_DOWN );
+    info.stair_flight = info.stairs && t.id.str().starts_with( "t_stairs_" );
+    info.stairs_down = t.has_flag( TFLAG_GOES_DOWN );
     info.window = traits.window;
     info.door = traits.door;
     info.open_door = traits.open_door;
@@ -1505,6 +1563,7 @@ auto tile_info_cache::furniture( const furniture_options &options ) -> const til
             }
             if( art_id == "f_locker" || art_id == "f_vitrified_locker" ) {
                 info.depth_scale = 0.5f;
+                info.proportions.size[1] = 0.5f;
             }
             if( art_id == "f_bulletin" ) {
                 traits.panel = true;
@@ -1515,10 +1574,29 @@ auto tile_info_cache::furniture( const furniture_options &options ) -> const til
         }
         info.sh = classify_furniture( traits );
         resolve_layers( { .tiles = tiles, .id = f.id.str(), .category = C_FURNITURE, .out = info, .subtile = subtile, .rota = rota } );
+        if( f.id.str() == "f_bench" ) {
+            // Geometry supplies the row orientation. A vertical top-down variant has
+            // shadow/legs where the box mapper expects a horizontal seat elevation.
+            resolve_layers( { .tiles = tiles, .id = "f_bench", .category = C_FURNITURE, .out = info, .subtile = 2, .rota = 1 } );
+            info.sprite.facing = 0;
+        }
+        if( f.id.str() == "f_bench_flipped" ) {
+            info.prop = solid_prop::overturned_bench;
+            resolve_layers( { .tiles = tiles, .id = "f_bench", .category = C_FURNITURE, .out = info, .subtile = 2, .rota = 1 } );
+            info.sh.height = floor_height + 0.65f;
+        } else if( f.id.str() == "f_wreckage" ) {
+            info.prop = solid_prop::metal_wreckage;
+        }
+        if( info.prop == solid_prop::none && info.main().placeholder ) {
+            info.sh.kind = shape_kind::upright;
+        }
         if( info.sh.kind == shape_kind::prism ) {
             const auto profile = profiles_.find( presentation_profile_key( "furniture", f.id.str() ) );
             if( profile != profiles_.end() ) {
-                info.proportions = { .size = profile->second.size, .anchor = profile->second.support_anchor };
+                for( auto axis = size_t{ 0 }; axis < info.proportions.size.size(); ++axis ) {
+                    if( profile->second.size[axis] > 0.0f ) { info.proportions.size[axis] = profile->second.size[axis]; }
+                }
+                info.proportions.anchor = profile->second.support_anchor;
                 const auto vertical = furniture_profile_height( info.proportions, info.sh.height );
                 info.base_offset = vertical.base_offset;
                 info.sh.height = vertical.top;
@@ -1880,6 +1958,30 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             }
             switch( ts.kind ) {
                 case shape_kind::floor:
+                    if( terrain.stair_flight ) {
+                        // Read absolute submaps: flights may cross a chunk boundary.
+                        const auto matches = [&]( const int dx, const int dy ) {
+                            const auto absolute = chunk_origin + tripoint_rel_ms( lx + dx, ly + dy, 0 );
+                            const auto split = project_remain<coords::sm>( absolute );
+                            const auto sm = lookup( split.quotient_tripoint );
+                            return sm && sm->get_ter( split.remainder ) == self->get_ter( p );
+                        };
+                        const auto run = [&]( const int dx, const int dy ) {
+                            auto length = 0;
+                            while( length < 8 && matches( dx * ( length + 1 ), dy * ( length + 1 ) ) ) { ++length; }
+                            return length;
+                        };
+                        const auto west = run( -1, 0 );
+                        const auto east = run( 1, 0 );
+                        const auto north = run( 0, -1 );
+                        const auto south = run( 0, 1 );
+                        const auto along_y = north + south > west + east;
+                        const auto boxes = stair_cuboids( { .down = terrain.stairs_down, .along_y = along_y,
+                                                            .segment = along_y ? north : west, .segments = 1 + ( along_y ? north + south : west + east ) } );
+                        emit_prop_cuboids( { .sink = sink, .material = terrain.main(), .boxes = boxes,
+                                             .x = lx, .y = ly, .base = ts.height } );
+                        break;
+                    }
                     if( ( faces & face_top ) != 0 ) {
                         auto floor_ref = light_ref( make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = face_shade[0] } ) );
                         floor_ref.floor = true;
@@ -2207,6 +2309,15 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             if( ts.kind != shape_kind::floor || fs.kind == shape_kind::empty ) {
                 continue;
             }
+            if( furn.prop != solid_prop::none ) {
+                const auto boxes = prop_cuboids( furn.prop );
+                const auto bench = []( const furn_id id ) { return id.obj().id.str() == "f_bench" || id.obj().id.str() == "f_bench_flipped"; };
+                const auto along_y = bench( chunk_tiles.furniture_at( lx, ly - 1 ) ) ||
+                                     bench( chunk_tiles.furniture_at( lx, ly + 1 ) );
+                emit_prop_cuboids( { .sink = sink, .material = furn.main(), .boxes = boxes,
+                                     .x = lx, .y = ly, .base = ts.height, .facing = along_y ? 1 : 0 } );
+                continue;
+            }
             if( fs.kind == shape_kind::upright ) {
                 mesh_uprights.push_back( { .lx = static_cast<uint8_t>( lx ), .ly = static_cast<uint8_t>( ly ),
                                            .z_base = ts.height, .info = &furn } );
@@ -2256,6 +2367,10 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             constexpr auto low_box = static_cast<float>( 0.6f );
             auto layout = box_layout( furniture_box_layout( { .ox0 = spr.opaque_x0, .oy0 = spr.opaque_y0, .ox1 = spr.opaque_x1,
                                       .oy1 = spr.opaque_y1, .front = front_fraction( fs.height - ts.height ), .low = fs.height < low_box } ) );
+            if( furn.depth_scale < 1.0f ) {
+                layout.x0 = 0.0f;
+                layout.x1 = 1.0f;
+            }
             // The same furniture next door: a row of lockers, a long bench.
             const auto here_furn = furn_id( self->get_furn( p ) );
             const auto dirs = std::array<point, 4> {{ point( 0, -1 ), point( 0, 1 ), point( -1, 0 ), point( 1, 0 ) }};

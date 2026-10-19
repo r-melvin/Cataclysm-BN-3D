@@ -110,24 +110,34 @@ art test reproduced five failing assertions before the fix. Both binaries build;
 163 renderer/onboarding tests pass (53,171 assertions). A private Hoder virtual
 run confirms solid wall faces replace the magenta pattern; evidence is under
 `/tmp/bn-wall-regression/`. A second private Ultica run shows the intended grey
-wall elevation (`/tmp/bn-wall-ultica/after.png`). The newer shelter screenshot
-also reports bench seams, corner/row locker differences, and unreadable extruded
-items; those remain active R3D-03/05/07 follow-ups. Dan Guzman's Meredith world is
-backed up privately under `/tmp/bn-meredith-regression/`, using SQLite's backup API
-for consistent database snapshots. His actual shelter has `f_bench_flipped`
-interruptions and `f_wreckage` beside lockers; preserve these native states.
-The apparent voxel character is a loose `talking_doll`; a bundled profile now
-sets toy proportions. The trashcan has opaque, identity-bound Ultica body/lid
-crops and a compact footprint, preventing its source shadow/transparent margins
-from becoming disconnected faces. Both targets build without new warnings;
-165 renderer/onboarding cases pass (53,480 assertions), including actual donor
-alpha coverage and emitted doll height. A private native run confirms the
-connected trashcan and reduced doll (`profiles-after.png` / `profiles-wide.png`
-under `/tmp/bn-meredith-regression/`). The marked stairwell, black patches,
-bench-state readability and locker corner/row proportions need native mesh and
-visual regressions. The outdoor screenshot adds unknown-art cubes/creatures and
-vehicle panel/state problems; identify exact native IDs before choosing fallbacks. Broader cross-tileset
-furniture/material acceptance remains in R3D-07.
+wall elevation (`/tmp/bn-wall-ultica/after.png`). The shelter follow-up now uses horizontal seat art for every intact bench row,
+removing black patches caused by sampling vertical top-down variants. Native
+flipped benches have closed overturned-seat geometry; intact neighbours join
+without spanning the overturned state. Wreckage is a low pile of intersecting
+metal pieces. Actual stair flights use closed treads spanning one storey, with
+continuous segment heights across submap boundaries; ladders and hatches retain
+their separate presentation. Locker depth is consistently half a tile, with
+plain corner infill instead of stretching the door face. The earlier talking-doll
+scale and connected trashcan profiles remain in place.
+
+Missing-art furniture and items stay visible as upright glyph/category markers;
+they are not extruded into question-mark cubes. Solid vehicle faces now sample
+an opaque texel from the same part sprite, avoiding transparent material holes.
+Both binaries build without warnings in the affected rebuild. The local
+renderer/onboarding suite passes 172 cases / 54,739 assertions. Native fixtures
+cover bench seams, flipped state, stair continuity, locker dimensions, marker
+retention and the source sheet/opacity of vehicle materials. A software-Vulkan
+Xvfb comparison confirms the shelter fixture in both renderers; evidence is in
+ignored `out/validation/dan-recovery/shelter_{2d,3d}.png` and test logs in
+`out/validation/`. The desktop restart removed the earlier `/tmp` world snapshot;
+Dan's last alive character checkpoint was recovered from the native graveyard
+into `out/validation/dan-recovery/character-checkpoint/`, but current Meredith
+world files have been regenerated and are not that original world.
+
+The exact outdoor screenshot's vehicles and unknown species still require a
+matching saved scene; broader vehicle layer/state presentation and cross-tileset
+material acceptance remain in R3D-04/07. These shelter regressions are fixed;
+that does not mark the broader presentation-profile contract complete.
 
 ## R3D-04: Finish vehicle layer, material and state presentation
 
