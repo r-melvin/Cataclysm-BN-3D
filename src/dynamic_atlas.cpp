@@ -15,8 +15,6 @@
 #include "sdl_utils.h"
 #include "sdltiles.h"
 
-#define dbg(x) DebugLogFL((x),DC::SDL)
-
 detail::texture_packer::~texture_packer() = default;
 
 template<typename T>

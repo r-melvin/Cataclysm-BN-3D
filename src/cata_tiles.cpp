@@ -4196,7 +4196,7 @@ void cata_tiles::draw( point dest, const tripoint_bub_ms &center, int width, int
         half_open_rectangle<point> maprect( mappos.raw(), mappos.raw() + point( mapsize,
                                             mapsize ) );
 
-        const auto is_map = [mappos, maprect]( const tripoint & p ) {
+        const auto is_map = [maprect]( const tripoint & p ) {
             if( !maprect.contains( p.xy() ) ) {
                 return false;
             }
@@ -5910,7 +5910,7 @@ bool cata_tiles::draw_vpart( const tripoint_bub_ms &p, lit_level ll, int &height
 bool cata_tiles::draw_critter_at( const tripoint_bub_ms &p, lit_level ll, int &height_3d,
                                   const bool ( &invisible )[5], int z_drop )
 {
-    bool result;
+    auto result = false;
     bool is_player;
     bool sees_player;
     Attitude attitude;
