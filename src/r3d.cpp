@@ -2189,9 +2189,9 @@ auto draw_fp_hud( const draw_fp_hud_options &options ) -> void
     if( looking != 0 ) {
         const auto levels = static_cast<int>( std::abs( looking ) );
         const auto line = std::string( looking > 0 ?
-                                       string_format( ngettext( "Looking: %d level up", "Looking: %d levels up",
+                                       string_format( vgettext( "Looking: %d level up", "Looking: %d levels up",
                                                levels ), levels ) :
-                                       string_format( ngettext( "Looking: %d level down", "Looking: %d levels down",
+                                       string_format( vgettext( "Looking: %d level down", "Looking: %d levels down",
                                                levels ), levels ) );
         constexpr auto light_cyan = static_cast<unsigned char>( 14 );
         text( { .x = x + w * 0.5f, .y = y + std::max( 22.0f, cell_h + 8.0f ) + 10.0f, .text = line, .color = light_cyan } );
