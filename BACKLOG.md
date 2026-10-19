@@ -341,6 +341,9 @@ combination has received human visual acceptance. Temporary evidence:
 
 ## R3D-13: Integrate guided onboarding
 
+Guided Play has its own New Game entry. Ordinary Play Now does not opt into
+guided lessons or the starter kit; global hints remain an explicit option.
+
 **Status: integrated on main; broader UI/platform acceptance remains R3D-07/10.**
 Lessons, F1 checklist, context-specific F2 explanations, progress persistence,
 optional guided start kit and translation extraction are included. Hints-only

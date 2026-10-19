@@ -28,13 +28,11 @@ auto subscriber() -> event_subscriber &; // *NOPAD*
 
 // Forgets the progress of the previous character.  Called when a game is set up.
 auto reset_progress() -> void;
-// Called once a new character is made, before the game starts.  Characters made with
-// Play Now get guided hints under the default option.
-auto prepare_new_game( bool play_now ) -> void;
+/// Called before a new character is created. Guided Play enables hints under the default option.
+auto prepare_new_game( bool guided ) -> void;
 
-// The scenario a Play Now (Default Scenario) character starts in when guided hints and the
-// guided start kit are on, or an empty string for the usual default scenario.  Call it after
-// prepare_new_game().
+/// The Guided Play scenario when hints and the kit are enabled, otherwise empty.
+/// Call after prepare_new_game().
 auto start_scenario() -> std::string;
 
 // Whether hints are on for this game at all.

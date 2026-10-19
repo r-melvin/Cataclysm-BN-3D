@@ -692,7 +692,7 @@ class manager : public event_subscriber
         bool built = false;
         // Progress waiting for the lessons to be loaded, or kept across a data reload.
         std::map<std::string, ob_lesson_state> pending_states;
-        // The character was made with Play Now.
+        // The character was made with the Guided Play menu entry.
         bool guided = false;
         // The world is the Tutorial Game's.
         bool in_tutorial = false;
@@ -1028,18 +1028,18 @@ auto reset_progress() -> void
     get_manager().reset_progress();
 }
 
-auto prepare_new_game( bool play_now ) -> void
+auto prepare_new_game( bool guided ) -> void
 {
     auto &m = get_manager();
     m.reset_progress();
-    m.guided = play_now;
+    m.guided = guided;
 }
 
 auto start_scenario() -> std::string
 {
     static const auto guided_scenario = std::string( "evacuee_guided" );
     auto &m = get_manager();
-    if( m.level() == ob_level::off || !option_on( "ONBOARDING_SOFT_START" ) ||
+    if( !m.guided || m.level() == ob_level::off || !option_on( "ONBOARDING_SOFT_START" ) ||
         !string_id<scenario>( guided_scenario ).is_valid() ) {
         return std::string();
     }

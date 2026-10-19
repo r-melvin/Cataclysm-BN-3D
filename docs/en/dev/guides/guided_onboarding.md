@@ -5,10 +5,13 @@ play. It uses BN actions, event subscribers, dialogue conditions, and sidebar
 panels. Lesson titles, descriptions and conditional variants are included in BN's
 JSON translation extraction. Hints do not spend turns or modify combat, movement, or survival rules.
 
+Choose **New Game → Guided Play** for guided lessons and an optional starter kit.
+Ordinary Play Now entries use the native starts without either by default.
+
 Select Guided hints in the Interface options:
 
 - Off disables the overlay.
-- Play Now only (default) enables hints for quickly generated characters.
+- Guided play only (default) enables hints for the separate Guided Play entry.
 - Hints only enables messages and the checklist for all characters. Popup lessons
   finish after their text is logged, so later lessons remain available.
 - Hints and popups also allows lesson popups.
@@ -20,7 +23,7 @@ survives saving and loading. Existing saves without progress start cleanly.
 BN's built-in Tutorial Game keeps its own teaching flow.
 
 The optional Guided start kit chooses an ordinary additional Evacuee (guided)
-scenario for Play Now (Default Scenario), with a Prepared Survivor profession.
+scenario for Guided Play, with a Prepared Survivor profession.
 It provides a backpack, flashlight, water and basic tools. Disable the option for
 the normal start. Custom character creation and random scenarios stay native.
 

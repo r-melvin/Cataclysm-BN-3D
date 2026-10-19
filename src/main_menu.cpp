@@ -510,21 +510,24 @@ void main_menu::init_strings()
         // Special games don't play well together with shared maps
         vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "<T|t>utorial" ) );
         vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "<D|d>efence mode" ) );
+        vNewGameSubItems.emplace_back( pgettext( "Main Menu|New Game", "<G|g>uided play" ) );
     }
     vNewGameHints.clear();
     vNewGameHints.emplace_back(
-        _( "Allows you to fully customize points pool, scenario, and character's profession, stats, traits, skills and other parameters." ) );
+                     _( "Allows you to fully customize points pool, scenario, and character's profession, stats, traits, skills and other parameters." ) );
     vNewGameHints.emplace_back( _( "Select from one of previously created character templates." ) );
     vNewGameHints.emplace_back(
-        _( "Creates random character, but lets you preview the generated character and the scenario and change character and/or scenario if needed." ) );
+                     _( "Creates random character, but lets you preview the generated character and the scenario and change character and/or scenario if needed." ) );
     vNewGameHints.emplace_back(
-        _( "Puts you right in the game, randomly choosing character's traits, profession, skills and other parameters.  Scenario is fixed to Evacuee." ) );
+                     _( "Puts you right in the game, randomly choosing character's traits, profession, skills and other parameters.  Scenario is fixed to Evacuee." ) );
     vNewGameHints.emplace_back(
-        _( "Puts you right in the game, randomly choosing scenario and character's traits, profession, skills and other parameters." ) );
+                     _( "Puts you right in the game, randomly choosing scenario and character's traits, profession, skills and other parameters." ) );
     vNewGameHints.emplace_back(
-        _( "Learn controls and basic game mechanics while exploring a small underground complex." ) );
+                     _( "Learn controls and basic game mechanics while exploring a small underground complex." ) );
     vNewGameHints.emplace_back(
-        _( "Defend against waves of incoming enemies.  This game mode hasn't been updated in a while and may contain bugs." ) );
+                     _( "Defend against waves of incoming enemies.  This game mode hasn't been updated in a while and may contain bugs." ) );
+    vNewGameHints.emplace_back(
+                     _( "Start with a generated character, guided lessons and an optional starter kit." ) );
     vNewGameHotkeys.clear();
     vNewGameHotkeys.reserve( vNewGameSubItems.size() );
     for( const std::string &item : vNewGameSubItems ) {
@@ -944,6 +947,7 @@ bool main_menu::new_character_tab()
     } );
     g->gamemode.reset();
 
+    const auto guided_play = sel2 == 7;
     WORLDINFO *world;
     if( sel2 == 5 ) {
         g->gamemode = get_special_game( special_game_type::TUTORIAL );
@@ -953,7 +957,7 @@ bool main_menu::new_character_tab()
         world = world_generator->make_new_world( special_game_type::DEFENSE );
     } else {
         // Pick a world, suppressing prompts if it's "play now" mode.
-        bool empty_only = sel2 == 3 || sel2 == 4;
+        const auto empty_only = sel2 == 3 || sel2 == 4 || guided_play;
         bool show_prompt = !empty_only;
         world = world_generator->pick_world( show_prompt, empty_only );
     }
@@ -989,14 +993,14 @@ bool main_menu::new_character_tab()
             play_type = character_type::RANDOM;
             break;
         case 3:
+        case 7: // Guided play uses the default scenario unless the guided kit is enabled.
             play_type = character_type::NOW;
             break;
         case 4:
             play_type = character_type::FULL_RANDOM;
             break;
     }
-    onboarding::prepare_new_game( play_type == character_type::NOW ||
-                                  play_type == character_type::FULL_RANDOM );
+    onboarding::prepare_new_game( guided_play );
     if( !pc.create( play_type, selected_template ) ) {
         load_char_templates();
         MAPBUFFER.clear();

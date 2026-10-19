@@ -82,7 +82,8 @@ TEST_CASE("onboarding_hint_refresh_does_not_spend_game_time", "[onboarding][inte
 
 TEST_CASE("onboarding_start_kit_is_optional", "[onboarding][integration]") {
     auto cleanup = on_out_of_scope([]() { onboarding::reset_progress(); });
-    const auto mode = override_option("ONBOARDING_HINTS", "play_now");
+    const auto hints = GENERATE("play_now", "hints", "full");
+    const auto mode = override_option("ONBOARDING_HINTS", hints);
     const auto kit_enabled = GENERATE("false", "true");
     const auto kit = override_option("ONBOARDING_SOFT_START", kit_enabled);
     onboarding::prepare_new_game(true);

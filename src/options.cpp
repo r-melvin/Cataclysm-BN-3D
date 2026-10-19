@@ -1825,18 +1825,18 @@ void options_manager::add_options_interface()
     add( "ONBOARDING_HINTS", "interface", translate_marker( "Guided hints" ),
          translate_marker( "Hints for new players: what to try next, shown in the sidebar and the "
                            "message log, with a few popups for important moments.  They never change "
-                           "the game.  Play Now characters: on for characters made with Play Now, off "
+                           "the game.  Guided play only: on for characters made with Guided Play, off "
                            "for others.  Hints only: every character, without popups.  Hints and "
     "popups: every character." ), {
         { "off", translate_marker( "Off" ) },
-        { "play_now", translate_marker( "Play Now characters" ) },
+        { "play_now", translate_marker( "Guided play only" ) },
         { "hints", translate_marker( "Hints only" ) },
         { "full", translate_marker( "Hints and popups" ) }
     },
     "play_now" );
 
     add( "ONBOARDING_SOFT_START", "interface", translate_marker( "Guided start kit" ),
-         translate_marker( "With guided hints on, Play Now! (Default Scenario) starts in the "
+         translate_marker( "With guided hints on, Guided Play starts in the "
                            "\"Evacuee (guided)\" scenario: the usual evacuation shelter, with a "
                            "backpack, a flashlight, a bottle of water and a pocket knife.  Off: the "
                            "usual default scenario." ),
