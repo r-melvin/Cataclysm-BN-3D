@@ -143,6 +143,7 @@ endif ()
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Darwin")
     set(_OS_DARWIN_ 1)
     add_definitions(-DMACOSX)
+    add_definitions(-D_LIBCPP_ENABLE_EXPERIMENTAL)
     if (TILES)
         add_definitions(-DOSX_SDL3_LIBS)
     endif ()
@@ -519,6 +520,27 @@ if (CATA_SDL)
                 list(APPEND CATA_MISSING_PRECOMPILED_SHADERS "${SHADER_NAME}")
             endif ()
         endforeach ()
+
+        if (CATA_MISSING_PRECOMPILED_SHADERS)
+            find_program(BASH_EXECUTABLE bash)
+            if (BASH_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/build-scripts/generate-shaders.sh")
+                message(STATUS "Attempting to generate missing precompiled shaders...")
+                execute_process(
+                    COMMAND "${BASH_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/build-scripts/generate-shaders.sh"
+                    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                    RESULT_VARIABLE GEN_RESULT
+                )
+                if (GEN_RESULT EQUAL 0)
+                    set(CATA_MISSING_PRECOMPILED_SHADERS "")
+                    foreach (SHADER_OUT ${CATA_PRECOMPILED_SHADER_OUTPUTS})
+                        if (NOT EXISTS "${SHADER_OUT}")
+                            get_filename_component(SHADER_NAME ${SHADER_OUT} NAME)
+                            list(APPEND CATA_MISSING_PRECOMPILED_SHADERS "${SHADER_NAME}")
+                        endif ()
+                    endforeach ()
+                endif ()
+            endif ()
+        endif ()
 
         if (CATA_MISSING_PRECOMPILED_SHADERS)
             message(FATAL_ERROR

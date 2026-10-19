@@ -2,6 +2,10 @@
 #ifndef CATA_SRC_R3D_ASSET_LOADER_H
 #define CATA_SRC_R3D_ASSET_LOADER_H
 
+#if defined(__APPLE__) && !defined(_LIBCPP_ENABLE_EXPERIMENTAL)
+#define _LIBCPP_ENABLE_EXPERIMENTAL
+#endif
+
 #include <cstdint>
 #include <expected>
 #include <filesystem>
