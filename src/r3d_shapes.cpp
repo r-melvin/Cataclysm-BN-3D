@@ -26,16 +26,16 @@ constexpr auto decal_height = static_cast<float>( floor_height + 0.01f );
 auto classify_terrain( const tile_traits &t ) -> shape
 {
     if( t.no_floor ) {
-    return { .kind = shape_kind::empty, .height = 0.0f };
-}
-if( t.tree ) {
-    return { .kind = shape_kind::upright, .height = tree_height };
-}
-if( t.shrub ) {
-    return { .kind = shape_kind::upright, .height = shrub_height, .slab = 0.0f, .ground_backdrop = true };
-}
-// Windows, doors and doorframes stand in the wall line as panels rather than filling the tile.
-if( !t.wall && ( t.window || t.door ) ) {
+        return { .kind = shape_kind::empty, .height = 0.0f };
+    }
+    if( t.tree ) {
+        return { .kind = shape_kind::upright, .height = tree_height };
+    }
+    if( t.shrub ) {
+        return { .kind = shape_kind::upright, .height = shrub_height, .slab = 0.0f, .ground_backdrop = true };
+    }
+    // Windows, doors and doorframes stand in the wall line as panels rather than filling the tile.
+    if( !t.wall && ( t.window || t.door ) ) {
         return { .kind = shape_kind::pane, .height = 1.0f };
     }
     if( t.wall || ( t.move_cost <= 0 && !t.flat ) ) {
@@ -47,25 +47,25 @@ if( !t.wall && ( t.window || t.door ) ) {
 auto classify_furniture( const tile_traits &t ) -> shape
 {
     if( t.panel ) {
-    return { .kind = shape_kind::pane, .height = tall_furniture_height };
-}
-if( t.flat ) {
-    return { .kind = shape_kind::floor, .height = decal_height };
-}
-// Natural obstacles need a filled volume, not the lid/front/legs of manufactured
-// furniture. Use the same simple box for plants and rocks, with size-based heights.
-if( t.shrub || t.boulder ) {
-    const auto height = static_cast<float>( t.tiny ? 0.3f : t.low ? 0.55f : tall_furniture_height );
+        return { .kind = shape_kind::pane, .height = tall_furniture_height };
+    }
+    if( t.flat ) {
+        return { .kind = shape_kind::floor, .height = decal_height };
+    }
+    // Natural obstacles need a filled volume, not the lid/front/legs of manufactured
+    // furniture. Use the same simple box for plants and rocks, with size-based heights.
+    if( t.shrub || t.boulder ) {
+        const auto height = static_cast<float>( t.tiny ? 0.3f : t.low ? 0.55f : tall_furniture_height );
         return { .kind = shape_kind::block, .height = height };
     }
     if( t.tiny ) {
-    return { .kind = shape_kind::floor, .height = tiny_height };
-}
-// Solid furniture is a box: tilesets draw it in 3/4 view, so the top of the sprite becomes
-// the box's top and the rest its sides. Low or flat-topped pieces (benches, counters, tables)
-// are low boxes, other impassable ones (lockers, fridges) tall ones.
-if( t.low || t.flat_surface ) {
-    const auto height = static_cast<float>( t.flat_surface ? surface_height : low_height );
+        return { .kind = shape_kind::floor, .height = tiny_height };
+    }
+    // Solid furniture is a box: tilesets draw it in 3/4 view, so the top of the sprite becomes
+    // the box's top and the rest its sides. Low or flat-topped pieces (benches, counters, tables)
+    // are low boxes, other impassable ones (lockers, fridges) tall ones.
+    if( t.low || t.flat_surface ) {
+        const auto height = static_cast<float>( t.flat_surface ? surface_height : low_height );
         // Benches and tables are a top on legs; cabinets and counters holding items are solid.
         return { .kind = shape_kind::prism, .height = height, .slab = t.container ? 0.0f : slab_thickness };
     }
@@ -191,7 +191,7 @@ auto place_furniture_box( const place_furniture_box_options &options ) -> box_la
 auto furniture_wall_facing( bool row_x, bool row_y, uint8_t walls ) -> int
 {
     if( !row_y ) {
-    if( ( walls & face_north ) != 0 ) {
+        if( ( walls & face_north ) != 0 ) {
             return 0;
         }
         if( ( walls & face_south ) != 0 ) {
@@ -199,7 +199,7 @@ auto furniture_wall_facing( bool row_x, bool row_y, uint8_t walls ) -> int
         }
     }
     if( !row_x ) {
-    if( ( walls & face_east ) != 0 ) {
+        if( ( walls & face_east ) != 0 ) {
             return 1;
         }
         if( ( walls & face_west ) != 0 ) {
@@ -222,9 +222,9 @@ auto trim_wall_spur( uint8_t connections, uint8_t indoor_sides,
                                    connections == face_west ? face_east : face_west );
     const auto corner = uint8_t( neighbour_connections & ~opposite );
     const auto horizontal = static_cast<bool>( ( corner & ( face_west | face_east ) ) == face_west ||
-        ( corner & ( face_west | face_east ) ) == face_east );
+                            ( corner & ( face_west | face_east ) ) == face_east );
     const auto vertical = static_cast<bool>( ( corner & ( face_north | face_south ) ) == face_north ||
-        ( corner & ( face_north | face_south ) ) == face_south );
+                          ( corner & ( face_north | face_south ) ) == face_south );
     return ( neighbour_connections & opposite ) != 0 && horizontal && vertical;
 }
 
