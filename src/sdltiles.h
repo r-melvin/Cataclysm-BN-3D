@@ -62,6 +62,10 @@ const SDL_Window_Ptr &get_sdl_window();
 /// before loading tilesets (the game sets it up in init_interface()).
 auto set_sdl_renderer( SDL_Renderer_Ptr r ) -> void;
 
+auto is_mouse_captured() -> bool;
+
+#else // TILES
+
+inline auto is_mouse_captured() -> bool { return false; }
+
 #endif // TILES
-
-

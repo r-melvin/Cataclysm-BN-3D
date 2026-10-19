@@ -3,15 +3,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <list>
 #include <map>
 #include <string>
 #include <vector>
 #include <optional>
-
-#if defined(__ANDROID__)
-#include <algorithm>
-#include <list>
-#endif
 
 #include "coordinates.h"
 #include "translations.h"
@@ -86,7 +82,6 @@ static constexpr int NUMPAD_7 = 0x407;
 static constexpr int NUMPAD_8 = 0x408;
 static constexpr int NUMPAD_9 = 0x409;
 static constexpr int NUMPAD_0 = 0x40a;
-
 
 bool is_mouse_enabled();
 std::string get_input_string_from_file( const std::string &fname = "input.txt" );
@@ -404,15 +399,14 @@ extern input_manager inp_mngr;
 class input_context
 {
     public:
-#if defined(__ANDROID__)
         // Whatever's on top is our current input context.
         static std::list<input_context *> input_context_stack;
-#endif
+        static auto get_active_category() -> std::string;
 
         input_context() : registered_any_input( false ), category( "default" ),
             coordinate_input_received( false ), handling_coordinate_input( false ) {
-#if defined(__ANDROID__)
             input_context_stack.push_back( this );
+#if defined(__ANDROID__)
             allow_text_entry = false;
 #endif
         }
@@ -420,13 +414,12 @@ class input_context
         // outside that window can be ignored
         input_context( const std::string &category ) : registered_any_input( false ), category( category ),
             coordinate_input_received( false ), handling_coordinate_input( false ) {
-#if defined(__ANDROID__)
             input_context_stack.push_back( this );
+#if defined(__ANDROID__)
             allow_text_entry = false;
 #endif
         }
 
-#if defined(__ANDROID__)
         input_context( const input_context &other ) : input_context() {
             *this = other;
         }
@@ -510,7 +503,6 @@ class input_context
         bool operator!=( const input_context &other ) const {
             return !( *this == other );
         }
-#endif
 
         /**
          * Register an action with this input context.
@@ -782,5 +774,3 @@ bool gamepad_available();
 
 // rotate a delta direction clockwise
 void rotate_direction_cw( int &dx, int &dy );
-
-

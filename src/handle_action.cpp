@@ -35,6 +35,7 @@
 #include "fstream_utils.h"
 #include "game.h"
 #include "r3d.h" // IWYU pragma: associated
+#include "sdltiles.h"
 #include "game_constants.h"
 #include "game_inventory.h"
 #include "gamemode.h"
@@ -676,40 +677,31 @@ inline static void pldrive( point_rel_veh d )
     return pldrive( tripoint_rel_veh( d, 0 ) );
 }
 
-static void open()
+static auto open_at( const tripoint_bub_ms &openp ) -> void
 {
-    player &u = g->u;
-    const std::optional<tripoint_bub_ms> openp_ = choose_adjacent_highlight( _( "Open where?" ),
-            pgettext( "no door, gate, curtain, etc.", "There is nothing that can be opened nearby." ),
-            ACTION_OPEN, false );
+    auto &u = g->u;
+    auto &here = get_map();
 
-    if( !openp_ ) {
-        return;
-    }
-    const auto openp = *openp_;
-    map &here = get_map();
-
-    if( const optional_vpart_position vp = here.veh_at( openp ) ) {
-        const vehicle *const veh = &vp->vehicle();
-        const int openable = veh->next_part_to_open( vp->part_index() );
+    if( const auto vp = here.veh_at( openp ) ) {
+        const auto *const veh = &vp->vehicle();
+        const auto openable = veh->next_part_to_open( vp->part_index() );
         if( openable >= 0 ) {
-            const vehicle *player_veh = veh_pointer_or_null( here.veh_at( u.bub_pos() ) );
-            const bool outside = !player_veh || player_veh != veh;
+            const auto *player_veh = veh_pointer_or_null( here.veh_at( u.bub_pos() ) );
+            const auto outside = !player_veh || player_veh != veh;
             if( here.open_door_veh( &get_avatar(), vp, openp, !outside ) ) {
                 u.moves -= 100;
             }
         } else {
             // If there are any OPENABLE parts here, they must be already open
-            if( const std::optional<vpart_reference> already_open = vp.part_with_feature( "OPENABLE",
-                    true ) ) {
-                const std::string name = already_open->info().name();
+            if( const auto already_open = vp.part_with_feature( "OPENABLE", true ) ) {
+                const auto name = already_open->info().name();
                 add_msg( m_info, _( "That %s is already open." ), name );
             }
         }
     } else if( here.open_door( &u, openp, !here.is_outside( u.bub_pos() ) ) ) {
         u.moves -= 100;
     } else {
-        const ter_str_id tid = here.ter( openp ).id();
+        const auto tid = here.ter( openp ).id();
 
         if( here.has_flag( flag_LOCKED, openp ) ) {
             add_msg( m_info, _( "The door is locked!" ) );
@@ -720,6 +712,17 @@ static void open()
             return;
         }
         add_msg( m_info, _( "No door there." ) );
+    }
+}
+
+static auto open() -> void
+{
+    const std::optional<tripoint_bub_ms> openp_ = choose_adjacent_highlight( _( "Open where?" ),
+            pgettext( "no door, gate, curtain, etc.", "There is nothing that can be opened nearby." ),
+            ACTION_OPEN, false );
+
+    if( openp_ ) {
+        open_at( *openp_ );
     }
 }
 
@@ -1503,7 +1506,6 @@ static void loot()
                             _( "Auto-mine anything in mining zone - auto-fetch tools." ) );
     }
 
-
     menu.query();
     flags = ( menu.ret >= 0 ) ? menu.ret : None;
 
@@ -1640,8 +1642,7 @@ static void fire()
         if( u.bonus_from_enchantments( 0, ench_val_REACH_RANGE_UNARMED, true ) > 0 ) {
             options.push_back( _( "Unarmed Reach Attack" ) );
             actions.emplace_back( [&] {
-                if( u.has_effect( effect_relax_gas ) )
-                {
+                if( u.has_effect( effect_relax_gas ) ) {
                     if( one_in( 8 ) ) {
                         add_msg( m_good, _( "Your willpower asserts itself, and so do you!" ) );
                         reach_attack( u );
@@ -2030,29 +2031,76 @@ bool game::handle_action()
                 return false;
             }
 
-            const std::optional<tripoint_bub_ms> mouse_pos = ctxt.get_coordinates( w_terrain );
-            if( !mouse_pos ) {
-                return false;
-            }
-            mouse_target = mouse_pos;
+            if( act == ACTION_SELECT && use_tiles && r3d::active() && is_mouse_captured() ) {
+                const auto forward_delta = get_delta_from_movement_action( ACTION_MOVE_FORTH, iso_rotate::yes );
+                const auto front_tile = u.bub_pos() + tripoint_rel_ms( forward_delta, 0 );
 
-            if( act == ACTION_SELECT ) {
-                if( !avatar_knows_travel_destination( u, *mouse_target ) ) {
+                const auto dim = get_window_dimensions( w_terrain );
+                const auto cx = dim.window_pos_pixel.x + dim.window_size_pixel.x * 0.5f;
+                const auto cy = dim.window_pos_pixel.y + dim.window_size_pixel.y * 0.5f;
+                const auto picked = r3d::pick( cx, cy );
+
+                auto target_tile = front_tile;
+                if( picked && *picked != u.bub_pos() && square_dist( picked->xy(), u.bub_pos().xy() ) <= 1 ) {
+                    target_tile = *picked;
+                }
+                mouse_target = target_tile;
+
+                u.clear_destination();
+                destination_preview.clear();
+
+                if( auto *const critter = critter_at<Creature>( target_tile ) ) {
+                    if( critter != &u ) {
+                        const auto delta = target_tile - u.bub_pos();
+                        act = get_movement_action_from_delta( delta, iso_rotate::yes );
+                        if( can_action_change_worldstate( act ) ) {
+                            user_action_counter += 1;
+                        }
+                    } else {
+                        act = ACTION_EXAMINE;
+                    }
+                } else {
+                    const auto can_open_veh = [&]() -> bool {
+                        if( const auto vp = m.veh_at( target_tile ) ) {
+                            const auto *const veh = &vp->vehicle();
+                            return veh->next_part_to_open( vp->part_index() ) >= 0;
+                        }
+                        return false;
+                    }();
+                    if( can_open_veh || m.can_open_door( &u, target_tile, !m.is_outside( u.bub_pos() ) ) ) {
+                        act = ACTION_OPEN;
+                        if( can_action_change_worldstate( act ) ) {
+                            user_action_counter += 1;
+                        }
+                    } else {
+                        act = ACTION_EXAMINE;
+                    }
+                }
+            } else {
+                const std::optional<tripoint_bub_ms> mouse_pos = ctxt.get_coordinates( w_terrain );
+                if( !mouse_pos ) {
                     return false;
                 }
-                // Note: The following has the potential side effect of
-                // setting auto-move destination state in addition to setting
-                // act.
-                if( !try_get_left_click_action( act, *mouse_target ) ) {
-                    return false;
-                }
-            } else if( act == ACTION_SEC_SELECT ) {
-                if( !u.sees( *mouse_target ) ) {
-                    // Right-click actions examine or target current terrain and creatures.
-                    return false;
-                }
-                if( !try_get_right_click_action( act, *mouse_target ) ) {
-                    return false;
+                mouse_target = mouse_pos;
+
+                if( act == ACTION_SELECT ) {
+                    if( !avatar_knows_travel_destination( u, *mouse_target ) ) {
+                        return false;
+                    }
+                    // Note: The following has the potential side effect of
+                    // setting auto-move destination state in addition to setting
+                    // act.
+                    if( !try_get_left_click_action( act, *mouse_target ) ) {
+                        return false;
+                    }
+                } else if( act == ACTION_SEC_SELECT ) {
+                    if( !u.sees( *mouse_target ) ) {
+                        // Right-click actions examine or target current terrain and creatures.
+                        return false;
+                    }
+                    if( !try_get_right_click_action( act, *mouse_target ) ) {
+                        return false;
+                    }
                 }
             }
         } else if( act != ACTION_TIMEOUT ) {
@@ -2064,6 +2112,26 @@ bool game::handle_action()
             // timeout delay.
             u.clear_destination();
             destination_preview.clear();
+        }
+    }
+
+    if( !mouse_target && use_tiles && r3d::active() && is_mouse_captured() &&
+        ( act == ACTION_EXAMINE || act == ACTION_OPEN || act == ACTION_CLOSE || act == ACTION_PICKUP ) ) {
+        const auto forward_delta = get_delta_from_movement_action( ACTION_MOVE_FORTH, iso_rotate::yes );
+        const auto front_tile = u.bub_pos() + tripoint_rel_ms( forward_delta, 0 );
+
+        const auto dim = get_window_dimensions( w_terrain );
+        const auto cx = dim.window_pos_pixel.x + dim.window_size_pixel.x * 0.5f;
+        const auto cy = dim.window_pos_pixel.y + dim.window_size_pixel.y * 0.5f;
+        const auto picked = r3d::pick( cx, cy );
+
+        if( picked && *picked != u.bub_pos() && square_dist( picked->xy(), u.bub_pos().xy() ) <= 1 &&
+            can_interact_at( act, *picked ) ) {
+            mouse_target = *picked;
+        } else if( can_interact_at( act, front_tile ) ) {
+            mouse_target = front_tile;
+        } else if( can_interact_at( act, u.bub_pos() ) ) {
+            mouse_target = u.bub_pos();
         }
     }
 
@@ -2401,9 +2469,13 @@ bool game::handle_action()
                     if( !mon->has_flag( MF_MOUNTABLE_DOORS ) ) {
                         add_msg( m_info, _( "You can't open things while you're riding." ) );
                         break;
+                    } else if( mouse_target ) {
+                        open_at( *mouse_target );
                     } else {
                         open();
                     }
+                } else if( mouse_target ) {
+                    open_at( *mouse_target );
                 } else {
                     open();
                 }

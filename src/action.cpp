@@ -755,8 +755,8 @@ namespace
 auto rotate_eighths( point_rel_ms delta, int turns ) -> point_rel_ms
 {
     const auto ring = std::array<point_rel_ms, 8> { point_rel_ms::north(), point_rel_ms::north_east(),
-               point_rel_ms::east(), point_rel_ms::south_east(), point_rel_ms::south(),
-               point_rel_ms::south_west(), point_rel_ms::west(), point_rel_ms::north_west()
+            point_rel_ms::east(), point_rel_ms::south_east(), point_rel_ms::south(),
+            point_rel_ms::south_west(), point_rel_ms::west(), point_rel_ms::north_west()
                                                   };
     for( auto i = size_t{ 0 }; i < ring.size(); ++i ) {
         if( ring[i] == delta ) { return ring[( i + size_t( turns ) ) % ring.size()]; }
@@ -915,14 +915,17 @@ static bool can_pickup_at( const tripoint_bub_ms &p )
     return ( here.has_items( p ) && !here.has_flag( flag_SEALED, p ) ) || veh_has_items;
 }
 
-bool can_interact_at( action_id action, const tripoint_bub_ms &p )
+auto can_interact_at( action_id action, const tripoint_bub_ms &p ) -> bool
 {
-    map &here = get_map();
+    auto &here = get_map();
     switch( action ) {
-        case ACTION_OPEN:
-            return here.can_open_door( &get_avatar(), p, !here.is_outside( g->u.bub_pos() ) );
+        case ACTION_OPEN: {
+            const auto vp = here.veh_at( p );
+            return ( vp && vp->vehicle().next_part_to_open( vp->part_index() ) >= 0 ) ||
+                   here.can_open_door( &get_avatar(), p, !here.is_outside( g->u.bub_pos() ) );
+        }
         case ACTION_CLOSE: {
-            const optional_vpart_position vp = here.veh_at( p );
+            const auto vp = here.veh_at( p );
             return ( vp &&
                      vp->vehicle().next_part_to_close( vp->part_index(),
                              veh_pointer_or_null( here.veh_at( g->u.bub_pos() ) ) != &vp->vehicle() ) >= 0 ) ||
@@ -942,6 +945,15 @@ bool can_interact_at( action_id action, const tripoint_bub_ms &p )
         case ACTION_PICKUP_ALL:
         case ACTION_PICKUP_FEET:
             return can_pickup_at( p );
+        case ACTION_CONTROL_VEHICLE: {
+            const auto vp = here.veh_at( p );
+            if( vp ) {
+                const auto &veh = vp->vehicle();
+                return veh.avail_part_with_feature( vp->part_index(), "CONTROLS", true ) >= 0 ||
+                       veh.avail_part_with_feature( vp->part_index(), "CONTROL_ANIMAL", true ) >= 0;
+            }
+            return false;
+        }
         default:
             return false;
     }
@@ -1488,7 +1500,6 @@ std::optional<tripoint_bub_ms> choose_adjacent_uilist(
             }
         }
     }
-
 
     const bool auto_select = get_option<bool>( "AUTOSELECT_SINGLE_VALID_TARGET" );
     if( auto_select ) {

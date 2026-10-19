@@ -92,3 +92,44 @@ TEST_CASE("manual combat default bindings reserve backtab for the toggle", "[inp
     CHECK(toggle_key == inp_mngr.get_keycode("BACKTAB"));
     CHECK(removed_manual_attack_key == 0);
 }
+
+TEST_CASE("input_context active category stack", "[input]") {
+    CHECK(input_context::get_active_category().empty());
+    {
+        auto ctxt_default = input_context("DEFAULTMODE");
+        CHECK(input_context::get_active_category() == "DEFAULTMODE");
+
+        {
+            auto ctxt_menu = input_context("INVENTORY");
+            CHECK(input_context::get_active_category() == "INVENTORY");
+        }
+
+        CHECK(input_context::get_active_category() == "DEFAULTMODE");
+    }
+    CHECK(input_context::get_active_category().empty());
+}
+
+TEST_CASE("wasd keys are not remapped to movement in defaultmode", "[input]") {
+    auto ctxt = input_context("DEFAULTMODE");
+    ctxt.register_action("wield");
+    ctxt.register_action("apply");
+    ctxt.register_action("smash");
+    ctxt.register_action("drop");
+    ctxt.register_action("UP");
+    ctxt.register_action("DOWN");
+    ctxt.register_action("LEFT");
+    ctxt.register_action("RIGHT");
+
+    CHECK(ctxt.input_to_action(input_event('w', input_event_t::keyboard)) == "wield");
+    CHECK(ctxt.input_to_action(input_event('a', input_event_t::keyboard)) == "apply");
+    CHECK(ctxt.input_to_action(input_event('s', input_event_t::keyboard)) == "smash");
+    CHECK(ctxt.input_to_action(input_event('d', input_event_t::keyboard)) == "drop");
+}
+
+TEST_CASE("contextual interaction default keys in defaultmode", "[input]") {
+    CHECK(inp_mngr.get_first_char_for_action("examine", "DEFAULTMODE") == 'e');
+    CHECK(inp_mngr.get_first_char_for_action("open", "DEFAULTMODE") == 'o');
+    CHECK(inp_mngr.get_first_char_for_action("close", "DEFAULTMODE") == 'c');
+    CHECK(inp_mngr.get_first_char_for_action("pickup", "DEFAULTMODE") == 'g');
+    CHECK(inp_mngr.get_first_char_for_action("control_vehicle", "DEFAULTMODE") == '^');
+}

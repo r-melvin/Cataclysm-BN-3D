@@ -402,7 +402,6 @@ void input_manager::init_keycode_mapping()
     add_keycode_pair( NUMPAD_8,      translate_marker_context( "key name", "NUMPAD_8" ) );
     add_keycode_pair( NUMPAD_9,      translate_marker_context( "key name", "NUMPAD_9" ) );
 
-
     for( int c = 0; IS_CTRL_CHAR( c ); c++ ) {
         // Some codes fall into this range but have more common names we'd prefer to use.
         if( !IS_NAMED_CTRL_CHAR( c ) ) {
@@ -702,7 +701,6 @@ const std::string &input_context::input_to_action( const input_event &inp ) cons
     return CATA_ERROR;
 }
 
-#if defined(__ANDROID__)
 std::list<input_context *> input_context::input_context_stack;
 
 void input_context::register_manual_key( manual_key mk )
@@ -726,7 +724,6 @@ void input_context::register_manual_key( int key, const std::string text )
 
     registered_manual_keys.push_back( manual_key( key, text ) );
 }
-#endif
 
 void input_context::register_action( const std::string &action_descriptor )
 {
@@ -928,20 +925,30 @@ std::string input_context::describe_key_and_name( const std::string &action_desc
 
 namespace
 {
-auto r3d_key_action( const input_event &event,
-                     const std::string &category ) -> const std::string * // *NOPAD*
+auto *current_active_input_context = static_cast<input_context *>( nullptr );
+
+struct active_context_guard {
+    input_context *prev;
+    explicit active_context_guard( input_context *ctx ) : prev( current_active_input_context ) {
+        current_active_input_context = ctx;
+    }
+    ~active_context_guard() {
+        current_active_input_context = prev;
+    }
+};
+} // namespace
+
+auto input_context::get_active_category() -> std::string
 {
-    if( category != "DEFAULTMODE" || !event.modifiers.empty() || event.sequence.size() != 1 ||
-        event.type != input_event_t::keyboard || !r3d::wasd_controls() ) { return nullptr; }
-    static const auto bindings = std::map<int, std::string> {
-        { 'w', "UP" }, { 's', "DOWN" }, { 'a', "LEFT" }, { 'd', "RIGHT" },
-        { KEY_LEFT, "r3d_rotate_left" }, { KEY_RIGHT, "r3d_rotate_right" },
-        { KEY_UP, "r3d_pitch_up" }, { KEY_DOWN, "r3d_pitch_down" }
-    };
-    const auto found = bindings.find( event.sequence.front() );
-    return found == bindings.end() ? nullptr : &found->second;
+    if( current_active_input_context ) {
+        return current_active_input_context->get_category();
+    }
+    if( !input_context_stack.empty() && input_context_stack.back() ) {
+        return input_context_stack.back()->get_category();
+    }
+    return "";
 }
-}
+
 const std::string &input_context::handle_input()
 {
     return handle_input( timeout );
@@ -950,6 +957,7 @@ const std::string &input_context::handle_input()
 const std::string &input_context::handle_input( const int timeout )
 {
     ZoneScopedN( "input_context_handle_input" );
+    const auto guard = active_context_guard{ this };
     const auto old_timeout = inp_mngr.get_timeout();
     if( timeout >= 0 ) {
         inp_mngr.set_timeout( timeout );
@@ -968,8 +976,7 @@ const std::string &input_context::handle_input( const int timeout )
 
         const auto &action = [&]() -> const std::string & {
             ZoneScopedN( "input_context_input_to_action" );
-            const auto remapped = r3d_key_action( next_action, category );
-            return remapped ? *remapped : input_to_action( next_action );
+            return input_to_action( next_action );
         }();
 
         // Special help action
@@ -1195,8 +1202,8 @@ action_id input_context::display_menu( const bool permit_execute_action )
         legwidth = width - filter_pos.x * 2 - BORDER_SPACE;
         // +1 for end-of-text cursor
         spopup.window( w_help, filter_pos, filter_pos.x + legwidth + 1 )
-        .max_length( legwidth )
-        .context( ctxt );
+              .max_length( legwidth )
+              .context( ctxt );
         ui.position_from_window( w_help );
     };
     recalc_size( ui );

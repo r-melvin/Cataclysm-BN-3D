@@ -12,6 +12,7 @@
 
 #include <SDL3/SDL.h>
 
+#include "action.h"
 #include "avatar.h"
 #include "color.h"
 #include "cursesdef.h"
@@ -23,6 +24,7 @@
 #include "event.h"
 #include "event_bus.h"
 #include "game.h"
+#include "input.h"
 #include "line.h"
 #include "map/map.h"
 #include "overmap/overmap_ui.h"
@@ -582,6 +584,153 @@ auto add_place_notice( const hud_frame &frame, std::vector<hud_text> &texts ) ->
     texts.push_back( { .x = frame.x + frame.w * 0.5f, .y = frame.y + 44.0f, .text = string_format( _( "Entering: %s" ), ev.place ), .color = 15, .align = 0, .boxed = true } );
 }
 
+auto get_action_display_key( action_id act ) -> std::string
+{
+    const auto ident = action_ident( act );
+    const auto &events = inp_mngr.get_input_for_action( ident, "DEFAULTMODE" );
+    if( !events.empty() && !events[0].sequence.empty() ) {
+        const auto key_code = events[0].sequence[0];
+        if( key_code >= 'a' && key_code <= 'z' ) {
+            return std::string( 1, static_cast<char>( std::toupper( key_code ) ) );
+        }
+        if( key_code >= 'A' && key_code <= 'Z' ) {
+            return std::string( 1, static_cast<char>( key_code ) );
+        }
+        const auto key_name = inp_mngr.get_keyname( key_code, events[0].type );
+        if( !key_name.empty() ) {
+            return key_name;
+        }
+    }
+    switch( act ) {
+        case ACTION_EXAMINE:
+            return "E";
+        case ACTION_OPEN:
+            return "O";
+        case ACTION_CLOSE:
+            return "C";
+        case ACTION_PICKUP:
+            return "G";
+        case ACTION_CONTROL_VEHICLE:
+            return "^";
+        default:
+            return "?";
+    }
+}
+
+auto get_action_description( action_id act ) -> std::string
+{
+    switch( act ) {
+        case ACTION_EXAMINE:
+            return _( "examine" );
+        case ACTION_OPEN:
+            return _( "open" );
+        case ACTION_CLOSE:
+            return _( "close" );
+        case ACTION_PICKUP:
+            return _( "get" );
+        case ACTION_CONTROL_VEHICLE:
+            return _( "operate vehicle" );
+        default:
+            return "";
+    }
+}
+
+auto add_interaction_tooltip( const hud_frame &frame, std::vector<hud_text> &texts ) -> void
+{
+    if( input_context::get_active_category() != "DEFAULTMODE" ) {
+        return;
+    }
+    auto &u = get_avatar();
+    if( u.is_dead_state() ) {
+        return;
+    }
+    const auto avatar_pos = u.bub_pos();
+    const auto forward_delta = get_delta_from_movement_action( ACTION_MOVE_FORTH, iso_rotate::yes );
+    const auto front_tile = avatar_pos + tripoint_rel_ms( forward_delta, 0 );
+
+    const auto cx = frame.x + frame.w * 0.5f;
+    const auto cy = frame.y + frame.h * 0.5f;
+    const auto picked = r3d::pick( cx, cy );
+
+    const auto query_options_at = [&]( const tripoint_bub_ms & pos ) -> std::vector<action_id> {
+        auto acts = std::vector<action_id>{};
+        if( can_examine_at( pos ) )
+        {
+            acts.push_back( ACTION_EXAMINE );
+        }
+        if( can_interact_at( ACTION_OPEN, pos ) )
+        {
+            acts.push_back( ACTION_OPEN );
+        }
+        if( can_interact_at( ACTION_CLOSE, pos ) )
+        {
+            acts.push_back( ACTION_CLOSE );
+        }
+        if( can_interact_at( ACTION_PICKUP, pos ) )
+        {
+            acts.push_back( ACTION_PICKUP );
+        }
+        if( !u.controlling_vehicle && ( can_interact_at( ACTION_CONTROL_VEHICLE, pos ) ||
+                                        ( pos == avatar_pos && can_interact_at( ACTION_CONTROL_VEHICLE, avatar_pos ) ) ||
+                                        ( u.in_vehicle && can_interact_at( ACTION_CONTROL_VEHICLE, avatar_pos ) ) ) )
+        {
+            acts.push_back( ACTION_CONTROL_VEHICLE );
+        }
+        return acts;
+    };
+
+    auto target_tile = front_tile;
+    auto options = std::vector<action_id> {};
+
+    if( picked && *picked != avatar_pos && square_dist( picked->xy(), avatar_pos.xy() ) <= 1 ) {
+        options = query_options_at( *picked );
+        if( !options.empty() ) {
+            target_tile = *picked;
+        }
+    }
+
+    if( options.empty() ) {
+        options = query_options_at( front_tile );
+        target_tile = front_tile;
+    }
+
+    if( options.empty() ) {
+        options = query_options_at( avatar_pos );
+        target_tile = avatar_pos;
+    }
+
+    if( options.empty() ) {
+        return;
+    }
+
+    const auto p_screen = frame.screen( target_tile, 1.0f );
+    if( !p_screen || p_screen->z < 0.0f ) {
+        return;
+    }
+
+    const auto sx = std::clamp( p_screen->x, frame.x + 80.0f, frame.x + frame.w - 80.0f );
+    const auto line_h = frame.cell_h + 3.0f;
+    const auto total_h = static_cast<float>( options.size() ) * line_h;
+    const auto base_y = std::clamp( p_screen->y - total_h - 6.0f, frame.y + 20.0f,
+                                    frame.y + frame.h - total_h - 20.0f );
+
+    for( auto i = size_t{ 0 }; i < options.size(); ++i ) {
+        const auto act = options[i];
+        const auto key = get_action_display_key( act );
+        const auto desc = get_action_description( act );
+        const auto line = string_format( "%s - %s", key, desc );
+        const auto y = base_y + static_cast<float>( i ) * line_h;
+        texts.push_back( {
+            .x = sx,
+            .y = y,
+            .text = line,
+            .color = 15,
+            .align = 0,
+            .boxed = true
+        } );
+    }
+}
+
 } // namespace
 
 auto hud_animation_pending() -> bool
@@ -614,6 +763,7 @@ auto draw_hud( const draw_hud_options &options ) -> void
         add_status_badges( frame, texts );
         draw_hit_direction( renderer, frame );
         add_place_notice( frame, texts );
+        add_interaction_tooltip( frame, texts );
     } else {
         // Keep listening so a notice is not shown late when the option comes back on.
         events();

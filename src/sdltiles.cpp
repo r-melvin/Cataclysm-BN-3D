@@ -889,8 +889,7 @@ void cata_tiles::draw_om( point dest, const tripoint_abs_omt &center_abs_omt, bo
     };
     const auto has_map_label = [&]( const tripoint_abs_omt & pos ) -> bool {
         if( const auto player_label = overmap_label_note::extract_label( ACTIVE_OVERMAP_BUFFER.note( pos ) );
-            player_label.has_value() && !player_label->empty() )
-        {
+            player_label.has_value() && !player_label->empty() ) {
             return true;
         }
 
@@ -1001,8 +1000,7 @@ void cata_tiles::draw_om( point dest, const tripoint_abs_omt &center_abs_omt, bo
                 }
                 const auto fallback_horde_id = [&]( const tripoint_abs_omt & pos ) -> std::string {
                     const auto groups = ACTIVE_OVERMAP_BUFFER.monsters_at( pos );
-                    const auto horde_it = std::ranges::find_if( groups, []( const mongroup * mgp )
-                    {
+                    const auto horde_it = std::ranges::find_if( groups, []( const mongroup * mgp ) {
                         return mgp != nullptr && mgp->horde && mgp->type.is_valid();
                     } );
                     if( horde_it == groups.end() )
@@ -1013,16 +1011,15 @@ void cata_tiles::draw_om( point dest, const tripoint_abs_omt &center_abs_omt, bo
                     const mongroup *mgp = *horde_it;
                     const MonsterGroup &group = mgp->type.obj();
                     const auto default_id = group.defaultMonster.is_valid()
-                    ? group.defaultMonster.str()
-                    : std::string( "mon_zombie" );
+                                                 ? group.defaultMonster.str()
+                                                 : std::string( "mon_zombie" );
                     if( group.monsters.empty() )
                     {
                         return default_id;
                     }
 
                     const auto best_entry = std::ranges::max_element( group.monsters, []( const auto & lhs,
-                            const auto & rhs )
-                    {
+                    const auto & rhs ) {
                         return lhs.frequency < rhs.frequency;
                     } );
                     if( best_entry == group.monsters.end() )
@@ -1628,7 +1625,10 @@ auto draw_r3d_hud_texts( const SDL_Rect &bounds ) -> void
         const auto left = t.align < 0 ? t.x : t.align > 0 ? t.x - width : t.x - width * 0.5f;
         if( t.boxed ) {
             auto blend = SDL_BLENDMODE_NONE;
-            auto red = Uint8{}; auto green = Uint8{}; auto blue = Uint8{}; auto alpha = Uint8{};
+            auto red = Uint8{};
+            auto green = Uint8{};
+            auto blue = Uint8{};
+            auto alpha = Uint8{};
             SDL_GetRenderDrawBlendMode( renderer.get(), &blend );
             SDL_GetRenderDrawColor( renderer.get(), &red, &green, &blue, &alpha );
             SDL_SetRenderDrawBlendMode( renderer.get(), SDL_BLENDMODE_BLEND );
@@ -1689,8 +1689,8 @@ void cata_cursesport::curses_drawwindow( const catacurses::window &w )
             overlay_strings.clear();
             color_blocks.second.clear();
             draw_r3d_hud_texts( { .x = win->pos.x * fontwidth, .y = win->pos.y * fontheight,
-                                 .w = TERRAIN_WINDOW_TERM_WIDTH * font->width,
-                                 .h = TERRAIN_WINDOW_TERM_HEIGHT * font->height } );
+                                  .w = TERRAIN_WINDOW_TERM_WIDTH * font->width,
+                                  .h = TERRAIN_WINDOW_TERM_HEIGHT * font->height } );
         }
 
         // color blocks overlay
@@ -3276,18 +3276,35 @@ static void CheckMessages()
 
     last_input = input_event();
 
+    if( ::window ) {
+        const auto has_focus = ( SDL_GetWindowFlags( ::window.get() ) & SDL_WINDOW_INPUT_FOCUS ) != 0;
+        const auto *key_state = SDL_GetKeyboardState( nullptr );
+        const auto lalt_down = key_state && key_state[SDL_SCANCODE_LALT];
+        const auto want_capture = has_focus &&
+                                  r3d::active() &&
+                                  input_context::get_active_category() == "DEFAULTMODE" &&
+                                  !lalt_down;
+        const auto current_capture = SDL_GetWindowRelativeMouseMode( ::window.get() );
+        if( current_capture != want_capture ) {
+            SDL_SetWindowRelativeMouseMode( ::window.get(), want_capture );
+            if( !want_capture && !SDL_CursorVisible() ) {
+                SDL_ShowCursor();
+            }
+        }
+    }
+
     std::optional<point> resize_dims;
     bool render_target_reset = false;
 
     while( SDL_PollEvent( &ev ) ) {
         switch( ev.type ) {
-#if defined(__ANDROID__)
-            // SDL will send a focus lost event whenever the app loses focus (eg. lock screen, switch app focus etc.)
-            // If we detect it and the game seems in a saveable state, try and do a quicksave. This is a bit dodgy
-            // as the player could be ANYWHERE doing ANYTHING (a sub-menu, interacting with an NPC/computer etc.)
-            // but it seems to work so far, and the alternative is the player losing their progress as the app is likely
-            // to be destroyed pretty quickly when it goes out of focus due to memory usage.
             case SDL_EVENT_WINDOW_FOCUS_LOST:
+#if defined(__ANDROID__)
+                // SDL will send a focus lost event whenever the app loses focus (eg. lock screen, switch app focus etc.)
+                // If we detect it and the game seems in a saveable state, try and do a quicksave. This is a bit dodgy
+                // as the player could be ANYWHERE doing ANYTHING (a sub-menu, interacting with an NPC/computer etc.)
+                // but it seems to work so far, and the alternative is the player losing their progress as the app is likely
+                // to be destroyed pretty quickly when it goes out of focus due to memory usage.
                 if( world_generator &&
                     world_generator->active_world &&
                     g && g->uquit == QUIT_NO &&
@@ -3295,7 +3312,15 @@ static void CheckMessages()
                     !std::uncaught_exceptions() ) {
                     g->quicksave();
                 }
+#endif
+                if( ::window && SDL_GetWindowRelativeMouseMode( ::window.get() ) ) {
+                    SDL_SetWindowRelativeMouseMode( ::window.get(), false );
+                    if( !SDL_CursorVisible() ) {
+                        SDL_ShowCursor();
+                    }
+                }
                 break;
+#if defined(__ANDROID__)
             // SDL sends a pixel size changed event whenever the screen rotates orientation
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
                 WindowWidth = ev.window.data1;
@@ -3338,8 +3363,15 @@ static void CheckMessages()
                 }
 #endif
                 is_repeat = ev.key.repeat;
+                if( ev.key.key == SDLK_LALT && ::window && SDL_GetWindowRelativeMouseMode( ::window.get() ) ) {
+                    SDL_SetWindowRelativeMouseMode( ::window.get(), false );
+                    if( !SDL_CursorVisible() ) {
+                        SDL_ShowCursor();
+                    }
+                }
                 //hide mouse cursor on keyboard input
-                if( get_option<std::string>( "HIDE_CURSOR" ) != "show" && SDL_CursorVisible() ) {
+                if( get_option<std::string>( "HIDE_CURSOR" ) != "show" && SDL_CursorVisible() &&
+                    !SDL_GetWindowRelativeMouseMode( ::window.get() ) ) {
                     SDL_HideCursor();
                 }
                 const int lc = sdl_keysym_to_curses( ev.key.key, ev.key.mod );
@@ -3353,7 +3385,31 @@ static void CheckMessages()
                 } else if( add_alt_code( lc ) ) {
                     // key was handled
                 } else {
-                    last_input = input_event( lc, input_event_t::keyboard );
+                    if( ( lc == KEY_UP || lc == KEY_DOWN || lc == KEY_LEFT || lc == KEY_RIGHT ) &&
+                        input_context::get_active_category() == "DEFAULTMODE" ) {
+                        const auto *key_state = SDL_GetKeyboardState( nullptr );
+                        if( key_state ) {
+                            const auto up = key_state[SDL_SCANCODE_UP];
+                            const auto down = key_state[SDL_SCANCODE_DOWN];
+                            const auto left = key_state[SDL_SCANCODE_LEFT];
+                            const auto right = key_state[SDL_SCANCODE_RIGHT];
+                            if( up && right && !down && !left ) {
+                                last_input = input_event( NUMPAD_9, input_event_t::keyboard );
+                            } else if( up && left && !down && !right ) {
+                                last_input = input_event( NUMPAD_7, input_event_t::keyboard );
+                            } else if( down && right && !up && !left ) {
+                                last_input = input_event( NUMPAD_3, input_event_t::keyboard );
+                            } else if( down && left && !up && !right ) {
+                                last_input = input_event( NUMPAD_1, input_event_t::keyboard );
+                            } else {
+                                last_input = input_event( lc, input_event_t::keyboard );
+                            }
+                        } else {
+                            last_input = input_event( lc, input_event_t::keyboard );
+                        }
+                    } else {
+                        last_input = input_event( lc, input_event_t::keyboard );
+                    }
 #if defined(__ANDROID__)
                     if( !android_is_hardware_keyboard_available() ) {
                         if( !is_string_input( touch_input_context ) && !touch_input_context.allow_text_entry ) {
@@ -3393,6 +3449,10 @@ static void CheckMessages()
                 }
 #endif
                 is_repeat = ev.key.repeat;
+                if( ev.key.key == SDLK_LALT && ::window && r3d::active() &&
+                    input_context::get_active_category() == "DEFAULTMODE" ) {
+                    SDL_SetWindowRelativeMouseMode( ::window.get(), true );
+                }
                 if( ev.key.key == SDLK_LALT || ev.key.key == SDLK_RALT ) {
                     int code = end_alt_code();
                     if( code ) {
@@ -3462,6 +3522,19 @@ static void CheckMessages()
                 }
                 break;
             case SDL_EVENT_MOUSE_MOTION:
+                if( is_mouse_captured() ) {
+                    if( SDL_GetModState() & SDL_KMOD_SHIFT ) {
+                        r3d::drag_pan( ev.motion.xrel, ev.motion.yrel );
+                    } else {
+                        r3d::drag_orbit( ev.motion.xrel, ev.motion.yrel );
+                    }
+                    if( g ) {
+                        g->invalidate_main_ui_adaptor();
+                    }
+                    ui_manager::redraw_invalidated();
+                    needupdate = true;
+                    break;
+                }
                 if( r3d_dragging ) {
                     if( SDL_GetModState() & SDL_KMOD_SHIFT ) { r3d::drag_pan( ev.motion.xrel, ev.motion.yrel ); }
                     else { r3d::drag_orbit( ev.motion.xrel, ev.motion.yrel ); }
@@ -4387,5 +4460,9 @@ const SDL_Window_Ptr &get_sdl_window()
     return window;
 }
 
+auto is_mouse_captured() -> bool
+{
+    return ::window && SDL_GetWindowRelativeMouseMode( ::window.get() );
+}
 
 #endif // TILES
