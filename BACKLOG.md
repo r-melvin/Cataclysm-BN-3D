@@ -155,6 +155,7 @@ locally; paid GitHub CI is explicitly out of scope.
   source settings outside the source user directory. Backend/font/panel settings
   are preserved per checkpoint. The normal quit sentinel previously returned
   status 25; the corrected menu exit (`923b619`) was verified to return 0.
+  Failed explicit world loads retain a nonzero exit status (verified as 1).
 
 These are Linux/software-Vulkan checks, not the complete vehicle/prop fixture
 matrix or native Metal/Direct3D acceptance. Current private evidence is in

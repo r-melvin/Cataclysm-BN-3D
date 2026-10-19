@@ -912,9 +912,11 @@ int main( int argc, char *argv[] )
     prompt_select_lang_on_startup();
     replay_buffered_debugmsg_prompts();
 
+    auto exit_status = 0;
     while( true ) {
         if( !world.empty() ) {
             if( !g->load( world ) ) {
+                exit_status = 1;
                 break;
             }
             world.clear(); // ensure quit returns to opening screen
@@ -931,7 +933,7 @@ int main( int argc, char *argv[] )
         while( !g->do_turn() );
     }
 
-    exit_handler( 0 );
+    exit_handler( exit_status );
     return 0;
 }
 
