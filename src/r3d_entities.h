@@ -109,7 +109,7 @@ struct sprite_opaque_bounds {
     bool has_trim = false;
 };
 
-/// Computes local footprint bounds from a sprite's opaque fraction and rotation.
+/// Local tile-space footprint, accounting for sprite size, anchor offsets, flip and rotation.
 auto get_sprite_opaque_bounds( const sprite_ref &s ) -> sprite_opaque_bounds;
 
 /// Camera-facing quads for view.particles, in the scene frame. Kept apart from the entities: they

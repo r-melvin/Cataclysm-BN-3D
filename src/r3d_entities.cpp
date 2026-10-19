@@ -1978,20 +1978,19 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
 
 auto get_sprite_opaque_bounds( const sprite_ref &s ) -> sprite_opaque_bounds
 {
-    if( !s.valid || ( s.opaque_x0 <= 0.01f && s.opaque_x1 >= 0.99f &&
-                      s.opaque_y0 <= 0.01f && s.opaque_y1 >= 0.99f ) ) {
-        return sprite_opaque_bounds{};
-    }
-
-    auto x0 = s.opaque_x0;
-    auto x1 = s.opaque_x1;
+    if( !s.valid ) { return {}; }
+    // Atlas fractions are not tile fractions. Tall/oversized vehicle elevations
+    // overflow their native tile and carry an offset back to that tile's anchor.
+    auto x0 = s.offset_x + s.opaque_x0 * s.size_x;
+    auto x1 = s.offset_x + s.opaque_x1 * s.size_x;
     if( s.flip ) {
         const auto temp = 1.0f - x1;
         x1 = 1.0f - x0;
         x0 = temp;
     }
-    const auto y0 = s.opaque_y0;
-    const auto y1 = s.opaque_y1;
+    const auto y0 = s.offset_y + s.opaque_y0 * s.size_y;
+    const auto y1 = s.offset_y + s.opaque_y1 * s.size_y;
+    if( x0 <= 0.01f && x1 >= 0.99f && y0 <= 0.01f && y1 >= 0.99f ) { return {}; }
 
     auto gx_min = 0.0f;
     auto gx_max = 1.0f;

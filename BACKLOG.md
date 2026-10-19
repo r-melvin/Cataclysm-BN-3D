@@ -164,6 +164,19 @@ a blanket vehicle-wide colour average or deletion of markers would lose them.
 No save, logs or capture archive were attached. The reporter closed it as
 completed; its visual findings remain part of this presentation work.
 
+Vehicle footprint follow-up: opacity bounds now convert through native sprite
+size and anchor offsets before rotation/mirroring. Ultica's oversized hatch art
+therefore fills its native tile instead of shrinking adjoining panels. A real
+two-hatch assembly reproduced three failed boundary checks before the fix.
+The rebased hatch blueprint and bounds fix build together; 180 renderer,
+onboarding and input cases pass (54,851 assertions). Geometry snapshots were
+regenerated for car, pickup, SUV, bus and semi-truck at 0/90/225 degrees; both
+item scenes are unchanged. This establishes native mount bounds, not the full
+vehicle appearance/state acceptance matrix. A private software-Vulkan virtual-window capture shows the rebased hatchback
+with adjoining body/window panels (`out/validation/dan-recovery/rebased-screen.png`).
+The automatic one-shot did not reach its frame threshold while idle; the virtual
+window was captured directly. This is one fixture, not the original outdoor save.
+
 Source and acceptance matrix:
 [vehicle research](docs/en/dev/research/vehicle_rendering_research.md).
 

@@ -1,8 +1,17 @@
 #if defined(TILES)
+#    include "cata_tiles.h"
+#    include "cata_utility.h"
 #    include "catch/catch.hpp"
+#    include "map/map.h"
+#    include "map_helpers.h"
 #    include "r3d_entities.h"
+#    include "sdltiles.h"
+#    include "state_helpers.h"
+#    include "tile_helpers.h"
+#    include "vehicle/vehicle.h"
 
 #    include <cmath>
+#    include <ranges>
 
 namespace {
 auto approx(float a, float b, float eps = 1e-3f) -> bool { return std::fabs(a - b) <= eps; }
@@ -67,5 +76,78 @@ TEST_CASE("r3d_vehicle_opaque_bounds_trimming", "[r3d]") {
     CHECK(approx(r_r_rel, 0.25f));
 }
 
+
+TEST_CASE("r3d_oversized_and_tall_vehicle_elevations_cover_one_tile", "[r3d][vehicle]") {
+    for (const auto rotation : {0, 1, 2, 3}) {
+        for (const auto flip : {false, true}) {
+            auto hatch = r3d::sprite_ref{};
+            hatch.valid = true;
+            hatch.size_x = 2.0f;
+            hatch.size_y = 2.0f;
+            hatch.offset_x = -0.5f;
+            hatch.offset_y = -1.0f;
+            hatch.opaque_x0 = 0.25f;
+            hatch.opaque_x1 = 0.75f;
+            hatch.opaque_y0 = 0.5f;
+            hatch.opaque_y1 = 1.0f;
+            hatch.quarter_turns = rotation;
+            hatch.flip = flip;
+            const auto bounds = r3d::get_sprite_opaque_bounds(hatch);
+            CHECK_FALSE(bounds.has_trim);
+            CHECK(bounds.local_r_min == Approx(-0.5f));
+            CHECK(bounds.local_r_max == Approx(0.5f));
+            CHECK(bounds.local_f_min == Approx(-0.5f));
+            CHECK(bounds.local_f_max == Approx(0.5f));
+            hatch.size_x = 1.0f;
+            hatch.size_y = 1.5f;
+            hatch.offset_x = 0.0f;
+            hatch.offset_y = -0.5f;
+            hatch.opaque_x0 = 0.0f;
+            hatch.opaque_x1 = 1.0f;
+            hatch.opaque_y0 = 1.0f / 3.0f;
+            CHECK_FALSE(r3d::get_sprite_opaque_bounds(hatch).has_trim);
+        }
+    }
+}
+
+TEST_CASE("r3d_oversized_vehicle_art_keeps_native_mount_dimensions", "[r3d][vehicle][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh != nullptr);
+    for (auto x = 0; x < 2; ++x) {
+        REQUIRE(
+            veh->install_part(tripoint_mnt_veh(x, 0, 0), vpart_id("frame_horizontal"), true) >= 0);
+        REQUIRE(veh->install_part(tripoint_mnt_veh(x, 0, 0), vpart_id("hatch"), true) >= 0);
+    }
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    REQUIRE_FALSE(mesh.empty());
+    // The two native mounts occupy [0,2] x [0,1] around the half-tile pivot.
+    // Transparent pixels in an elevation must not narrow their shared body envelope.
+    for (const auto y : {0.0f, -1.0f}) {
+        CAPTURE(y);
+        CHECK(std::ranges::any_of(mesh.vertices, [&](const auto& v) { return v.y == Approx(y); }));
+    }
+    for (const auto x : {0.0f, 1.0f, 2.0f}) {
+        CAPTURE(x);
+        CHECK(std::ranges::any_of(mesh.vertices, [&](const auto& v) { return v.x == Approx(x); }));
+    }
+}
 
 #endif
