@@ -16,6 +16,23 @@ the default game or the 2D renderer. Determine which parts can be safely
 controlled by data or Lua and which require core C++ hooks; a partial mod must
 not imply that all vehicle gameplay is disabled.
 
+## Improve the feel of turn-based driving in the 3D renderer
+
+Keep BN's discrete vehicle simulation, collision checks, action costs, and turn
+economy. First instrument how often the renderer is redrawn during vehicle
+substeps, then prototype renderer-only interpolation of the vehicle's committed
+position and heading and the camera target between those states. Snap on
+collisions, map shifts, portals, save/load, and any transition where an
+interpolated path would be misleading. If control still feels coarse, review
+the existing `VEHICLE_CONTROL_SCALE` option and turn-based driving affordances.
+Treat real-time vehicle physics/input as a final resort because it would require
+broader changes to world-turn scheduling, actor fairness, action costs, and
+collision semantics.
+
+Relevant paths: `src/vehicle/vehicle_move.cpp` (`pldrive()` and `act_on_map()`),
+`src/vehicle/vehicle.cpp` (`gain_moves()`), `src/map/map.cpp` (`vehmove()`),
+`src/game.cpp` (world-turn processing), and `src/r3d.cpp` (camera heading).
+
 ## Prototype sprite-to-voxel assets for vehicles and characters
 
 Use Kenney Shape to author a wheel `.vox` and one vehicle panel, then use
