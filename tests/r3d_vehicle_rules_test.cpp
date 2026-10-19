@@ -208,6 +208,182 @@ TEST_CASE("r3d_only_floored_vehicle_tiles_raise_the_item_surface", "[r3d][vehicl
     CHECK(height_with({"frame_horizontal", "aisle_horizontal"}) == Approx(r3d::chassis_floor_h));
 }
 
+namespace {
+auto install_all(vehicle& veh, const tripoint_mnt_veh& mount, const std::vector<const char*>& ids)
+    -> std::vector<int> {
+    auto indices = std::vector<int>{};
+    for (const auto id : ids) {
+        const auto index = veh.install_part(mount, vpart_id(id), true);
+        REQUIRE(index >= 0);
+        indices.push_back(index);
+    }
+    return indices;
+}
+
+auto has_layer_role(
+    const r3d::vehicle_render_profile& profile, const int part_idx,
+    const r3d::vehicle_render_role role) -> bool {
+    return std::ranges::any_of(profile.layers, [&](const auto& layer) {
+        return layer.part_idx == part_idx
+            && std::ranges::find(layer.roles, role) != layer.roles.end();
+    });
+}
+} // namespace
+
+TEST_CASE("r3d_open_door_stops_being_a_tall_wall", "[r3d][vehicle]") {
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    const auto mount = tripoint_mnt_veh::zero();
+    const auto parts = install_all(veh, mount, {"frame_horizontal", "door"});
+    const auto door = parts[1];
+    REQUIRE(veh.part_info(door).has_flag("OPENABLE"));
+
+    auto profile = r3d::vehicle_profile(veh, mount);
+    CHECK(profile.is_openable);
+    CHECK(profile.is_tall_cabin);
+    CHECK(profile.height == r3d::vehicle_cabin_h);
+    CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::openable));
+    // The stock "door" part is also BOARDABLE, so even a closed door counts as interior and floor.
+    CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::interior));
+    CHECK(profile.is_interior);
+    CHECK(r3d::vehicle_surface_height(veh, mount) == Approx(r3d::chassis_floor_h));
+
+    veh.part(door).open = true;
+    profile = r3d::vehicle_profile(veh, mount);
+    CHECK(profile.is_openable);
+    CHECK(profile.is_interior);
+    CHECK_FALSE(profile.is_tall_cabin);
+    CHECK(profile.height == r3d::chassis_floor_h);
+    CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::interior));
+    CHECK(std::ranges::any_of(profile.layers, [door](const auto& layer) {
+        return layer.part_idx == door && layer.open;
+    }));
+    CHECK(r3d::vehicle_surface_height(veh, mount) == Approx(r3d::chassis_floor_h));
+}
+
+TEST_CASE("r3d_broken_non_wheel_parts_keep_layers_but_drop_profile_flags", "[r3d][vehicle]") {
+    const auto break_part = [](vehicle& veh, const int idx) {
+        veh.set_hp(veh.part(idx), 0);
+        REQUIRE(veh.cpart(idx).is_broken());
+    };
+    SECTION("windshield") {
+        auto veh = vehicle(vproto_id("none"), 0, 0);
+        const auto mount = tripoint_mnt_veh::zero();
+        const auto parts =
+            install_all(veh, mount, {"frame_horizontal", "windshield_horizontal_front"});
+        REQUIRE(r3d::vehicle_profile(veh, mount).is_windshield);
+        break_part(veh, parts[1]);
+        const auto profile = r3d::vehicle_profile(veh, mount);
+        CHECK_FALSE(profile.is_windshield);
+        CHECK_FALSE(profile.is_tall_cabin);
+        CHECK(profile.height == r3d::vehicle_body_h);
+        CHECK(std::ranges::any_of(profile.layers, [&](const auto& layer) {
+            return layer.part_idx == parts[1] && layer.broken;
+        }));
+    }
+    SECTION("door") {
+        auto veh = vehicle(vproto_id("none"), 0, 0);
+        const auto mount = tripoint_mnt_veh::zero();
+        const auto parts = install_all(veh, mount, {"frame_horizontal", "door"});
+        break_part(veh, parts[1]);
+        const auto profile = r3d::vehicle_profile(veh, mount);
+        CHECK_FALSE(profile.is_openable);
+        CHECK_FALSE(profile.is_tall_cabin);
+        CHECK(has_layer_role(profile, parts[1], r3d::vehicle_render_role::openable));
+    }
+    SECTION("roof and shaped panel") {
+        auto veh = vehicle(vproto_id("none"), 0, 0);
+        const auto mount = tripoint_mnt_veh::zero();
+        const auto parts = install_all(veh, mount, {"frame_horizontal", "halfboard_nw", "roof"});
+        REQUIRE(r3d::vehicle_profile(veh, mount).has_roof);
+        break_part(veh, parts[2]);
+        break_part(veh, parts[1]);
+        const auto profile = r3d::vehicle_profile(veh, mount);
+        CHECK_FALSE(profile.has_roof);
+        CHECK_FALSE(profile.show_roof);
+        CHECK(profile.roof_part_idx == -1);
+        CHECK(profile.corner == r3d::panel_corner::none);
+    }
+    SECTION("seat") {
+        auto veh = vehicle(vproto_id("none"), 0, 0);
+        const auto mount = tripoint_mnt_veh::zero();
+        const auto parts = install_all(veh, mount, {"frame_horizontal", "seat"});
+        REQUIRE(r3d::vehicle_profile(veh, mount).is_interior);
+        break_part(veh, parts[1]);
+        CHECK_FALSE(r3d::vehicle_profile(veh, mount).is_interior);
+        CHECK(r3d::vehicle_surface_height(veh, mount) == Approx(0.0f));
+    }
+}
+
+TEST_CASE("r3d_broken_wheel_does_not_hide_intact_wheel_on_same_mount", "[r3d][vehicle]") {
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    const auto mount = tripoint_mnt_veh::zero();
+    const auto parts = install_all(veh, mount, {"frame_horizontal", "wheel_mount_medium", "wheel"});
+    veh.set_hp(veh.part(parts[2]), 0);
+    const auto profile = r3d::vehicle_profile(veh, mount);
+    CHECK(profile.has_wheel);
+    const auto* const layer = r3d::preferred_wheel_layer(profile.layers);
+    REQUIRE(layer != nullptr);
+    CHECK(layer->part_idx == parts[2]);
+    CHECK(layer->broken);
+}
+
+TEST_CASE("r3d_several_panels_on_one_mount_first_installed_corner_wins", "[r3d][vehicle]") {
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    const auto mount = tripoint_mnt_veh::zero();
+    install_all(veh, mount, {"frame_horizontal", "halfboard_nw"});
+    REQUIRE(r3d::vehicle_profile(veh, mount).corner == r3d::panel_corner::front_left);
+    install_all(veh, mount, {"halfboard_se"});
+    const auto profile = r3d::vehicle_profile(veh, mount);
+    // Observed: parts_at_relative() lists the earliest-installed panel last, and each panel
+    // overwrites the corner, so the first installed shaped panel wins.
+    CHECK(profile.corner == r3d::panel_corner::front_left);
+    auto reversed = vehicle(vproto_id("none"), 0, 0);
+    install_all(reversed, mount, {"frame_horizontal", "halfboard_se", "halfboard_nw"});
+    CHECK(r3d::vehicle_profile(reversed, mount).corner == r3d::panel_corner::rear_right);
+}
+
+TEST_CASE("r3d_main_part_is_the_highest_z_order_below_nine", "[r3d][vehicle]") {
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    const auto mount = tripoint_mnt_veh::zero();
+    const auto parts = install_all(veh, mount, {"frame_horizontal", "halfboard_horizontal"});
+    auto profile = r3d::vehicle_profile(veh, mount);
+    REQUIRE(profile.main_part_idx >= 0);
+    auto expected = -1;
+    for (const auto idx : parts) {
+        if (veh.part_info(idx).z_order < 9
+            && (expected < 0 || veh.part_info(idx).z_order > veh.part_info(expected).z_order)) {
+            expected = idx;
+        }
+    }
+    CHECK(profile.main_part_idx == expected);
+    CHECK(veh.part_info(profile.main_part_idx).z_order < 9);
+    for (const auto& layer : profile.layers) {
+        if (veh.part_info(layer.part_idx).z_order < 9) {
+            CHECK(veh.part_info(layer.part_idx).z_order
+                  <= veh.part_info(profile.main_part_idx).z_order);
+        }
+    }
+    // Parts with z_order 9 or more (roof accessories) never become the main part.
+    install_all(veh, mount, {"roof", "solar_panel"});
+    profile = r3d::vehicle_profile(veh, mount);
+    REQUIRE(profile.main_part_idx >= 0);
+    CHECK(veh.part_info(profile.main_part_idx).z_order < 9);
+}
+
+TEST_CASE("r3d_surface_height_follows_floor_parts_not_frames_or_panels", "[r3d][vehicle]") {
+    const auto height_with = [](const std::vector<const char*>& ids) {
+        auto veh = vehicle(vproto_id("none"), 0, 0);
+        const auto mount = tripoint_mnt_veh::zero();
+        install_all(veh, mount, ids);
+        return r3d::vehicle_surface_height(veh, mount);
+    };
+    CHECK(height_with({"frame_horizontal", "halfboard_horizontal"}) == Approx(0.0f));
+    CHECK(height_with({"frame_horizontal", "roof"}) == Approx(0.0f));
+    CHECK(height_with({"frame_horizontal", "seat", "roof"}) == Approx(r3d::chassis_floor_h));
+    CHECK(height_with({"frame_horizontal", "aisle_horizontal", "halfboard_horizontal"})
+          == Approx(r3d::chassis_floor_h));
+}
+
 #if defined(TILES)
 #    include "cata_tiles.h"
 #    include "cata_utility.h"
@@ -297,6 +473,33 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
     const auto voxel_wheeled = r3d::build_vehicle_mesh(view);
     CHECK(voxel_wheeled.vertices.size() > wheeled.vertices.size());
     CHECK(voxel_wheeled.indices.size() > wheeled.indices.size());
+    // The voxel wheel's own vertices (those the sprite wheel mesh lacks) stay inside the wheel's
+    // extent: a lone centreline wheel is 0.58 long and 0.26 wide, centred in the cell at mount x=1,
+    // and as tall as vehicle_wheel_h from the chassis base.
+    auto known = std::set<std::array<float, 3>>{};
+    for (const auto& v : wheeled.vertices) { known.insert({v.x, v.y, v.z}); }
+    auto low = std::array<float, 3>{1e9f, 1e9f, 1e9f};
+    auto high = std::array<float, 3>{-1e9f, -1e9f, -1e9f};
+    for (const auto& v : voxel_wheeled.vertices) {
+        if (known.contains({v.x, v.y, v.z})) { continue; }
+        const auto position = std::array<float, 3>{v.x, v.y, v.z};
+        for (auto axis = 0; axis < 3; ++axis) {
+            low[axis] = std::min(low[axis], position[axis]);
+            high[axis] = std::max(high[axis], position[axis]);
+        }
+    }
+    constexpr auto eps = 0.001f;
+    constexpr auto base = r3d::floor_height + 0.02f;
+    REQUIRE(high[0] >= low[0]);
+    CHECK(low[0] >= 1.5f - 0.29f - eps);
+    CHECK(high[0] <= 1.5f + 0.29f + eps);
+    CHECK(high[0] - low[0] > 0.45f);
+    CHECK(low[1] >= -0.5f - 0.13f - eps);
+    CHECK(high[1] <= -0.5f + 0.13f + eps);
+    CHECK(high[1] - low[1] > 0.2f);
+    CHECK(low[2] >= base - eps);
+    CHECK(high[2] <= base + r3d::vehicle_wheel_h + eps);
+    CHECK(high[2] - low[2] > 0.28f);
     const auto& roof_art =
         cache.named({.category = C_VEHICLE_PART, .id = "vp_roof", .tiles = *tilecontext}).main();
     REQUIRE(roof_art.valid);
