@@ -128,6 +128,15 @@ struct shown_view {
     int z_hi = 0;
 };
 
+struct dynamic_mesh_buffers {
+    SDL_GPUBuffer *positions = nullptr;
+    SDL_GPUBuffer *lights = nullptr;
+    SDL_GPUBuffer *indices = nullptr;
+    uint32_t position_bytes = 0;
+    uint32_t light_bytes = 0;
+    uint32_t index_bytes = 0;
+};
+
 struct state {
     gpu device;
     tile_info_cache cache;
@@ -147,26 +156,11 @@ struct state {
     uint64_t tileset_loads = 0;
     bool env_camera_applied = false;
     bool screenshot_taken = false;
-    // Per-frame buffers for creatures and items, grown as needed and re-uploaded every frame.
-    SDL_GPUBuffer *dyn_positions = nullptr;
-    SDL_GPUBuffer *dyn_lights = nullptr;
-    SDL_GPUBuffer *dyn_indices = nullptr;
-    uint32_t dyn_position_bytes = 0;
-    uint32_t dyn_light_bytes = 0;
-    uint32_t dyn_index_bytes = 0;
-    // Per-frame buffers for vehicles, separate from entities for independent cutaway uniforms.
-    SDL_GPUBuffer *veh_positions = nullptr;
-    SDL_GPUBuffer *veh_lights = nullptr;
-    SDL_GPUBuffer *veh_indices = nullptr;
-    uint32_t veh_position_bytes = 0;
-    uint32_t veh_light_bytes = 0;
-    uint32_t veh_index_bytes = 0;
-    SDL_GPUBuffer *silhouette_positions = nullptr;
-    SDL_GPUBuffer *silhouette_lights = nullptr;
-    SDL_GPUBuffer *silhouette_indices = nullptr;
-    uint32_t silhouette_position_bytes = 0;
-    uint32_t silhouette_light_bytes = 0;
-    uint32_t silhouette_index_bytes = 0;
+    // Per-frame buffers, grown as needed and re-uploaded every frame. Vehicles are separate
+    // from creatures and items for independent cutaway uniforms.
+    dynamic_mesh_buffers dyn;
+    dynamic_mesh_buffers veh;
+    dynamic_mesh_buffers silhouette;
     shown_view shown;
     bool map_drawn = false; // the game's map view has been on screen (a game is running)
     vec3 pan; // free camera: offset of the camera target from the viewed tile, world space
@@ -189,33 +183,12 @@ auto st() -> state &
 
 auto release_dynamic( state &s ) -> void
 {
-    s.device.release_buffer( s.dyn_positions );
-    s.device.release_buffer( s.dyn_lights );
-    s.device.release_buffer( s.dyn_indices );
-    s.dyn_positions = nullptr;
-    s.dyn_lights = nullptr;
-    s.dyn_indices = nullptr;
-    s.dyn_position_bytes = 0;
-    s.dyn_light_bytes = 0;
-    s.dyn_index_bytes = 0;
-    s.device.release_buffer( s.veh_positions );
-    s.device.release_buffer( s.veh_lights );
-    s.device.release_buffer( s.veh_indices );
-    s.veh_positions = nullptr;
-    s.veh_lights = nullptr;
-    s.veh_indices = nullptr;
-    s.veh_position_bytes = 0;
-    s.veh_light_bytes = 0;
-    s.veh_index_bytes = 0;
-    s.device.release_buffer( s.silhouette_positions );
-    s.device.release_buffer( s.silhouette_lights );
-    s.device.release_buffer( s.silhouette_indices );
-    s.silhouette_positions = nullptr;
-    s.silhouette_lights = nullptr;
-    s.silhouette_indices = nullptr;
-    s.silhouette_position_bytes = 0;
-    s.silhouette_light_bytes = 0;
-    s.silhouette_index_bytes = 0;
+    for( auto *buffers : { &s.dyn, &s.veh, &s.silhouette } ) {
+        s.device.release_buffer( buffers->positions );
+        s.device.release_buffer( buffers->lights );
+        s.device.release_buffer( buffers->indices );
+        *buffers = {};
+    }
 }
 
 // Makes sure a dynamic buffer holds at least bytes, then queues the data for upload.
@@ -247,6 +220,20 @@ auto upload_dynamic( const upload_dynamic_options &options ) -> bool
         }
     }
     return s.device.upload( { .dst = buffer, .data = data, .size = bytes, .cycle = true } );
+}
+
+// Uploads a whole mesh into its buffer trio; false when it is empty or an upload fails.
+auto upload_mesh( state &s, dynamic_mesh_buffers &b, const chunk_mesh &mesh ) -> bool
+{
+    return !mesh.empty() &&
+           upload_dynamic( { .s = s, .buffer = b.positions, .capacity = b.position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                             .data = mesh.vertices.data(), .bytes = static_cast<uint32_t>( mesh.vertices.size() * sizeof( vertex ) ) } )
+           &&
+           upload_dynamic( { .s = s, .buffer = b.lights, .capacity = b.light_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                             .data = mesh.light.data(), .bytes = static_cast<uint32_t>( mesh.light.size() * sizeof( uint32_t ) ) } )
+           &&
+           upload_dynamic( { .s = s, .buffer = b.indices, .capacity = b.index_bytes, .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                             .data = mesh.indices.data(), .bytes = static_cast<uint32_t>( mesh.indices.size() * sizeof( uint32_t ) ) } );
 }
 
 auto release_chunk( state &s, chunk_gpu &c ) -> void
@@ -1738,27 +1725,9 @@ auto draw( const draw_options &options ) -> bool
         add_markers( queued.cursors, "cursor", true );
     }
     const auto vehicles = chunk_mesh( build_vehicle_mesh( entities_view ) );
-    const auto draw_vehicles = static_cast<bool>( !vehicles.empty() &&
-                               upload_dynamic( { .s = s, .buffer = s.veh_positions, .capacity = s.veh_position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                                       .data = vehicles.vertices.data(),
-                                       .bytes = static_cast<uint32_t>( vehicles.vertices.size() * sizeof( vertex ) ) } ) &&
-                               upload_dynamic( { .s = s, .buffer = s.veh_lights, .capacity = s.veh_light_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                                       .data = vehicles.light.data(),
-                                       .bytes = static_cast<uint32_t>( vehicles.light.size() * sizeof( uint32_t ) ) } ) &&
-                               upload_dynamic( { .s = s, .buffer = s.veh_indices, .capacity = s.veh_index_bytes, .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                                       .data = vehicles.indices.data(),
-                                       .bytes = static_cast<uint32_t>( vehicles.indices.size() * sizeof( uint32_t ) ) } ) );
+    const auto draw_vehicles = upload_mesh( s, s.veh, vehicles );
     const auto entities = chunk_mesh( build_entity_mesh( entities_view ) );
-    const auto draw_entities = static_cast<bool>( !entities.empty() &&
-                               upload_dynamic( { .s = s, .buffer = s.dyn_positions, .capacity = s.dyn_position_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                                       .data = entities.vertices.data(),
-                                       .bytes = static_cast<uint32_t>( entities.vertices.size() * sizeof( vertex ) ) } ) &&
-                               upload_dynamic( { .s = s, .buffer = s.dyn_lights, .capacity = s.dyn_light_bytes, .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                                       .data = entities.light.data(),
-                                       .bytes = static_cast<uint32_t>( entities.light.size() * sizeof( uint32_t ) ) } ) &&
-                               upload_dynamic( { .s = s, .buffer = s.dyn_indices, .capacity = s.dyn_index_bytes, .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                                       .data = entities.indices.data(),
-                                       .bytes = static_cast<uint32_t>( entities.indices.size() * sizeof( uint32_t ) ) } ) );
+    const auto draw_entities = upload_mesh( s, s.dyn, entities );
 
     auto avatar_silhouette = chunk_mesh{};
     auto draw_avatar_silhouette = static_cast<bool>( false );
@@ -1767,16 +1736,7 @@ auto draw( const draw_options &options ) -> bool
         entities_view.avatar_only = true;
         avatar_silhouette = build_entity_mesh( entities_view );
         entities_view.avatar_only = false;
-        draw_avatar_silhouette = static_cast<bool>( !avatar_silhouette.empty() &&
-                                 upload_dynamic( { .s = s, .buffer = s.silhouette_positions, .capacity = s.silhouette_position_bytes,
-                                         .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.vertices.data(),
-                                         .bytes = static_cast<uint32_t>( avatar_silhouette.vertices.size() * sizeof( vertex ) ) } ) &&
-                                 upload_dynamic( { .s = s, .buffer = s.silhouette_lights, .capacity = s.silhouette_light_bytes,
-                                         .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.light.data(),
-                                         .bytes = static_cast<uint32_t>( avatar_silhouette.light.size() * sizeof( uint32_t ) ) } ) &&
-                                 upload_dynamic( { .s = s, .buffer = s.silhouette_indices, .capacity = s.silhouette_index_bytes,
-                                         .usage = SDL_GPU_BUFFERUSAGE_INDEX, .data = avatar_silhouette.indices.data(),
-                                         .bytes = static_cast<uint32_t>( avatar_silhouette.indices.size() * sizeof( uint32_t ) ) } ) );
+        draw_avatar_silhouette = upload_mesh( s, s.silhouette, avatar_silhouette );
     }
 
     if( !s.device.begin_pass( 0.05f, 0.05f, 0.07f ) ) {
@@ -1814,7 +1774,7 @@ auto draw( const draw_options &options ) -> bool
             uniforms.cut2[1] = floor_height + 0.52f;
         }
         for( const mesh_batch &b : vehicles.batches ) {
-            s.device.draw_block( { .positions = s.veh_positions, .lights = s.veh_lights, .indices = s.veh_indices, .first_index = b.first_index, .index_count = b.index_count,
+            s.device.draw_block( { .positions = s.veh.positions, .lights = s.veh.lights, .indices = s.veh.indices, .first_index = b.first_index, .index_count = b.index_count,
                                    .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
@@ -1832,7 +1792,7 @@ auto draw( const draw_options &options ) -> bool
         uniforms.pull[2] = toward.z / s.cam.z_scale;
         uniforms.pull[3] = max_billboard_pull;
         for( const mesh_batch &b : entities.batches ) {
-            s.device.draw_block( { .positions = s.dyn_positions, .lights = s.dyn_lights, .indices = s.dyn_indices, .first_index = b.first_index, .index_count = b.index_count,
+            s.device.draw_block( { .positions = s.dyn.positions, .lights = s.dyn.lights, .indices = s.dyn.indices, .first_index = b.first_index, .index_count = b.index_count,
                                    .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
@@ -1848,8 +1808,8 @@ auto draw( const draw_options &options ) -> bool
         uniforms.pull[3] = max_billboard_pull;
         uniforms.cut[3] = 0.0f;
         for( const mesh_batch &b : avatar_silhouette.batches ) {
-            s.device.draw_block( { .positions = s.silhouette_positions, .lights = s.silhouette_lights,
-                                   .indices = s.silhouette_indices, .first_index = b.first_index,
+            s.device.draw_block( { .positions = s.silhouette.positions, .lights = s.silhouette.lights,
+                                   .indices = s.silhouette.indices, .first_index = b.first_index,
                                    .index_count = b.index_count, .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
