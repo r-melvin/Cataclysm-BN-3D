@@ -113,7 +113,8 @@ auto vehicle_surface_height( const vehicle &veh, const tripoint_mnt_veh &mount )
     return vehicle_profile( veh, mount ).is_interior ? chassis_floor_h : 0.0f;
 }
 
-auto preferred_wheel_layer( std::span<const vehicle_render_layer> layers ) -> const vehicle_render_layer * // *NOPAD*
+auto preferred_wheel_layer( std::span<const vehicle_render_layer> layers ) -> const
+vehicle_render_layer * // *NOPAD*
 {
     const auto is_wheel = []( const auto & layer ) {
         return std::ranges::find( layer.roles, vehicle_render_role::wheel ) != layer.roles.end();
