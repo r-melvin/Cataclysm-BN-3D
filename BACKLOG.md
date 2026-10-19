@@ -64,3 +64,11 @@ ambient horizon lighting driven by the in-game day/night cycle so the exposed
 world does not disappear into a uniformly black background. Preserve gameplay
 visibility rules, and account for indoor, underground, weather, and renderer
 cutaway views when choosing fog and sky behavior.
+
+## Render multi-level vehicles in the 3D renderer
+
+Vehicle mounts carry a z coordinate, but the 3D renderer draws each vehicle at
+one vehicle-wide base height and keys its render cells by mount x and y only,
+so parts on different levels overwrite each other. Key cells by the full mount,
+offset each cell's geometry by its mount z, and make the neighbour lookups
+(walls, trim, bumpers, roofs) level-aware.
