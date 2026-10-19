@@ -59,12 +59,17 @@ Opening overrides preserve their pane/leaf art and geometry and apply rotated
 crops to sill, lintel and jamb sections. Native broken/empty window frames now
 remain upright without adding gameplay flags. Tests cover eight opening states,
 both axes and both wall thicknesses, including sheet/UV identity and unchanged
-profiled geometry. Both binaries build; the combined renderer/onboarding run
-passes 156 cases (37,524 assertions). A private Xvfb/Vulkan scene confirms upright
+profiled geometry. Furniture box/slab faces now share the donor resolver:
+`top`, non-front `side`, and explicit `front` overrides preserve native handles
+and doors when no front donor is supplied. Footprints, row joins, wall fitting,
+slabs, feet and undersides remain inferred; this is not yet arbitrary furniture
+shape/anchor support. Both binaries build; the combined renderer/onboarding run
+passes 158 cases (37,778 assertions), including per-face donor checks for
+lockers, chairs, bins and tables. A private Xvfb/Vulkan scene confirms upright
 broken/empty windows and the open door leaf; a reusable native Lua scene builder
 and instructions now live in `tools/r3d_spike/fixtures/`. The saved private scene
 reloads and exits normally (0), with turn 1,327,697 and moves 100 unchanged and
-no Vulkan validation errors. Native 2D and 3D references were inspected. Geometry-family overrides and equivalent furniture/vehicle
+no Vulkan validation errors. Native 2D and 3D references were inspected. Geometry-family overrides and equivalent upright/panel furniture and vehicle
 face consumers from the original proposal remain outstanding.
 
 Define those fields for a bin, chair, locker, window, door, tree, loose item and

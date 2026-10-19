@@ -71,6 +71,7 @@ struct tile_info {
     bool stairs = false;   // the level above holds its treetop, which this sprite already shows
     sprite_ref side;     // texture for the sides of a wall (see wall_sides), else invalid
     sprite_ref cap;      // the top of such a wall: a plain patch of the same texture
+    sprite_ref front;    // optional authored furniture front; preserves native art when absent
     // >= 0: the wall's sprite is a front elevation (tilesets draw painted walls as a band of
     // framing over coving, paint and skirting); rows below this fraction of the sprite are the
     // side, from coving to skirting, and the rows above it top the wall

@@ -71,5 +71,14 @@ inline auto orient_material_uvs( const sprite_ref &sprite, const uvs_t &source )
     return result;
 }
 
+/// An authored face uses its complete crop, independently of inferred lid/front bands.
+inline auto material_face_uvs( const sprite_ref &sprite ) -> uvs_t
+{
+    return orient_material_uvs( sprite, {{{ sprite.u0, sprite.v0 }, { sprite.u1, sprite.v0 },
+            { sprite.u1, sprite.v1 }, { sprite.u0, sprite.v1 }
+        }
+    } );
+}
+
 } // namespace r3d
 #endif // CATA_SRC_R3D_PROFILE_MATERIALS_H

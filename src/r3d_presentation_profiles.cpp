@@ -34,17 +34,19 @@ auto valid_positive_size( const std::array<float, 3> &size ) -> bool
     } );
 }
 
-auto read_face_sources( const JsonObject &entry ) -> std::vector<profile_face_source>
+auto read_face_sources( const JsonObject &entry,
+                        const std::string &category ) -> std::vector<profile_face_source>
 {
     auto sources = std::vector<profile_face_source> {};
     if( !entry.has_member( "face_sources" ) ) { return sources; }
     for( const auto source : entry.get_array( "face_sources" ) ) {
         const auto object = source.get_object();
         const auto face = object.get_string( "face" );
-        if( face != "side" && face != "top" ) {
-            object.throw_error( "wall face must be side or top", "face" );
+        if( face != "side" && face != "top" && !( face == "front" && category == "furniture" ) ) {
+            object.throw_error( "face must be side or top; furniture also supports front", "face" );
         }
-        const auto selected_face = face == "side" ? profile_face::side : profile_face::top;
+        const auto selected_face = face == "front" ? profile_face::front :
+                                   face == "side" ? profile_face::side : profile_face::top;
         auto donor = profile_face_source{
             .face = selected_face,
             .tileset = object.get_string( "tileset" ),
@@ -94,7 +96,7 @@ auto load_presentation_profiles( std::istream &input ) -> presentation_profile_m
             .size = read_vec3( entry, "size", {} ),
             .support_anchor = read_vec3( entry, "support_anchor", { 0.5f, 0.5f, 0.0f } ),
             .depth_fraction = static_cast<float>( entry.get_float( "depth_fraction", 0.0 ) ),
-            .face_sources = read_face_sources( entry )
+            .face_sources = read_face_sources( entry, category )
         };
         if( !valid_positive_size( profile.size ) || profile.depth_fraction < 0.0f ||
             profile.depth_fraction > 4.0f ||

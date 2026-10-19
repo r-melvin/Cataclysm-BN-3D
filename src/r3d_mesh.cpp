@@ -146,6 +146,49 @@ auto to_sprite_ref( const texture_draw_data &data, bool with_alpha = false ) -> 
     return ref;
 }
 
+struct apply_profile_materials_options {
+    const presentation_profile_map &profiles;
+    const std::string &category;
+    const std::string &id;
+    cata_tiles &tiles;
+    tile_info &out;
+};
+
+auto apply_profile_materials( const apply_profile_materials_options &options ) -> void
+{
+    const auto profile = options.profiles.find( presentation_profile_key( options.category,
+                         options.id ) );
+    const auto *tileset = options.tiles.current_tileset();
+    if( profile != options.profiles.end() && tileset ) {
+        for( const auto &source : profile->second.face_sources ) {
+            const auto *source_tile = tileset->find_tile_type( source.sprite );
+            if( source.tileset != tileset->get_tileset_id() || !source_tile ) { continue; }
+            // A donor must name concrete foreground art, not a multitile container
+            // whose missing foreground would choose an unrelated fallback piece.
+            const auto *foreground = source_tile->sprite.fg.pick( 0 );
+            if( !foreground || foreground->empty() ) { continue; }
+            const auto data = options.tiles.get_sprite_draw_data( {
+                .id = source.sprite, .category = C_NONE, .pos = tripoint_bub_ms( 0, 0, 0 ),
+                            .rotation = source.rotation
+            } );
+            if( !data ) { continue; }
+            const auto sprite = to_sprite_ref( *data );
+            const auto cropped = crop_profile_sprite( { .sprite = sprite, .source = source,
+                                 .tileset = tileset->get_tileset_id() } );
+            if( !cropped ) { continue; }
+            if( source.face == profile_face::side ) {
+                options.out.side = *cropped;
+                options.out.side_tint = 0xffffffu;
+            } else if( source.face == profile_face::front ) {
+                options.out.front = *cropped;
+            } else {
+                options.out.cap = *cropped;
+                options.out.cap_tint = 0xffffffu;
+            }
+        }
+    }
+}
+
 struct resolve_layers_options {
     cata_tiles &tiles;
     const std::string &id;
@@ -470,6 +513,7 @@ struct emit_box_options {
     uint8_t wall_contacts;
     float slab = 0.0f;
     float depth_scale = 1.0f;
+    const tile_info *materials = nullptr;
 };
 
 auto emit_box( const emit_box_options &options ) -> void
@@ -529,7 +573,13 @@ auto emit_box( const emit_box_options &options ) -> void
                 { ox + fx1, oy + fy1, z1 }, { ox + fx0, oy + fy1, z1 }
             }
         };
-        sink.add( { .sprite = s, .corners = c, .uvs = uv, .ref = refs[0] } );
+        if( options.materials && options.materials->cap.valid ) {
+            auto cap = options.materials->cap;
+            cap.quarter_turns = ( cap.quarter_turns + facing ) & 3;
+            sink.add( { .sprite = cap, .corners = c, .uvs = material_face_uvs( cap ), .ref = refs[0] } );
+        } else {
+            sink.add( { .sprite = s, .corners = c, .uvs = uv, .ref = refs[0] } );
+        }
     }
 
     // A slab (bench seat, table top) only has sides as thick as itself, an underside, and legs.
@@ -573,7 +623,13 @@ auto emit_box( const emit_box_options &options ) -> void
             }
         };
         // A slab's sides are its own wood (the lid's colour), lit like any side.
-        sink.add( { .sprite = s, .corners = c, .uvs = slab > 0.0f ? plain_uv : sd.face == front ? side_uv : plain_uv, .ref = refs[sd.ref] } );
+        const auto *material = options.materials ?
+                               ( sd.face == front ? &options.materials->front : &options.materials->side ) : nullptr;
+        if( material && material->valid ) {
+            sink.add( { .sprite = *material, .corners = c, .uvs = material_face_uvs( *material ), .ref = refs[sd.ref] } );
+        } else {
+            sink.add( { .sprite = s, .corners = c, .uvs = slab > 0.0f ? plain_uv : sd.face == front ? side_uv : plain_uv, .ref = refs[sd.ref] } );
+        }
     }
     if( zs <= z0 ) {
         return;
@@ -1376,34 +1432,7 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
     }
     // Authored wall faces override presentation only; native geometry/knowledge stays intact.
     if( info.wall_connection ) {
-        const auto profile = profiles_.find( presentation_profile_key( "terrain", t.id.str() ) );
-        const auto *tileset = tiles.current_tileset();
-        if( profile != profiles_.end() && tileset ) {
-            for( const auto &source : profile->second.face_sources ) {
-                const auto *source_tile = tileset->find_tile_type( source.sprite );
-                if( source.tileset != tileset->get_tileset_id() || !source_tile ) { continue; }
-                // A donor must name concrete foreground art, not a multitile container
-                // whose missing foreground would choose an unrelated fallback piece.
-                const auto *foreground = source_tile->sprite.fg.pick( 0 );
-                if( !foreground || foreground->empty() ) { continue; }
-                const auto data = tiles.get_sprite_draw_data( {
-                    .id = source.sprite, .category = C_NONE, .pos = tripoint_bub_ms( 0, 0, 0 ),
-                                .rotation = source.rotation
-                } );
-                if( !data ) { continue; }
-                const auto sprite = to_sprite_ref( *data );
-                const auto cropped = crop_profile_sprite( { .sprite = sprite, .source = source,
-                                     .tileset = tileset->get_tileset_id() } );
-                if( !cropped ) { continue; }
-                if( source.face == profile_face::side ) {
-                    info.side = *cropped;
-                    info.side_tint = 0xffffffu;
-                } else {
-                    info.cap = *cropped;
-                    info.cap_tint = 0xffffffu;
-                }
-            }
-        }
+        apply_profile_materials( { .profiles = profiles_, .category = "terrain", .id = t.id.str(), .tiles = tiles, .out = info } );
     }
     return terrain_.emplace( key, info ).first->second;
 }
@@ -1467,6 +1496,9 @@ auto tile_info_cache::furniture( const furniture_options &options ) -> const til
         }
         info.sh = classify_furniture( traits );
         resolve_layers( { .tiles = tiles, .id = f.id.str(), .category = C_FURNITURE, .out = info, .subtile = subtile, .rota = rota } );
+        if( info.sh.kind == shape_kind::prism ) {
+            apply_profile_materials( { .profiles = profiles_, .category = "furniture", .id = f.id.str(), .tiles = tiles, .out = info } );
+        }
         if( info.sh.kind == shape_kind::block ) {
             // A supplied backdrop may itself have transparent holes. Keep the object's
             // artwork as detail over a solid material, including background-only tiles.
@@ -2257,7 +2289,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             }
             const auto box_faces = uint8_t( visible_faces( fs, nb ) | ( fs.slab > 0.0f ? 0 : all_sides ) );
             emit_box( { .sink = sink, .s = spr, .x = lx, .y = ly, .z0 = ts.height, .z1 = fs.height, .b = layout, .faces = box_faces, .refs = refs, .facing = facing, .joined = joined,
-                        .wall_contacts = wall_contacts, .slab = fs.slab, .depth_scale = furn.depth_scale } );
+                        .wall_contacts = wall_contacts, .slab = fs.slab, .depth_scale = furn.depth_scale, .materials = &furn } );
 
         }
     }

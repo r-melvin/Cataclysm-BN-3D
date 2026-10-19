@@ -240,4 +240,119 @@ TEST_CASE(
     unrotated.quarter_turns = 0;
     CHECK(r3d::orient_material_uvs(unrotated, part) == part);
 }
+
+TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][profiles][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto id = std::string(GENERATE("f_locker", "f_chair", "f_trashcan", "f_table"));
+    const auto face =
+        GENERATE(r3d::profile_face::top, r3d::profile_face::side, r3d::profile_face::front);
+    CAPTURE(id, static_cast<int>(face));
+    const auto pos = tripoint_abs_sm(get_map().get_abs_sub(), 0);
+    auto sm = submap(pos, {});
+    sm.set_all_ter(t_floor);
+    const auto furniture = furn_str_id(id).id();
+    sm.set_furn(point_sm_ms(5, 5), furniture);
+    const auto lookup = [&sm, &pos](const tripoint_abs_sm& requested) -> const submap* {
+        return requested == pos ? &sm : nullptr;
+    };
+    auto cache = r3d::tile_info_cache{};
+    const auto original = cache.furniture({.id = furniture, .tiles = *tilecontext});
+    REQUIRE(original.sh.kind == r3d::shape_kind::prism);
+    const auto baseline = r3d::build_chunk_mesh(
+        {.pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    cache.set_presentation_profiles(
+        {{"furniture:" + id,
+          {.face_sources = {
+               {.face = face,
+                .tileset = "UltimateCataclysm",
+                .sprite = "t_grass",
+                .crop = {0.13f, 0.23f, 0.67f, 0.79f}}}}}});
+    const auto art = cache.furniture({.id = furniture, .tiles = *tilecontext});
+    CHECK(art.main().sheet == original.main().sheet);
+    CHECK(art.main().u0 == original.main().u0);
+    CHECK(art.depth_scale == original.depth_scale);
+    const auto mesh = r3d::build_chunk_mesh(
+        {.pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    CHECK(mesh.indices.size() == baseline.indices.size());
+    auto changed = 0;
+    auto preserved_front = 0;
+    auto front_y = 0.0f;
+    for (const auto& vertex : baseline.vertices) {
+        if (vertex.x >= 5.0f && vertex.x <= 6.0f && vertex.y <= -5.0f && vertex.y >= -6.0f
+            && vertex.z == Approx(art.sh.height)) {
+            front_y = std::min(front_y, vertex.y);
+        }
+    }
+    for (auto index = size_t(0); index < baseline.vertices.size(); index += 4) {
+        const auto& first = baseline.vertices[index];
+        auto belongs = first.z == Approx(art.sh.height);
+        for (auto corner = size_t(0); corner < 4; ++corner) {
+            const auto& vertex = baseline.vertices[index + corner];
+            belongs = belongs && vertex.x >= 5.0f && vertex.x <= 6.0f && vertex.y <= -5.0f
+                   && vertex.y >= -6.0f;
+        }
+        if (!belongs) { continue; }
+        auto matched = false;
+        for (auto target = size_t(0); target < mesh.vertices.size(); target += 4) {
+            auto same = true;
+            auto different_uv = false;
+            auto top = true;
+            auto front = true;
+            for (auto corner = size_t(0); corner < 4; ++corner) {
+                const auto& before = baseline.vertices[index + corner];
+                const auto& after = mesh.vertices[target + corner];
+                same = same && before.x == after.x && before.y == after.y && before.z == after.z;
+                different_uv = different_uv || before.u != after.u || before.v != after.v;
+                top = top && before.z == Approx(art.sh.height);
+                front = front && before.y == Approx(front_y);
+            }
+            if (!same) { continue; }
+            matched = true;
+            const auto should_change =
+                face == r3d::profile_face::top ? top
+                : face == r3d::profile_face::front
+                    ? front
+                    : !top && !front;
+            CHECK(different_uv == should_change);
+            if (different_uv) {
+                ++changed;
+                const auto& material =
+                    face == r3d::profile_face::top ? art.cap
+                    : face == r3d::profile_face::front
+                        ? art.front
+                        : art.side;
+                REQUIRE(material.valid);
+                // Check the bound draw batch as well as UVs; different sheets can share
+                // coordinates.
+                const auto vertex_index = static_cast<uint32_t>(target);
+                auto correct_sheet = false;
+                for (const auto& batch : mesh.batches) {
+                    for (auto i = batch.first_index; i < batch.first_index + batch.index_count;
+                         ++i) {
+                        if (mesh.indices[i] == vertex_index && batch.sheet == material.sheet) {
+                            correct_sheet = true;
+                        }
+                    }
+                }
+                CHECK(correct_sheet);
+            }
+            if (front && !different_uv) { ++preserved_front; }
+            break;
+        }
+        CHECK(matched);
+    }
+    CHECK(changed > 0);
+    if (face != r3d::profile_face::front) { CHECK(preserved_front > 0); }
+}
+
+TEST_CASE("r3d_furniture_profiles_parse_explicit_front_sources", "[r3d][profiles]") {
+    auto input = std::istringstream(R"({"version":1,"profiles":[{
+      "category":"furniture","id":"f_locker","face_sources":[{
+      "face":"front","tileset":"UltimateCataclysm","sprite":"f_locker"}]}]})");
+    const auto profiles = r3d::load_presentation_profiles(input);
+    REQUIRE(profiles.at("furniture:f_locker").face_sources.size() == 1);
+    CHECK(profiles.at("furniture:f_locker").face_sources[0].face == r3d::profile_face::front);
+}
 #endif

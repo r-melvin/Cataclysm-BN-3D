@@ -118,7 +118,7 @@ is in clockwise quarter turns (0 to 3). `crop` is
 it defaults to the whole sprite. A donor retains its own texture sheet and
 ownership. One source per face per tileset is allowed. Invalid profiles are
 reported through asset-loading warnings; absent donors and other tilesets keep
-the normal wall material. Installing/reloading profiles rebuilds affected
+the normal inferred material. Installing/reloading profiles rebuilds affected
 cached geometry. The renderer does not change terrain collision, visibility,
 door/window states or native part colours to apply these textures.
 
@@ -128,7 +128,24 @@ the neighboring wall. The window pane, door leaf, hinge and open/broken state
 retain their native artwork and geometry. Quarter-turns and crops also apply to
 partial sill/lintel sections. Native broken/empty window frames remain upright
 even though BN deliberately omits their `WINDOW` gameplay flag.
-Furniture families, vehicle layers and runtime palette material regions remain
+Box and slab furniture (including lockers, chairs, tables and bins) uses the
+same `face_sources` contract under category `furniture`. `top` replaces the lid,
+`side` replaces vertical body/rim faces other than the front, and optional
+`front` replaces only the front face. Without `front`, native handles and doors
+remain visible. The top follows the furniture's facing in addition to its donor
+rotation. Crops do not alter the inferred footprint, wall fitting, joins, slab
+thickness, feet or underside. Those support surfaces retain their native art.
+Upright, panel and natural solid furniture keep their existing rendering.
+
+| Profile fields | Current runtime consumers |
+| --- | --- |
+| Size, support anchor, depth fraction | Loose items and authored item models |
+| Side/top face sources | Solid walls, window/door surrounds, box/slab furniture |
+| Front face source | Box/slab furniture |
+| Material-region names and palette slots | Gallery annotations |
+
+Geometry-family overrides, arbitrary furniture dimensions/anchors, vehicle
+layers and runtime palette material regions remain
 in [the presentation backlog](../../../../BACKLOG.md#r3d-03-complete-the-presentation-profile-shape-and-material-contract).
 
 ## Renderer diagnostics
