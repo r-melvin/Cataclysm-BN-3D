@@ -13,6 +13,11 @@ rendering remains available. Keep source artwork, conversion settings, and
 license information with contributed models; do not add models whose source
 licenses do not permit redistribution.
 
+`carbondioxide_tank.vox` is a hand-authored renderer asset with a steel cylinder,
+base ring, shoulder and valve assembly. Its dimensions and ground support are
+defined in `../presentation_profiles.json`; it uses palette slots 1 and 3 for
+the shell, 2 for dark hardware, and 4 for the red valve grips.
+
 Use `../presentation_profiles.json` to refine scene proportions and the point
 that touches the ground. Each profile names a `category` and exact asset `id`;
 `size` is `[forward, right, up]` in map-tile units, and `support_anchor` is the

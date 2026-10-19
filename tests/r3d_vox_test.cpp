@@ -1,8 +1,11 @@
 #include "catch/catch.hpp"
+#include "path_info.h"
 #include "r3d_vox.h"
 
 #include <array>
 #include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <ranges>
 #include <string_view>
 #include <vector>
@@ -88,6 +91,27 @@ TEST_CASE("r3d_vox_reader_uses_the_magica_voxel_default_palette", "[r3d][voxels]
     CHECK(model->palette[2].r == 255);
     CHECK(model->palette[2].g == 255);
     CHECK(model->palette[2].b == 204);
+}
+
+TEST_CASE("r3d_authored_co2_tank_asset_is_a_valid_supported_vox_model", "[r3d][voxels]") {
+    const auto path = PATH_INFO::datadir() + "raw/r3d/items/carbondioxide_tank.vox";
+    auto input = std::ifstream(path, std::ios::binary);
+    REQUIRE(input.good());
+    const auto bytes = std::vector<uint8_t>(std::istreambuf_iterator<char>(input), {});
+    const auto model = r3d::read_vox_model(bytes);
+
+    REQUIRE(model.has_value());
+    CHECK(model->size_x == 14);
+    CHECK(model->size_y == 12);
+    CHECK(model->size_z == 30);
+    CHECK(std::ranges::any_of(model->cells, [](const auto& cell) {
+        return cell.color_index == 4;
+    }));
+    CHECK(model->palette[1].a == 255);
+    CHECK(model->palette[4].r == 151);
+    const auto surface = r3d::extract_vox_surface(*model);
+    REQUIRE(surface.has_value());
+    CHECK_FALSE(surface->faces.empty());
 }
 
 TEST_CASE("r3d_vox_models_fit_inside_a_unit_cube_without_losing_proportions", "[r3d][voxels]") {
