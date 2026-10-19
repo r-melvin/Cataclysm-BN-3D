@@ -100,7 +100,9 @@ visible, rebuilt, deferred, and failed chunk counts, geometry size, uploaded
 bytes, and estimated bytes held by resident chunk buffers. The initial visible
 scene is built synchronously, so its first sample shows that cost even though
 there is no deferred queue. These measurements separate mesh work, light work,
-and queued rebuilds before changing the existing scheduling policy.
+and queued rebuilds before changing the existing scheduling policy. Diagnostic
+timing reads are disabled when `CATA_R3D_DEBUG_CHUNKS` is absent; asset-refresh
+and capture deadlines retain their independent clocks.
 
 ## Comparison reports
 

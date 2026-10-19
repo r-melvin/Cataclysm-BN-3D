@@ -107,6 +107,7 @@ struct chunk_gpu {
 };
 
 struct chunk_work_stats {
+    bool enabled = false;
     size_t rebuilt = 0;
     size_t failed = 0;
     size_t pending = 0;
@@ -287,10 +288,13 @@ auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
     const auto &lookup = options.lookup;
     auto &stats = options.stats;
 
-    const auto mesh_started = std::chrono::steady_clock::now();
+    const auto mesh_started = stats.enabled ? std::chrono::steady_clock::now() :
+                              std::chrono::steady_clock::time_point{};
     auto mesh = chunk_mesh( build_chunk_mesh( { .pos = pos, .lookup = lookup, .cache = s.cache, .tiles = *tilecontext } ) );
-    stats.mesh_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
-                     mesh_started ).count();
+    if( stats.enabled ) {
+        stats.mesh_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
+                         mesh_started ).count();
+    }
     stats.vertices += mesh.vertices.size();
     stats.indices += mesh.indices.size();
     release_chunk( s, c );
@@ -304,21 +308,26 @@ auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
     const auto vertex_bytes = static_cast<uint32_t>( mesh.vertices.size() * sizeof( vertex ) );
     const auto light_bytes = static_cast<uint32_t>( mesh.light.size() * sizeof( uint32_t ) );
     const auto index_bytes = static_cast<uint32_t>( mesh.indices.size() * sizeof( uint32_t ) );
-    const auto upload_started = std::chrono::steady_clock::now();
+    const auto upload_started = stats.enabled ? std::chrono::steady_clock::now() :
+                                std::chrono::steady_clock::time_point{};
     c.positions = s.device.create_buffer( SDL_GPU_BUFFERUSAGE_VERTEX, vertex_bytes );
     c.lights = s.device.create_buffer( SDL_GPU_BUFFERUSAGE_VERTEX, light_bytes );
     c.indices = s.device.create_buffer( SDL_GPU_BUFFERUSAGE_INDEX, index_bytes );
     if( !c.positions || !c.lights || !c.indices ||
         !s.device.upload( { .dst = c.positions, .data = mesh.vertices.data(), .size = vertex_bytes } ) ||
         !s.device.upload( { .dst = c.indices, .data = mesh.indices.data(), .size = index_bytes } ) ) {
-        stats.upload_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
-                           upload_started ).count();
+        if( stats.enabled ) {
+            stats.upload_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
+                               upload_started ).count();
+        }
         ++stats.failed;
         release_chunk( s, c );
         return false;
     }
-    stats.upload_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
-                       upload_started ).count();
+    if( stats.enabled ) {
+        stats.upload_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
+                           upload_started ).count();
+    }
     ++stats.rebuilt;
     stats.upload_bytes += static_cast<uint64_t>( vertex_bytes ) + index_bytes;
     c.gpu_bytes = static_cast<uint64_t>( vertex_bytes ) + light_bytes + index_bytes;
@@ -652,7 +661,8 @@ auto update_chunk_light( const update_chunk_light_options &options ) -> void
     if( c.refs.empty() ) {
         return;
     }
-    const auto light_started = std::chrono::steady_clock::now();
+    const auto light_started = stats.enabled ? std::chrono::steady_clock::now() :
+                               std::chrono::steady_clock::time_point{};
     constexpr auto border = static_cast<int>( SEEX + 2 );
     const auto chunk_origin = tripoint_abs_ms( project_to<coords::ms>( pos ) );
     const auto base = tripoint_bub_ms( center.x() + ( chunk_origin.x() - origin.x() ),
@@ -703,8 +713,10 @@ auto update_chunk_light( const update_chunk_light_options &options ) -> void
     }
     const auto light_bytes = static_cast<uint32_t>( c.light.size() * sizeof( uint32_t ) );
     s.device.upload( { .dst = c.lights, .data = c.light.data(), .size = light_bytes, .cycle = true } );
-    stats.light_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
-                      light_started ).count();
+    if( stats.enabled ) {
+        stats.light_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
+                          light_started ).count();
+    }
     stats.upload_bytes += light_bytes;
 }
 
@@ -1578,9 +1590,10 @@ auto draw( const draw_options &options ) -> bool
     }
 
     ++s.frame;
-    const auto render_started = std::chrono::steady_clock::now();
     static const auto debug_chunk_work = static_cast<bool>( std::getenv( "CATA_R3D_DEBUG_CHUNKS" ) !=
                                          nullptr );
+    const auto render_started = debug_chunk_work ? std::chrono::steady_clock::now() :
+                                std::chrono::steady_clock::time_point{};
     maybe_take_screenshot( s );
     if( !s.env_camera_applied ) {
         apply_env_camera( s.cam );
@@ -1676,7 +1689,7 @@ auto draw( const draw_options &options ) -> bool
     // A newly opened view must be complete before waiting for the player's next key.
     // Later edits retain the normal bounded rebuild budget.
     auto builds_left = s.chunks.empty() ? std::numeric_limits<int>::max() : max_chunk_builds_per_frame;
-    auto chunk_stats = chunk_work_stats{};
+    auto chunk_stats = chunk_work_stats{ .enabled = debug_chunk_work };
     for( auto z = static_cast<int>( z_lo ); z <= z_hi; ++z ) {
         for( auto gy = static_cast<int>( 0 ); gy < here.getmapsize(); ++gy ) {
             for( auto gx = static_cast<int>( 0 ); gx < here.getmapsize(); ++gx ) {
@@ -1853,7 +1866,8 @@ auto draw( const draw_options &options ) -> bool
     const auto dst = SDL_FRect{ .x = x, .y = y, .w = w, .h = h };
     SDL_RenderTexture( renderer, result, nullptr, &dst );
 
-    const auto report_time = std::chrono::steady_clock::now();
+    const auto report_time = debug_chunk_work ? std::chrono::steady_clock::now() :
+                             std::chrono::steady_clock::time_point{};
     if( debug_chunk_work && ( s.last_chunk_report == std::chrono::steady_clock::time_point{} ||
                               report_time - s.last_chunk_report >= std::chrono::seconds( 1 ) ) ) {
         s.last_chunk_report = report_time;

@@ -171,9 +171,18 @@ Sources: [comparison guide](tools/r3d_spike/COMPARE.md),
 
 **Status: measurement first, conditional optimization.** Chunk timing/queue
 logging exists. Initial visible chunks build synchronously; later rebuilds use
-a count budget, not a time allowance. Some timing calls run with diagnostics
-disabled. Silhouettes avoid copying the entity view but still build a separate
+a count budget, not a time allowance. Diagnostic-only mesh, upload, light and frame clocks are now gated by
+`CATA_R3D_DEBUG_CHUNKS`; capture and asset deadlines remain independent.
+Silhouettes avoid copying the entity view but still build a separate
 avatar-only mesh.
+
+A private Xvfb/Lavapipe comparison after gating recorded a 41-chunk cold
+scene at 17.0 ms renderer CPU time (10.1 ms meshing, 0.47 ms geometry upload,
+1.55 ms lighting); a tileset rebuild was 18.0 ms, and settled samples were
+3.9–5.0 ms. These single-scene samples are evidence, not a broad performance
+guarantee or GPU execution timings. Both game/test targets build and all 104
+renderer tests pass (28,312 assertions). Temporary evidence:
+`/tmp/bn-diagnostic-gating/`.
 
 Measure cold start, travel, destruction and tileset changes, including GPU
 upload/draw and silhouette cost. Gate diagnostic-only timing as appropriate.
