@@ -133,3 +133,10 @@ TEST_CASE("contextual interaction default keys in defaultmode", "[input]") {
     CHECK(inp_mngr.get_first_char_for_action("pickup", "DEFAULTMODE") == 'g');
     CHECK(inp_mngr.get_first_char_for_action("control_vehicle", "DEFAULTMODE") == '^');
 }
+
+TEST_CASE("r3d key remapping filters non-defaultmode and inactive 3d", "[input]") {
+    CHECK(r3d_key_action(input_event('w', input_event_t::keyboard), "INVENTORY") == nullptr);
+    CHECK(r3d_key_action(input_event('q', input_event_t::keyboard), "INVENTORY") == nullptr);
+    CHECK(r3d_key_action(input_event('e', input_event_t::keyboard), "INVENTORY") == nullptr);
+}
+

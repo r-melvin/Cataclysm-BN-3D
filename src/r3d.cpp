@@ -220,6 +220,7 @@ struct state {
     // Sounds heard this turn whose post cannot be seen (out of the picture or behind something):
     // the compass strip shows a tick for each.
     std::vector<tripoint_bub_ms> heard_ticks;
+    std::optional<tripoint_bub_ms> hovered{};
 };
 
 auto st() -> state & // *NOPAD*
@@ -1124,10 +1125,14 @@ auto picking_column_height( const picking_column_height_options &options ) -> fl
     if( p.z() < v.z_lo || p.z() > v.z_hi || !here.inbounds( p ) ) {
         return 0.0f;
     }
-    const auto h = static_cast<float>( column_height( s, here, p ) );
+    auto h = static_cast<float>( column_height( s, here, p ) );
     const Creature *critter = g->critter_at( p, true );
     if( critter && ( critter->is_avatar() ? !v.cam.first_person() : you.sees( *critter ) ) ) {
         return 1.0f;
+    }
+    if( here.sees_some_items( p, you ) && !here.has_flag( "CONTAINER", p ) &&
+        here.has_items( p ) ) {
+        h = std::max( h, static_cast<float>( surface_height( s, here, p ) + 0.55f ) );
     }
     return h;
 }
@@ -1920,6 +1925,16 @@ auto contains( float x, float y ) -> bool
     return active() && v.valid && x >= v.x && y >= v.y && x < v.x + v.w && y < v.y + v.h;
 }
 
+auto set_hovered_tile( const std::optional<tripoint_bub_ms> &p ) -> void
+{
+    st().hovered = p;
+}
+
+auto hovered_tile() -> std::optional<tripoint_bub_ms>
+{
+    return st().hovered;
+}
+
 auto drag_orbit( float dx, float dy ) -> void
 {
     auto &cam = st().cam;
@@ -2210,6 +2225,76 @@ auto draw_fp_hud( const draw_fp_hud_options &options ) -> void
     }
 }
 
+struct draw_first_person_weapon_options {
+    SDL_Renderer *renderer = nullptr;
+    float view_x = 0.0f;
+    float view_y = 0.0f;
+    float view_w = 0.0f;
+    float view_h = 0.0f;
+    const camera &cam;
+};
+
+auto draw_first_person_weapon( const draw_first_person_weapon_options &options ) -> void
+{
+    auto *const renderer = options.renderer;
+    const auto view_x = options.view_x;
+    const auto view_y = options.view_y;
+    const auto view_w = options.view_w;
+    const auto view_h = options.view_h;
+    const auto &cam = options.cam;
+
+    if( !cam.first_person() || !tilecontext ) {
+        return;
+    }
+    const auto &you = get_avatar();
+    if( !you.is_armed() ) {
+        return;
+    }
+    const auto &weapon = you.primary_weapon();
+    const auto item_id = std::string( weapon.typeId().str() );
+    const auto data = tilecontext->get_sprite_draw_data( {
+        .id = item_id,
+        .category = C_ITEM,
+        .pos = you.bub_pos()
+    } );
+    if( !data || !data->texture ) {
+        return;
+    }
+    auto src = SDL_FRect{
+        .x = static_cast<float>( data->dimensions.x ),
+        .y = static_cast<float>( data->dimensions.y ),
+        .w = static_cast<float>( data->dimensions.w ),
+        .h = static_cast<float>( data->dimensions.h )
+    };
+    if( data->opaque.w > 0 && data->opaque.h > 0 ) {
+        src.x = static_cast<float>( data->dimensions.x + data->opaque.x );
+        src.y = static_cast<float>( data->dimensions.y + data->opaque.y );
+        src.w = static_cast<float>( data->opaque.w );
+        src.h = static_cast<float>( data->opaque.h );
+    }
+    if( src.w <= 0.0f || src.h <= 0.0f ) {
+        return;
+    }
+
+    const auto target_h = view_h * 0.32f;
+    const auto aspect = src.w / src.h;
+    const auto target_w = std::clamp( target_h * aspect, view_h * 0.18f, view_w * 0.38f );
+
+    const auto p = you.bub_pos();
+    const auto phase = static_cast<float>( p.x() * 3 + p.y() * 5 ) * 0.8f + cam.fp_yaw() * 2.0f;
+    const auto bob_x = std::sin( phase ) * ( view_w * 0.008f );
+    const auto bob_y = std::abs( std::cos( phase ) ) * ( view_h * 0.012f );
+
+    const auto dst = SDL_FRect{
+        .x = view_x + view_w * 0.62f - target_w * 0.5f + bob_x,
+        .y = view_y + view_h - target_h * 0.88f + bob_y,
+        .w = target_w,
+        .h = target_h
+    };
+    SDL_SetTextureScaleMode( data->texture, SDL_SCALEMODE_NEAREST );
+    SDL_RenderTexture( renderer, data->texture, &src, &dst );
+}
+
 } // namespace
 
 auto draw( const draw_options &options ) -> bool
@@ -2223,6 +2308,13 @@ auto draw( const draw_options &options ) -> bool
     auto render_epoch = options.render_epoch;
 
     auto &s = st();
+    static auto forced_3d_on_start = false;
+    if( !forced_3d_on_start ) {
+        forced_3d_on_start = true;
+        get_options().get_option( "RENDERER_3D" ).setValue( "true" );
+        get_options().get_option( "R3D_CAMERA_MODE" ).setValue( "first_person" );
+        sync_camera_mode( s.cam );
+    }
     s.drawn = false;
     s.map_drawn = true;
     s.texts.clear();
@@ -2504,7 +2596,7 @@ auto draw( const draw_options &options ) -> bool
     {
         static const auto fullbright = static_cast<bool>( std::getenv( "CATA_R3D_FULLBRIGHT" ) != nullptr );
         return here.inbounds( p ) && ( fullbright || here.pl_sees( p, -1 ) );
-    } };
+    }, .hovered = s.hovered };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
 
     entities_view.upright_billboards = fp;
@@ -2519,6 +2611,9 @@ auto draw( const draw_options &options ) -> bool
         }
         append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.highlights, .id = "highlight", .box = false, .large = true } );
         append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.cursors, .id = "cursor", .box = true, .large = true } );
+        if( s.hovered ) {
+            append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = { *s.hovered }, .id = "highlight", .box = false, .large = false } );
+        }
 
         // Sounds heard this turn, which cata_tiles::draw_footsteps_frame would draw: posts on
         // their tile with normal depth, so walls and creatures in front hide them. The 2D view
@@ -2746,6 +2841,7 @@ auto draw( const draw_options &options ) -> bool
     }
     const auto dst = SDL_FRect{ .x = x, .y = y, .w = w, .h = h };
     SDL_RenderTexture( renderer, result, nullptr, &dst );
+    draw_first_person_weapon( { .renderer = renderer, .view_x = x, .view_y = y, .view_w = w, .view_h = h, .cam = s.cam } );
     s.texts.clear();
     auto frame = hud_frame{};
     frame.x = x;

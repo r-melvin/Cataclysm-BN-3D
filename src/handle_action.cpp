@@ -2031,76 +2031,71 @@ bool game::handle_action()
                 return false;
             }
 
-            if( act == ACTION_SELECT && use_tiles && r3d::active() && is_mouse_captured() ) {
-                const auto forward_delta = get_delta_from_movement_action( ACTION_MOVE_FORTH, iso_rotate::yes );
-                const auto front_tile = u.bub_pos() + tripoint_rel_ms( forward_delta, 0 );
+            const std::optional<tripoint_bub_ms> mouse_pos = ctxt.get_coordinates( w_terrain );
+            if( !mouse_pos ) {
+                return false;
+            }
+            mouse_target = mouse_pos;
 
-                const auto dim = get_window_dimensions( w_terrain );
-                const auto cx = dim.window_pos_pixel.x + dim.window_size_pixel.x * 0.5f;
-                const auto cy = dim.window_pos_pixel.y + dim.window_size_pixel.y * 0.5f;
-                const auto picked = r3d::pick( cx, cy );
+            if( act == ACTION_SELECT && use_tiles && r3d::active() ) {
+                const auto target_tile = *mouse_target;
+                const auto dist = rl_dist( u.bub_pos(), target_tile );
+                if( dist <= 1 ) {
+                    u.clear_destination();
+                    destination_preview.clear();
 
-                auto target_tile = front_tile;
-                if( picked && *picked != u.bub_pos() && square_dist( picked->xy(), u.bub_pos().xy() ) <= 1 ) {
-                    target_tile = *picked;
-                }
-                mouse_target = target_tile;
-
-                u.clear_destination();
-                destination_preview.clear();
-
-                if( auto *const critter = critter_at<Creature>( target_tile ) ) {
-                    if( critter != &u ) {
-                        const auto delta = target_tile - u.bub_pos();
-                        act = get_movement_action_from_delta( delta, iso_rotate::yes );
-                        if( can_action_change_worldstate( act ) ) {
-                            user_action_counter += 1;
+                    if( auto *const critter = critter_at<Creature>( target_tile ) ) {
+                        if( critter != &u ) {
+                            const auto delta = target_tile - u.bub_pos();
+                            act = get_movement_action_from_delta( delta, iso_rotate::yes );
+                            if( can_action_change_worldstate( act ) ) {
+                                user_action_counter += 1;
+                            }
+                        } else {
+                            act = ACTION_EXAMINE;
                         }
                     } else {
-                        act = ACTION_EXAMINE;
+                        const auto can_open_veh = [&]() -> bool {
+                            if( const auto vp = m.veh_at( target_tile ) ) {
+                                const auto *const veh = &vp->vehicle();
+                                return veh->next_part_to_open( vp->part_index() ) >= 0;
+                            }
+                            return false;
+                        }();
+                        if( can_open_veh || m.can_open_door( &u, target_tile, !m.is_outside( u.bub_pos() ) ) ) {
+                            act = ACTION_OPEN;
+                            if( can_action_change_worldstate( act ) ) {
+                                user_action_counter += 1;
+                            }
+                        } else {
+                            act = ACTION_EXAMINE;
+                        }
                     }
                 } else {
-                    const auto can_open_veh = [&]() -> bool {
-                        if( const auto vp = m.veh_at( target_tile ) ) {
-                            const auto *const veh = &vp->vehicle();
-                            return veh->next_part_to_open( vp->part_index() ) >= 0;
-                        }
-                        return false;
-                    }();
-                    if( can_open_veh || m.can_open_door( &u, target_tile, !m.is_outside( u.bub_pos() ) ) ) {
-                        act = ACTION_OPEN;
-                        if( can_action_change_worldstate( act ) ) {
-                            user_action_counter += 1;
-                        }
-                    } else {
-                        act = ACTION_EXAMINE;
-                    }
-                }
-            } else {
-                const std::optional<tripoint_bub_ms> mouse_pos = ctxt.get_coordinates( w_terrain );
-                if( !mouse_pos ) {
-                    return false;
-                }
-                mouse_target = mouse_pos;
-
-                if( act == ACTION_SELECT ) {
                     if( !avatar_knows_travel_destination( u, *mouse_target ) ) {
                         return false;
                     }
-                    // Note: The following has the potential side effect of
-                    // setting auto-move destination state in addition to setting
-                    // act.
                     if( !try_get_left_click_action( act, *mouse_target ) ) {
                         return false;
                     }
-                } else if( act == ACTION_SEC_SELECT ) {
-                    if( !u.sees( *mouse_target ) ) {
-                        // Right-click actions examine or target current terrain and creatures.
-                        return false;
-                    }
-                    if( !try_get_right_click_action( act, *mouse_target ) ) {
-                        return false;
-                    }
+                }
+            } else if( act == ACTION_SELECT ) {
+                if( !avatar_knows_travel_destination( u, *mouse_target ) ) {
+                    return false;
+                }
+                // Note: The following has the potential side effect of
+                // setting auto-move destination state in addition to setting
+                // act.
+                if( !try_get_left_click_action( act, *mouse_target ) ) {
+                    return false;
+                }
+            } else if( act == ACTION_SEC_SELECT ) {
+                if( !u.sees( *mouse_target ) ) {
+                    // Right-click actions examine or target current terrain and creatures.
+                    return false;
+                }
+                if( !try_get_right_click_action( act, *mouse_target ) ) {
+                    return false;
                 }
             }
         } else if( act != ACTION_TIMEOUT ) {
@@ -2115,19 +2110,15 @@ bool game::handle_action()
         }
     }
 
-    if( !mouse_target && use_tiles && r3d::active() && is_mouse_captured() &&
+    if( !mouse_target && use_tiles && r3d::active() &&
         ( act == ACTION_EXAMINE || act == ACTION_OPEN || act == ACTION_CLOSE || act == ACTION_PICKUP ) ) {
         const auto forward_delta = get_delta_from_movement_action( ACTION_MOVE_FORTH, iso_rotate::yes );
         const auto front_tile = u.bub_pos() + tripoint_rel_ms( forward_delta, 0 );
 
-        const auto dim = get_window_dimensions( w_terrain );
-        const auto cx = dim.window_pos_pixel.x + dim.window_size_pixel.x * 0.5f;
-        const auto cy = dim.window_pos_pixel.y + dim.window_size_pixel.y * 0.5f;
-        const auto picked = r3d::pick( cx, cy );
-
-        if( picked && *picked != u.bub_pos() && square_dist( picked->xy(), u.bub_pos().xy() ) <= 1 &&
-            can_interact_at( act, *picked ) ) {
-            mouse_target = *picked;
+        const auto hovered = r3d::hovered_tile();
+        if( hovered && *hovered != u.bub_pos() && square_dist( hovered->xy(), u.bub_pos().xy() ) <= 1 &&
+            can_interact_at( act, *hovered ) ) {
+            mouse_target = *hovered;
         } else if( can_interact_at( act, front_tile ) ) {
             mouse_target = front_tile;
         } else if( can_interact_at( act, u.bub_pos() ) ) {

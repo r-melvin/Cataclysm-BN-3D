@@ -2146,6 +2146,23 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                         vox_item = &found->second;
                     }
                 }
+                const auto is_hovered = view.hovered && *view.hovered == p;
+                const auto current_item_size = is_hovered ? ( item_size * 1.28f ) : item_size;
+                const auto z_base = frame_z( p ) + view.surface( p ) + ( is_hovered ? 0.04f : 0.02f );
+                const auto item_color = static_cast<uint32_t>( is_hovered ? pack_light( 255, 245, 160 ) : light );
+
+                if( is_hovered ) {
+                    emit_flat( {
+                        .sink = sink,
+                        .sprite = view.cache.named( { .category = C_NONE, .id = "cursor", .tiles = view.tiles } ),
+                        .cx = frame_x( p ),
+                        .cy = frame_y( p ),
+                        .z = frame_z( p ) + view.surface( p ) + 0.025f,
+                                                .color = pack_light( 255, 220, 60 ),
+                                                .size = 0.85f
+                    } );
+                }
+
                 if( voxel_items && vox_item ) {
                     const auto &model = vox_item->model;
                     auto size = fit_vox_model_to_unit_cube( model );
@@ -2158,20 +2175,19 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                         anchor = art.support_anchor;
                     }
                     if( size.x > 0.0f && size.y > 0.0f && size.z > 0.0f ) {
-                        const auto z_base = frame_z( p ) + view.surface( p ) + 0.02f;
                         emit_vox_model( { .sink = sink, .asset = *vox_item,
                                           .transform = { .pivot_sx = frame_x( p ), .pivot_sy = frame_y( p ) },
                                           .f_min = -size.x *anchor[0], .f_max = size.x * ( 1.0f - anchor[0] ),
                                           .r_min = -size.y *anchor[1], .r_max = size.y * ( 1.0f - anchor[1] ),
                                           .z_min = z_base - size.z *anchor[2],
                                           .z_max = z_base + size.z * ( 1.0f - anchor[2] ),
-                                          .color = light } );
+                                          .color = item_color } );
                     }
                 } else if( voxel_items && !sprite.backdrop.valid && !sprite.main().placeholder &&
                            sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
-                                          .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
-                                          .color = light, .depth_fraction = profile.depth_fraction,
+                                          .z_base = z_base,
+                                          .color = item_color, .depth_fraction = profile.depth_fraction,
                                           .width = has_authored_profile ? authored_profile->second.size[0] : 0.0f,
                                           .height = has_authored_profile ? authored_profile->second.size[2] : 0.0f,
                                           .anchor_forward = has_authored_profile ? authored_profile->second.support_anchor[0] : 0.5f,
@@ -2179,14 +2195,14 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                           .anchor_up = has_authored_profile ? authored_profile->second.support_anchor[2] : 0.0f } );
                 } else if( upright ) {
                     emit_stand( { .sink = sink, .sprite = sprite, .right_world = right, .z_scale = view.cam.z_scale,
-                                  .cx = frame_x( p ), .cy = frame_y( p ), .z = frame_z( p ) + view.surface( p ) + 0.02f, .color = light } );
+                                  .cx = frame_x( p ), .cy = frame_y( p ), .z = z_base, .color = item_color } );
                 } else {
                     // Items without a usable transparent sprite stay as camera-facing art.
                     emit_billboard( { .sink = sink, .layers = { &sprite }, .right_world = right, .up_world = up,
                                       .toward_world = toward, .z_scale = view.cam.z_scale,
                                       .cx = frame_x( p ), .cy = frame_y( p ),
-                                      .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
-                                      .color = light, .mirrored = false, .scale = item_size } );
+                                      .z_base = z_base,
+                                      .color = item_color, .mirrored = false, .scale = current_item_size } );
                 }
             }
         }
@@ -2204,6 +2220,9 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
 
     // Creatures: the player, NPCs and monsters that the player can see.
     for( Creature &critter : g->all_creatures() ) {
+        if( view.cam.first_person() && critter.is_avatar() ) {
+            continue;
+        }
         const auto p = tripoint_bub_ms( critter.bub_pos() );
         if( !in_range( p, creature_radius ) ) {
             continue;

@@ -2,6 +2,10 @@
 #include "input.h"
 #include "r3d.h"
 
+#if defined(TILES)
+#include <SDL3/SDL_keyboard.h>
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -949,6 +953,67 @@ auto input_context::get_active_category() -> std::string
     return "";
 }
 
+auto r3d_key_action( const input_event &ev,
+                     const std::string &category ) -> const std::string * // *NOPAD*
+{
+    if( category != "DEFAULTMODE" || !ev.modifiers.empty() || ev.sequence.size() != 1 ||
+        ev.type != input_event_t::keyboard || !r3d::wasd_controls() ) {
+        return nullptr;
+    }
+    static const auto up = std::string( "UP" );
+    static const auto down = std::string( "DOWN" );
+    static const auto left = std::string( "LEFT" );
+    static const auto right = std::string( "RIGHT" );
+    static const auto left_up = std::string( "LEFTUP" );
+    static const auto right_up = std::string( "RIGHTUP" );
+    static const auto left_down = std::string( "LEFTDOWN" );
+    static const auto right_down = std::string( "RIGHTDOWN" );
+    static const auto rotate_left = std::string( "r3d_rotate_left" );
+    static const auto rotate_right = std::string( "r3d_rotate_right" );
+    static const auto pitch_up = std::string( "r3d_pitch_up" );
+    static const auto pitch_down = std::string( "r3d_pitch_down" );
+
+    const auto key = ev.sequence.front();
+#if defined(TILES)
+    auto numkeys = 0;
+    const auto *const ks = SDL_GetKeyboardState( &numkeys );
+    const auto w_held = ks && SDL_SCANCODE_W < numkeys && ks[SDL_SCANCODE_W];
+    const auto s_held = ks && SDL_SCANCODE_S < numkeys && ks[SDL_SCANCODE_S];
+    const auto a_held = ks && SDL_SCANCODE_A < numkeys && ks[SDL_SCANCODE_A];
+    const auto d_held = ks && SDL_SCANCODE_D < numkeys && ks[SDL_SCANCODE_D];
+#else
+    const auto w_held = false;
+    const auto s_held = false;
+    const auto a_held = false;
+    const auto d_held = false;
+#endif
+    switch( key ) {
+        case 'w':
+            return a_held ? &left_up : ( d_held ? &right_up : &up );
+        case 's':
+            return a_held ? &left_down : ( d_held ? &right_down : &down );
+        case 'a':
+            return w_held ? &left_up : ( s_held ? &left_down : &left );
+        case 'd':
+            return w_held ? &right_up : ( s_held ? &right_down : &right );
+        case 'q':
+            return &rotate_left;
+        case 'e':
+            return &rotate_right;
+        case KEY_LEFT:
+            return &rotate_left;
+        case KEY_RIGHT:
+            return &rotate_right;
+        case KEY_UP:
+            return &pitch_up;
+        case KEY_DOWN:
+            return &pitch_down;
+        default:
+            break;
+    }
+    return nullptr;
+}
+
 const std::string &input_context::handle_input()
 {
     return handle_input( timeout );
@@ -976,7 +1041,8 @@ const std::string &input_context::handle_input( const int timeout )
 
         const auto &action = [&]() -> const std::string & {
             ZoneScopedN( "input_context_input_to_action" );
-            return input_to_action( next_action );
+            const auto *const remapped = r3d_key_action( next_action, category );
+            return remapped ? *remapped : input_to_action( next_action );
         }();
 
         // Special help action

@@ -774,3 +774,6 @@ bool gamepad_available();
 
 // rotate a delta direction clockwise
 void rotate_direction_cw( int &dx, int &dy );
+
+auto r3d_key_action( const input_event &ev,
+                     const std::string &category ) -> const std::string *; // *NOPAD*
