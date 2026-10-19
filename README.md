@@ -25,6 +25,44 @@ The renderer is experimental. Linux builds and capture reports have been tested;
 native macOS and Windows execution has not yet been verified. The UI overhaul,
 first-person camera, and guided onboarding are separate feature ports in progress,
 not features included in this main branch yet.
+Current remaining work, branch integration and deferred ideas are tracked in the
+[project backlog](BACKLOG.md); research documents retain their original evidence.
+
+## Local testing and tools
+
+After installing the dependencies in the [CMake build guide](docs/en/dev/guides/building/cmake.md),
+the Linux developer checks are:
+
+```sh
+cmake --preset linux-full -DLINKER=lld
+cmake --build --preset linux-full --target cataclysm-bn-tiles cata_test-tiles -j8
+CATA_TEST_COMPUTE_ACCELERATION=cpu ./out/build/linux-full/tests/cata_test-tiles '[r3d]'
+python3 -m unittest discover -s tools/r3d_spike -p test_compare_session.py
+python3 tools/r3d_spike/compare_session.py --help
+```
+
+For headless Linux tests, also set `SDL_VIDEODRIVER=dummy`. The CPU compute setting
+avoids requiring an SDL GPU compute device for tests; it does not validate the
+rendered GPU image. This fork uses local checks rather than paid GitHub CI.
+
+The renderer tests include 17 seeded geometry snapshots. For an intentional
+geometry change, regenerate them with `R3D_UPDATE_GEOMETRY_SNAPSHOT=1` on the test
+command, review the differences and name the affected scenes in the commit.
+Snapshots cover mesh positions/light, not textures, UVs or shaders. Use the
+[comparison guide](tools/r3d_spike/COMPARE.md) for real gameplay captures and ZIP
+reports; those are still needed to judge appearance.
+
+Format only touched files. Top-level `src/*.cpp` and `src/*.h` need astyle 3.4.7
+because system astyle 3.6.x mis-indents trailing-return functions. With
+[uv](https://docs.astral.sh/uv/) installed, use
+`uvx --from astyle-py python tools/r3d_spike/astyle_347.py <files>`;
+tests and nested C++ use `clang-format -i <files>`. See [AGENTS.md](AGENTS.md).
+
+The separate [Go asset CLI](https://github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline)
+packs directional sprites, voxelizes directly to `.vox`, validates models and
+optionally exports existing Kenney Shape projects through MelonLoader. Its
+README covers installation and `--help`. BN consumes the exported models;
+Kenney Shape and MelonLoader are authoring tools installed separately.
 
 ## LLM disclosure
 

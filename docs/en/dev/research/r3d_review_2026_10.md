@@ -1,5 +1,10 @@
 # 3D renderer review and remediation plan (2026-10)
 
+> Historical findings and delivered-change evidence. Current outstanding work,
+> decisions and deferrals are maintained only in the
+> [project backlog](../../../../BACKLOG.md). Check that tracker before treating
+> a finding or original plan step below as unfinished.
+
 Review of `45ba1a3~1..0e05f91` (the r3d vehicle, voxel and silhouette work). Static review only; ✔ marks
 findings confirmed against source.
 
@@ -41,7 +46,7 @@ findings confirmed against source.
   geometry, silhouette, asset loading.
 - `r3d_door_test.cpp` and `r3d_item_profiles_test.cpp` contain unrelated tests.
 
-## Plan
+## Original remediation plan
 
 Atomic commits; build `cataclysm-bn-tiles` + `cata_test-tiles` before each lands.
 
@@ -58,10 +63,12 @@ Atomic commits; build `cataclysm-bn-tiles` + `cata_test-tiles` before each lands
 
 Phase 4 follows phase 5 (both touch `r3d_entities.cpp`).
 
-## Status (2026-10-19)
+## Delivered follow-up evidence (2026-10-19)
 
-Done: phases 1, 2, 3 (dim unlit parts and creatures; silhouette hidden while driving, on unlit tiles and
-behind creatures; cargo tiles use the chassis floor), 6, and most of 4–5.
+Delivered: hygiene, test backfill, the single-level correctness fixes, lighting decisions
+(dim unlit parts and creatures; suppress silhouettes while driving, on unlit tiles and behind
+creatures), chassis-height cargo surfaces, and most performance/refactoring work. This does not
+mark every original plan step complete; remaining scope is recorded in the backlog.
 
 Completed follow-ups:
 
@@ -79,12 +86,11 @@ Completed follow-ups:
 - Conflicting intact shaped panels use fixed NW, NE, SW, SE corner precedence, independent of install
   order. Broken panels do not override intact ones, and unshaped panels cannot erase an authored corner.
 
-Open:
+## Measurements and validation limits
 
 - Vehicle mesh caching: dropped. Measured on RelWithDebInfo, five vehicles (car, pickup, SUV, bus, semi;
   ~9k vertices) build in 0.46 ms per frame and the entity mesh in 0.21 ms, about 3% of a 60 fps frame. GPU
   submission was not measured (needs interactive play).
-- Multi-level vehicles: moved to `BACKLOG.md`.
 - Local astyle 3.6.19 mis-indents functions with trailing return types; format r3d sources with
   `tools/r3d_spike/astyle_347.py` (astyle 3.4.7).
 - Mesh determinism (checked): the same seeded vehicle yields the same quads every run; only their order

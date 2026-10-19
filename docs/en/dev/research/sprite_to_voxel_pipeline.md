@@ -1,87 +1,91 @@
 # Sprite-to-voxel asset pipeline for vehicles and characters
 
-Research date: 2026-10-19. This is a prototype plan based on the tools' published
-capabilities and the current renderer interfaces. Neither tool has been
-integrated into the game's build or runtime.
+Originally researched 2026-10-19; reconciled with the renderer and the separate
+asset CLI at `b4e0493`. Current outstanding asset trials and character work are
+tracked only in the [project backlog](../../../../BACKLOG.md), R3D-05/06.
+This document describes tool roles, handoff conventions and acceptance gates.
 
-## Finding
+## Tool roles and the current boundary
 
-[2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer) and
-[Kenney Shape](https://kenney.nl/tools/kenney-shape) could form a useful art
-pipeline, but serve different jobs. The voxelizer documents single-sprite and
-multi-view modes, including a four-view sheet ordered `[LEFT, FRONT, RIGHT,
-BACK]`; it exports OBJ. Its README says the shape reconstruction uses simple
-math and can struggle with pixel art that contains varying depths. Kenney Shape
-lets an artist set per-pixel depth and export MagicaVoxel `.vox`, which the BN
-renderer can now read for vehicle wheels. Kenney Shape's documented workflow
-does not describe importing a PNG; it is best treated as a manual modeling and
-cleanup step.
+The separate [Bright Nights asset CLI](https://github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline)
+is one Go application, `sprite-pipeline`. Its adapted
+[2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer) backend accepts
+four sprite views and writes MagicaVoxel VOX directly. It also packs four-view
+sheets, inspects/validates VOX files and records manifests. The original
+voxelizer's OBJ-only output is therefore not a blocker for this workflow, and
+adding an OBJ importer to BN is not a prerequisite.
 
-The two tools therefore cover two important gaps: multi-view sprite input for
-characters and manual per-pixel volume authoring in the renderer's existing
-`.vox` format for items and vehicle parts. The renderer loads authored item
-models named by item type ID from `data/raw/r3d/items/`, fitting each model
-proportionally into a one-tile cube while keeping sprite-based voxel profiles as
-the fallback. Kenney Shape's sample character project in the
-local tool package is a compressed JSON document, but its undocumented
-project schema should not become a runtime dependency; the documented VOX
-export is the clean integration boundary. The renderer can now load a `.vox`
-asset matching a vehicle part ID and use it to replace that part's procedural
-geometry while retaining the game's part assembly and state. They do not yet
-make one automated pipeline:
-the voxelizer's published output is OBJ, its README does not document a batch or
-command-line interface, and Kenney Shape's published limits are 64×64 pixels,
-16 colors, with extruded art looking the same from both sides.
+[Kenney Shape](https://kenney.nl/tools/kenney-shape) is a separate authoring
+application for per-pixel depth and VOX export. The CLI's optional MelonLoader
+adapter runs Kenney Shape headlessly to load/export an existing `.kenshape`
+project; it does not convert PNGs into Kenney projects. Unity/MelonLoader hooks
+belong to the asset tool, not Bright Nights. Install the editor and loader
+separately; do not ship their applications, archives or bundled sample projects
+in BN assets.
 
-## Prototype plan
+The [asset CLI README at the audited revision](https://github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline/blob/b4e0493c72136fdfb3ffe805496fe8347bb70099/README.md)
+records a Linux Unity 2021.3.45f2 Mono batch-export smoke test and Go/path tests
+for the supported platforms. Native Windows/macOS Kenney application export
+remains unverified there. This documentation audit inspected that README; it
+did not repeat the external tool's tests or establish new platform support.
 
-1. **Loose item:** choose a recognizable item with clean source art, author a
-   compact model in Kenney Shape, and place the exported `.vox` under
-   `data/raw/r3d/items/<item-type-id>.vox`. Confirm the face orientation and
-   compare it at all camera angles with the existing sprite-based fallback.
-2. **Vehicle wheel:** use the existing native wheel sprite as a reference, make a
-   compact model in Kenney Shape, export `.vox`, and place it under
-   `data/raw/r3d/vehicle_parts/<native-part-id>.vox`. Verify the palette,
-   orientation, scale, wheel state fallback, and eight yaw views against the
-   procedural wheel. This path is already supported by the renderer.
-3. **Vehicle body part:** try one panel or fender. Place its model beside the
-   wheel assets with the native part ID as the filename. The renderer scales it
-   to that part's mount bounds and uses the existing procedural geometry when
-   the asset is absent. Keep the BN part ID, mount,
-   paint, state, and assembly dynamic in the game; the authored asset describes
-   only reusable shape and material. Compare manual Kenney modeling with a
-   voxelizer-generated OBJ from the available sprite views. Do not adopt the OBJ
-   route until its geometry, texture/palette, pivot, and scale can be imported
-   reproducibly.
-4. **Character:** prepare a centered four-view sheet for one representative
-   character in `[LEFT, FRONT, RIGHT, BACK]` order and test the voxelizer's quad
-   mode. Inspect its OBJ and determine whether adapting its exporter to MagicaVoxel
-   `.vox` is practical, or whether a small OBJ importer is the better boundary.
-   Validate that view selection follows character travel relative to the camera.
-5. **Layering and variation:** preserve the current base-body, clothing, hair,
-   armor, and wielded-item layers. Test whether each layer can have compatible
-   four-view geometry and combine at runtime. If a layer lacks directional art,
-   retain the existing billboard for that layer. Avoid baking equipment
-   combinations into a single model.
-6. **Package only proven assets:** record source sprite IDs, tool version,
-   conversion settings, palette, pivot, scale, and licenses beside each model.
-   Keep the editor tools out of the game's runtime and preserve current
-   sprite/procedural fallbacks for absent or invalid files.
+The original Kenney research described 64x64 art, 16 colors and equal-looking
+front/back extrusion. Treat it as useful manual volume authoring/cleanup for
+compact parts, not an inference engine for arbitrary vehicles or character
+faces. Four separately authored character views carry information one sprite
+cannot provide. The CLI documents one-color-per-voxel limitations when converting
+view-specific colors; judge the generated model visually, not just by parser
+acceptance.
 
-The first success gate is visual, not just parser acceptance: the voxelized wheel
-must be clearer than the faceted fallback, and the four-view character must
-show a recognizable back, face, and left/right profiles without breaking
-clothing or wielded layers. If a tool's output needs more manual repair than the
-result saves, retain the renderer fallback and stop that route.
+## Renderer handoff
 
-## References
+- Item models use `data/raw/r3d/items/<item-type-id>.vox` and the optional voxel
+  item setting. The CO2 tank is a bundled example. Source proportions normally
+  fit a tile; shared presentation profiles can override dimensions and support.
+- Vehicle models use `data/raw/r3d/vehicle_parts/<native-part-id>.vox`.
+  `wheel.vox` and `wheel_wide.vox` are bundled. Matching wheel and non-wheel main
+  parts can use authored geometry; missing models use procedural/sprite paths,
+  and open/broken main parts keep state-specific rendering.
+- The runtime already reads VOX and meshes exposed surfaces greedily. Keep
+  palette index zero transparent and follow the existing size/occupancy limits.
+  See the [item](../../../../data/raw/r3d/items/README.md) and
+  [vehicle-part](../../../../data/raw/r3d/vehicle_parts/README.md) authoring guides
+  for coordinates and filename conventions.
+- Character models do not have a runtime provider yet. The current body,
+  clothing, hair, armor and wielded layers are sprites. Exporting a character
+  VOX alone does not implement directional character rendering.
 
-- [2d-to-3d-voxelizer README](https://github.com/GazPrash/2d-to-3d-voxelizer):
-  single, dual, quad, and six-view modes; quad-sheet order; OBJ output; stated
-  reconstruction limitations; MIT license.
-- [Kenney Shape](https://kenney.nl/tools/kenney-shape): per-pixel depth, model
-  export formats, equal-looking front/back extrusion, and art-size/color limits.
-- [Kenney Shape documentation](https://kenney.nl/knowledge-base/tools/kenney-shape-documentation):
-  manual depth editing, optimization, VOX export, and square-voxel conversion.
-- [Vehicle part model authoring guide](../../../../data/raw/r3d/vehicle_parts/README.md):
-  current runtime filename and coordinate conventions.
+## Authoring and comparison procedure
+
+Use the bundled wheel/tank as ingestion references, then prepare one candidate
+panel/fender or prop. Preserve the source project, source sprite IDs, licensing,
+tool version/options, palette, pivot and scale in its manifest/provenance.
+Compare generated and manually authored versions with the existing fallback
+before adopting the model. BN part IDs, assembly, paint, state and interactions
+remain authoritative; an asset describes reusable shape/material only.
+
+For a directional trial, prepare equal-sized centered views ordered
+`[LEFT, FRONT, RIGHT, BACK]`, then use the CLI's `voxelize` command. Preserve
+compatible support anchors across equipment layers. A missing directional
+layer needs a sprite fallback; do not bake every equipment combination into one
+static body. Travel/facing relative to the camera needs a renderer convention,
+not a change to BN's movement rules.
+
+Use the normal [comparison workflow](../../../../tools/r3d_spike/COMPARE.md) with
+saved assemblies, both shipped tilesets and all eight orbit angles. Review
+front/back/side readability, proportions, palette, support, wheel damage,
+open/broken parts and equipment alignment. Geometry snapshots supplement those
+captures but cannot prove image quality or material correctness.
+
+## Acceptance gates
+
+A candidate must improve readability at normal gameplay scale over the existing
+fallback, preserve game-driven state/layering and remain editable with recorded
+provenance. A character must show a recognizable back, face and left/right
+profiles without breaking clothing or wielded layers. If reconstruction needs
+more repair than it saves, keep the renderer fallback rather than committing to
+that tool route. Check input-art and model redistribution rights separately
+from the tool's own license.
+
+For current task status, use R3D-05/06 in the backlog; this procedure is not an
+additional work queue.

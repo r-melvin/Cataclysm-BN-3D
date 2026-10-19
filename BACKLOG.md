@@ -1,88 +1,286 @@
 # Project backlog
 
-Ideas parked for later work. These are not active tasks and should not be
-implemented unless requested.
+This is the single source of truth for outstanding fork work. Research documents
+preserve evidence and rationale; their original recommendations are not separate
+task lists. Update this file when work is completed, selected or deferred.
+Listing an idea here does not authorize implementing it automatically.
 
-## Vehicle-free play mode for the 3D renderer
+Audited 2026-10-19 against `main` at `7767e98`, documentation since the initial BN
+renderer port (`f81afc9`), and the three feature-branch guides. The separate asset
+pipeline was checked at `b4e0493`.
 
-Explore an optional mode for players who want to use the 3D renderer while
-vehicle visuals are being improved. This would temporarily remove vehicles as
-playable content, rather than hide their models in the renderer.
+## R3D-01: Asset loading and reload safety
 
-Before implementation, define how the mode handles vehicle world spawns,
-construction and parts, driving and interaction, and vehicles already present
-in existing saves. Prefer an opt-in, clearly labelled mode that does not change
-the default game or the 2D renderer. Determine which parts can be safely
-controlled by data or Lua and which require core C++ hooks; a partial mod must
-not imply that all vehicle gameplay is disabled.
+**Status: implementation follow-up.** Malformed VOX models already log a warning
+and fall back individually. However, a thrown file/access/upload exception can
+skip the remaining directory entries; stream read failures are not checked
+explicitly. Assets load on the first 3D frame and do not reload with the tileset.
 
-## Improve the feel of turn-based driving in the 3D renderer
+Isolate failures per file, check reads, define profile/asset reload and GPU
+resource lifetime, and move preparation off the first visible frame. Preserve
+fallbacks. Validate a bad file between valid assets, failed reads, tileset reload
+and device recreation. See `src/r3d.cpp::load_vox_assets` and the
+[renderer review](docs/en/dev/research/r3d_review_2026_10.md).
 
-Keep BN's discrete vehicle simulation, collision checks, action costs, and turn
-economy. First instrument how often the renderer is redrawn during vehicle
-substeps, then prototype renderer-only interpolation of the vehicle's committed
-position and heading and the camera target between those states. Snap on
-collisions, map shifts, portals, save/load, and any transition where an
-interpolated path would be misleading. If control still feels coarse, review
-the existing `VEHICLE_CONTROL_SCALE` option and turn-based driving affordances.
-Treat real-time vehicle physics/input as a final resort because it would require
-broader changes to world-turn scheduling, actor fairness, action costs, and
-collision semantics.
+## R3D-02: Pin the working formatter in shared tooling
 
-Relevant paths: `src/vehicle/vehicle_move.cpp` (`pldrive()` and `act_on_map()`),
-`src/vehicle/vehicle.cpp` (`gain_moves()`), `src/map/map.cpp` (`vehmove()`),
-`src/game.cpp` (world-turn processing), and `src/r3d.cpp` (camera heading).
+**Status: implementation follow-up.** The astyle 3.4.7 wrapper works, but the
+normal format target still depends on the installed version. astyle 3.6.x
+mis-indents trailing-return functions. Make developer formatting select the
+compatible version and report setup failures clearly; retain clang-format for
+nested C++ and tests. Verify repeatable formatting on representative code.
+This is local tooling work, not a request to add paid CI.
 
-## Prototype sprite-to-voxel assets for vehicles and characters
+Sources: [agent guidelines](AGENTS.md),
+[wrapper](tools/r3d_spike/astyle_347.py).
 
-Authored `.vox` models for the standard wheel, wide wheel and carbon dioxide
-tank are bundled under `data/raw/r3d/`, with sprite and procedural fallbacks for
-everything else. Next: author one vehicle panel, then use 2d-to-3d-voxelizer's
-four-view mode to prototype a character with left, front, right, and back views.
-Resolve the voxelizer's OBJ output into the renderer's asset path, while
-preserving game-driven vehicle assembly and character equipment layers. The
-detailed trial and success gates are in
-[`sprite_to_voxel_pipeline.md`](docs/en/dev/research/sprite_to_voxel_pipeline.md).
+## R3D-03: Complete the presentation-profile shape and material contract
 
-## Add directional character models to the 3D renderer
+**Status: design/implementation follow-up.** Size, support-anchor and depth
+profiles work. Material regions are gallery annotations, not runtime material
+mappings. Geometry-family overrides, source face regions and per-tileset texture
+donors from the original proposal are not implemented.
 
-The current renderer draws player and NPC layers as camera-facing sprites. The
-built-in tilesets inspected so far provide a single character image rather than
-front, back, and side views, so mirroring or rotating that image cannot produce
-correct directional poses. Define a direction convention from character travel
-relative to the camera, then provide 3D character geometry or authored four-way
-pixel-art views. Preserve the existing layered clothing and wielded-item look,
-and fall back to the current sprite when a tileset has no directional assets.
-The four-view voxel prototype is tracked in
-[`sprite_to_voxel_pipeline.md`](docs/en/dev/research/sprite_to_voxel_pipeline.md).
+Define those fields for a bin, chair, locker, window, door, tree, loose item and
+vehicle corner. Bind sprite crops to a tileset/sprite identity; cover footprint,
+face materials, anchors and fallback without changing gameplay flags. Validate
+resolution, crop bounds, source texture sheet and missing/invalid overrides.
+Do not restore unused runtime metadata without a rendering consumer.
 
-## Add fog of war and a time-of-day sky to the 3D renderer
+Sources: [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md),
+[vehicle research](docs/en/dev/research/vehicle_rendering_research.md).
 
-Research how to use the game's visibility and lighting state to render fog of
-war that distinguishes unseen areas from visible darkness. Explore a sky and
-ambient horizon lighting driven by the in-game day/night cycle so the exposed
-world does not disappear into a uniformly black background. Preserve gameplay
-visibility rules, and account for indoor, underground, weather, and renderer
-cutaway views when choosing fog and sky behavior.
+## R3D-04: Finish vehicle layer, material and state presentation
 
-## Render multi-level vehicles in the 3D renderer
+**Status: implementation/visual validation; depends on R3D-03/07.** Role lists,
+stock-door classification, deterministic panel corners, faceted/authored wheels,
+roof/body heights and the shared windshield path exist. Geometry still relies
+heavily on one main sprite and generic surfaces.
 
-Vehicle mounts carry a z coordinate, but the 3D renderer draws each vehicle at
-one vehicle-wide base height and keys its render cells by mount x and y only,
-so parts on different levels overwrite each other. Key cells by the full mount,
-offset each cell's geometry by its mount z, and make the neighbour lookups
-(walls, trim, bumpers, roofs) level-aware.
+Resolve remaining installed layers into explicit paint/body, glass, rubber,
+trim, light, interior and roof contributions. Extend reusable frame, panel,
+sill, hood/bumper, roof and window templates where the gallery demonstrates a
+need; frame-only mounts should not read as solid body cubes. Verify vehicle
+door hinges/swings and intact/open/broken/removed/folded/accessory states;
+terrain-door tests do not establish vehicle-door correctness. Preserve arbitrary
+assembly, pivots, paint, damage, interactions and attachment seams.
 
-## Make 3D asset loading robust
+Source and acceptance matrix:
+[vehicle research](docs/en/dev/research/vehicle_rendering_research.md).
 
-One failing `.vox` file aborts loading of the rest, stream read errors are not
-checked, assets do not reload with the tileset, and loading on the first frame
-causes a stall. Load per file with isolated errors, check reads, reload with
-the tileset, and load off the first frame.
+## R3D-05: Expand authored props and run asset-pipeline trials
 
-## Pin astyle 3.4.7 in the format tooling
+**Status: authoring/integration follow-up; external tooling exists.** Standard
+and wide wheels and the CO2 tank are bundled. Solid seating/natural props,
+generic item extrusion and VOX loading/greedy meshing are already implemented.
 
-astyle 3.6.x mis-indents functions with trailing return types. Make the
-`format` target and CI use astyle 3.4.7 (as
-`tools/r3d_spike/astyle_347.py` does) instead of relying on agents reading
-`AGENTS.md`.
+Next author one useful vehicle panel/fender and representative props such as
+bins, shelves, lamps or machinery. Compare with fallbacks at gameplay scale and
+eight angles. Keep editable sources, provenance, tool versions/settings,
+palette, pivot and scale.
+
+Use the separate [Go asset CLI](https://github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline):
+its adapted four-view voxelizer outputs VOX directly, so an OBJ importer is not
+a prerequisite. Its optional MelonLoader adapter exports existing Kenney Shape
+projects. Install [Kenney Shape](https://kenney.nl/tools/kenney-shape) separately;
+do not ship its archive/application or couple BN to Unity hooks. Native
+Windows/macOS Kenney export is unverified in the tool's README and belongs to
+that project's validation.
+
+Procedure and visual gates:
+[sprite-to-voxel pipeline](docs/en/dev/research/sprite_to_voxel_pipeline.md).
+
+## R3D-06: Directional characters with equipment layers
+
+**Status: art/renderer design; depends on R3D-05's four-view trial.** Characters
+use layered camera-facing sprites with left/right mirroring. The inspected
+built-in art does not supply all four views.
+
+Define travel/facing relative to the camera and provide a representative
+left/front/right/back sheet or 3D model. Preserve body, hair, clothing, armor and
+wielded layers, with sprite fallback for missing directional assets. Check
+walking toward/away/sideways, stopping, camera rotation and mixed equipment.
+Mirroring one image cannot synthesize a correct face or back.
+
+Sources: [asset trial](docs/en/dev/research/sprite_to_voxel_pipeline.md),
+[Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md).
+
+## R3D-07: Reproducible visual fixtures and GPU acceptance checks
+
+**Status: validation/tooling follow-up.** Live sessions already bundle saves,
+logs, source galleries, support markers, 2D and eight 3D views. The state matrix
+reports available/observed sprites, not automatic captures of every state.
+The 17 seeded geometry snapshots cover positions/light, not UVs, textures,
+shaders or the final GPU image.
+
+Create saved fixtures for R3D-03's props and a sedan, van, pickup/flatbed,
+bicycle/motorcycle and unusual player-built assembly. Cover intact/open/broken/
+removed states, roofs/accessories, walls, partial visibility, daylight/darkness,
+both shipped tilesets, zoom, pitch and storey scale. Add focused front/side/top
+asset views and a labelled human acceptance sheet beside whole-scene captures.
+
+Review window/foot contact shading at chunk seams and avatar silhouettes with
+clothing, overhead levels and occluders. Add targeted texture-sheet/UV and
+normal-refresh-path tests where useful. Retain real saves/captures for visual
+judgment; fingerprints alone do not establish appearance or visibility. Run
+locally; paid GitHub CI is explicitly out of scope.
+
+Sources: [comparison guide](tools/r3d_spike/COMPARE.md),
+[Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md),
+[vehicle validation matrix](docs/en/dev/research/vehicle_rendering_research.md).
+
+## R3D-08: Measure frame cost and decide chunk scheduling
+
+**Status: measurement first, conditional optimization.** Chunk timing/queue
+logging exists. Initial visible chunks build synchronously; later rebuilds use
+a count budget, not a time allowance. Some timing calls run with diagnostics
+disabled. Silhouettes avoid copying the entity view but still build a separate
+avatar-only mesh.
+
+Measure cold start, travel, destruction and tileset changes, including GPU
+upload/draw and silhouette cost. Gate diagnostic-only timing as appropriate.
+If justified, prioritize nearby visible chunks and bound preparation by time;
+keep a safe complete/interim view and redraw while idle. A budget between whole
+chunks cannot bound one expensive chunk. Off-thread work needs immutable
+snapshots and stale-generation rejection.
+
+Do not reopen vehicle mesh caching by default: the recorded five-vehicle CPU
+benchmark was 0.46 ms for vehicles and 0.21 ms for entities. GPU cost remains
+unmeasured. Reuse avatar geometry or cache only with evidence of worthwhile
+savings and an invalidation plan.
+
+Sources: [diagnostics](docs/en/dev/guides/renderer_3d.md),
+[measurements](docs/en/dev/research/r3d_review_2026_10.md),
+[chunk research](docs/en/dev/research/dramatic_shape_voxel_review.md).
+
+## R3D-09: Audit complete-vehicle visibility and knowledge boundaries
+
+**Status: correctness investigation, not a confirmed visibility fix.** Once a
+mount is renderable, the renderer retains the rigid vehicle and dims unlit
+mounts. Tests establish completeness, not that unknown parts behind blockers
+can never be disclosed.
+
+Distinguish dark-but-visible, remembered and unknown tiles using BN knowledge
+contracts. Check opaque blockers, map edges, partial sight, night vision and
+unseen contents with R3D-07 fixtures. Preserve legitimate model continuity
+without exposing unavailable information. Do not equate black light with
+unknown terrain or silently change game rules.
+
+Source: [vehicle visibility research](docs/en/dev/research/vehicle_rendering_research.md).
+
+## R3D-10: Native macOS and Windows validation
+
+**Status: requires platform access.** Linux builds, renderer tests and reports
+have local evidence. Native macOS/Windows game execution is unverified.
+
+Build/play on Metal and Direct3D 12 with the required shaders. Check GPU/2D
+fallback, scaling/ultrawide layout, controls, options, save/load and capture/
+package/restore; repeat relevant checks for integrated feature ports. Cross-builds
+and path-resolution tests do not replace native runs.
+
+Sources: [README](README.md), [renderer guide](docs/en/dev/guides/renderer_3d.md).
+
+## R3D-11: Integrate the native UI/HUD branch
+
+**Status: implemented on a branch, not merged.** Local `feat/ui-overhaul` at
+`ce6d386` has menu themes, the F4 report, HUD indicators and weather/sky effects.
+Its guide is `docs/en/dev/guides/ui_overhaul.md` on that branch.
+
+Refresh against current main; resolve camera/visibility overlap and validate
+native UI refresh, perception, input, capture and 2D fallback before merging.
+Coordinate existing sky/fog effects with R3D-14 instead of starting a separate
+weather renderer.
+
+## R3D-12: Integrate the first-person branch
+
+**Status: implemented on a branch, not merged.** Local `feat/first-person` at
+`ae02e6f` has the BN camera/overlays and a branch guide at
+`docs/en/dev/guides/first_person.md`.
+
+Refresh against main and validate eye-level geometry, visibility, targeting,
+direction prompts, menus, minimap/alerts, saved heading, camera switching and
+comparison restoration. Preserve discrete BN movement/turns; analog or real-time
+movement is not part of integration.
+
+## R3D-13: Integrate guided onboarding
+
+**Status: implemented on a branch, not merged.** Local
+`feat/guided-onboarding` at `44dcdea` includes lessons, screen explanations,
+progress persistence and translation extraction. Its branch guide is
+`docs/en/dev/guides/guided_onboarding.md`.
+
+Refresh against main, run `[onboarding]` and affected normal UI tests, and check
+option modes, actions, old/new saves, translation coverage and the independent
+Tutorial Game flow. Keep the guided start kit optional; hints must not spend
+turns or alter normal gameplay rules.
+
+## R3D-14: Fog of war and a time-of-day sky
+
+**Status: research requested; related effects exist on R3D-11's branch.**
+Distinguish unseen terrain from visible darkness and replace the uniformly black
+exposed background with a game-time/weather-driven sky or horizon. Evaluate
+existing UI-branch effects first. Cover indoor/underground scenes, weather,
+cutaways, first person and remembered terrain. Keep BN lighting/knowledge
+in control. See the [Dramatic Shape constraints](docs/en/dev/research/dramatic_shape_voxel_review.md)
+and R3D-11's branch guide.
+
+## R3D-15: Improve turn-based driving presentation
+
+**Status: research/prototype; preserve discrete simulation.** Instrument redraws
+during vehicle substeps; evaluate renderer-only interpolation of committed
+position/heading and camera target. Snap on collisions, map shifts, portals,
+save/load and discontinuities. Review `VEHICLE_CONTROL_SCALE` and turn-based
+control affordances if necessary. Real-time physics/input remains a final resort
+requiring a separate decision on scheduling, fairness, action costs and collisions.
+
+Relevant paths: `src/vehicle/vehicle_move.cpp`, `src/vehicle/vehicle.cpp`,
+`src/map/map.cpp`, `src/game.cpp`, and `src/r3d.cpp`.
+
+## R3D-16: Multi-level vehicles
+
+**Status: explicitly deferred.** Mounts have z coordinates, but cells use mount
+x/y and one vehicle-wide base height. Key by full mount, offset geometry by
+mount z, and make wall/trim/bumper/roof neighbors level-aware. Verify parts at
+the same x/y on different levels never overwrite each other.
+
+Source: [renderer review](docs/en/dev/research/r3d_review_2026_10.md).
+
+## R3D-17: Vehicle-free play mode
+
+**Status: explicitly parked.** An opt-in mode would remove vehicles as playable
+content, not merely their models. Define spawns, construction, parts, driving/
+interaction and existing-save behavior first. Establish data/Lua versus core
+hook coverage; a partial mod must not imply every vehicle activity is disabled.
+Keep default BN and 2D behavior unchanged.
+
+## R3D-18: Shadow maps, reflections and tilt-shift
+
+**Status: deliberately deferred.** Revisit after core presentation/validation.
+Shadow/reflection passes must respect BN visibility and not introduce gameplay
+light. R3D-12 covers camera-only first person; these effects imply no real-time
+movement. Source: [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md).
+
+## Audit references and completed foundations
+
+- [Renderer review](docs/en/dev/research/r3d_review_2026_10.md): wheel/depth/roof/
+  shared-edge/cargo-floor/lighting/camera/classification fixes are delivered;
+  billboard/material/grid dead code and windshield duplication are removed.
+  Remaining findings map to R3D-01/02/07/08/09/16.
+- [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md):
+  size/anchor/depth profiles, galleries/support markers, local contact shading,
+  chunk diagnostics and avatar-only silhouettes exist. Extensions/acceptance
+  map to R3D-03/05/06/07/08/18.
+- [Vehicle research](docs/en/dev/research/vehicle_rendering_research.md): role
+  lists, shaped panels, faceted wheels and bundled wheel models supersede its
+  no-layer-list/box-wheel findings. Remaining work is R3D-03/04/05/07/09/16.
+- [Asset pipeline research](docs/en/dev/research/sprite_to_voxel_pipeline.md):
+  VOX ingestion and the separate Go CLI supersede the old OBJ-export obstacle.
+  R3D-05/06 cover remaining asset trials and character integration.
+- [Renderer](docs/en/dev/guides/renderer_3d.md),
+  [comparison](tools/r3d_spike/COMPARE.md), and
+  [item](data/raw/r3d/items/README.md)/[vehicle-part](data/raw/r3d/vehicle_parts/README.md)
+  authoring guides describe shipped behavior, not additional task queues.
+
+No paid CI, Unity/MelonLoader runtime dependency, whole-vehicle static replacement,
+or simulation change is introduced by this backlog. External art/code still
+needs compatible licensing and per-asset provenance.

@@ -6,6 +6,8 @@ renderer commit `00d5825a2585bc58cc46c4cfe5d72f7c7f46d37a`, onto Bright Nights.
 The original Cataclysm contributors retain their existing attribution and license.
 BN remains responsible for gameplay, world generation, visibility, turns, and saves.
 CDDA worlds and mods are not migration inputs for this port; start with a BN world.
+Current limitations, feature-branch integration and research follow-ups are tracked
+only in the [project backlog](../../../../BACKLOG.md).
 
 ## Build and play
 
@@ -49,8 +51,9 @@ full panels and windshields keep cabin height. Roof caps take the exterior panel
 material, while rooftop equipment keeps its own sprite. Native `shapes` direction
 variants ending in `_nw`, `_ne`, `_sw`, or `_se` trim the corresponding body corner.
 These are generated part IDs, not new map or vehicle rules. Once a vehicle has a
-lit or known mount, its remaining mounts use that light instead of disappearing
-individually; a model with no lit or known mounts remains hidden.
+renderable mount, its rigid model stays complete rather than disappearing in
+sections; unlit mounts use a dim fallback. A vehicle with no renderable mounts
+remains hidden. The backlog records the remaining knowledge/occlusion audit.
 Installed wheel parts now use faceted elliptical tire meshes with raised hubs,
 and map the installed wheel sprite onto the tire face. BN remains authoritative
 for wheel damage, removal, and vehicle behavior.
@@ -119,6 +122,7 @@ before sharing: character names, notes, explored maps, and paths can be included
 Saves reproduce a scene with matching BN assets/mods, not deterministic future RNG.
 See `tools/r3d_spike/COMPARE.md` for controls and crash recovery.
 
-The CDDA UI-overhaul and first-person branches are separate work from this renderer
-port. BN does not have CDDA's ImGui frontend, so those interfaces need their own
-BN implementation rather than copying CDDA's UI files.
+Native BN implementations of UI/HUD/weather, first-person camera and guided
+onboarding exist on separate feature branches and are not included on `main`.
+Their integration and validation status is tracked in the backlog. The UI port
+uses BN's own interface rather than CDDA's ImGui frontend.

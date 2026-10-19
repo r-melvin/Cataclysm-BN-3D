@@ -1,5 +1,9 @@
 # Dramatic Shape Voxel reference review
 
+> Historical reference review. Current outstanding work and recommendation status
+> are maintained only in the [project backlog](../../../../BACKLOG.md), including
+> the already-delivered profiles, galleries, shading, diagnostics and silhouette.
+
 Research date: 2026-10-18. Reference: `absol89/DramaticShapeVoxelMod` at
 [`a07146b45aee0b8525efc40062d73b426f7668df`](https://github.com/absol89/DramaticShapeVoxelMod/tree/a07146b45aee0b8525efc40062d73b426f7668df).
 BN baseline: `dbb2cd0712baea3639ec03abcebb005b81ad904f`.
@@ -52,7 +56,10 @@ moving vehicles. Full-building pattern recognition, fixed location decorations,
 canonical persistent map caches and assumed immutable connections would be poor
 defaults here.
 
-## Recommended next work, ordered by value and effort
+## Original recommendations, ordered by value and effort
+
+These explain the original design proposals, not the current work queue. See the
+backlog for implemented foundations, remaining extensions and deliberate deferrals.
 
 1. **Create a small presentation-profile format and a representative art gallery
    (high impact, medium effort).** Start with a bin, chair, locker, window, door,

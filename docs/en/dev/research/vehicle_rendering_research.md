@@ -1,5 +1,10 @@
 # Bright Nights 3D vehicle rendering: findings and next steps
 
+> Historical baseline review. Current outstanding work is maintained only in the
+> [project backlog](../../../../BACKLOG.md). Role lists, faceted/authored wheels,
+> shared windshields and door/panel classification fixes have since landed; the
+> baseline findings below are evidence, not a current defect or task list.
+
 Research date: 2026-10-18. Source baseline: `dbb2cd0712baea3639ec03abcebb005b81ad904f` (`main`). This is a source and capture review; no game code or external repository code was run or changed.
 
 ## Finding
@@ -16,7 +21,7 @@ The post-fix comparison bundle at `.port-validation/2026-10-18/issue-4/compariso
 
 Current tests verify several important invariants: real installed parts determine half/full height, all four native half-panel variants trim the corresponding corner, roof art is not overlaid as a blue placeholder, and partial mount lighting does not drop vehicle mesh geometry. See [r3d_vehicle_rules_test.cpp](../../../../tests/r3d_vehicle_rules_test.cpp#L14-L151). They do not compare vehicle appearance to a visual target, enumerate material coverage, or check knowledge/occlusion for partially visible vehicles.
 
-## Current implementation and why it reads as blocky
+## Implementation at the reviewed baseline and why it reads as blocky
 
 The vehicle renderer is in [r3d_entities.cpp](../../../../src/r3d_entities.cpp#L477-L535). It transforms native mount positions around the actual vehicle pivot and heading, groups the mounts into cells, and asks [vehicle_profile](../../../../src/r3d_vehicle_rules.cpp#L12-L63) to classify each cell from the installed BN part flags. This is a sound foundation: simulation data remains authoritative, and the renderer can represent vehicles built from arbitrary parts.
 
@@ -32,7 +37,10 @@ Vehicle visibility currently takes the first non-black mount light and uses it a
 
 The source also has the data needed for more precise presentation: vehicle part IDs and flags (`HALF_BOARD`, `FULL_BOARD`, `WINDSHIELD`, `ROOF`, `WHEEL`, `OPENABLE`, `OPAQUE`), state (`open`, `broken`, `removed`), mount, direction, color, and the installed tileset sprite. Directional board shapes are generated from the `shapes[].direction` values in [veh_type.cpp](../../../../src/vehicle/veh_type.cpp#L528-L537), and standard tileset entries are already organized by native part IDs in [vehicle_parts.json](../../../../data/json/external_tileset/vehicle_parts.json#L10-L60). A renderer-owned description can add shape/material intent without introducing new vehicle rules.
 
-## Ranked implementation plan
+## Original ranked improvement proposals
+
+Implementation status and remaining work now live in the backlog. Preserve this
+section as rationale and acceptance criteria rather than a parallel plan.
 
 ### 1. Establish a visual acceptance gallery before changing geometry
 
@@ -68,7 +76,7 @@ The license and content provenance of every input image and exported texture mus
 
 ### Kenney Shape as a per-part authoring tool
 
-Kenney Shape is available locally at `/tmp/Kenney Shape (Linux).zip`. Its official
+Install [Kenney Shape](https://kenney.nl/tools/kenney-shape) separately. Its official
 documentation describes authoring per-pixel depth and exporting OBJ, glTF, or
 MagicaVoxel `.vox` files. The documented workflow focuses on drawing and depth
 editing; it does not describe an automatic conversion of an existing PNG sprite.
@@ -80,21 +88,20 @@ replace the live vehicle assembled from BN parts.
 The renderer now has a pure `.vox` reader and exposed-face extractor in
 [`r3d_vox.cpp`](../../../../src/r3d_vox.cpp), and can load palette-colored `.vox`
 models named by native part ID from `data/raw/r3d/vehicle_parts/`. That path is
-currently used for wheels, with procedural geometry as the fallback. No authored
-vehicle models are bundled yet. Matching main parts now replace their procedural
+currently used by bundled `wheel.vox` and `wheel_wide.vox`, with procedural geometry
+as the fallback. Matching main parts replace their procedural
 body mesh with the authored model, scaled to that mount and modulated by the
 vehicle's current light; broken or open parts keep their state-specific sprite
 path. Kenney Shape's `.vox` output can exercise this path, but source-art
 licensing still applies to any tileset sprite used to author the model.
 
 Kenney Shape is a Unity application, so the [MelonLoader project](https://github.com/LavaGang/MelonLoader)
-is one possible automation route: it states that it supports Mono and Il2Cpp
-Unity games, including native Linux. Compatibility with Kenney Shape's particular
-Unity version and scripting backend is unverified. Its official workflow
-describes editing depth and exporting `.vox`, but not importing existing PNGs or
-a stable command-line API. Treat it as a manual authoring and cleanup tool unless
-an automation surface is verified; avoid coupling the renderer to private tool
-internals.
+is the automation route used by the separate
+[Go asset CLI](https://github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline).
+That project's README at `b4e0493` records a Linux Mono headless export smoke test
+and unverified Windows/macOS application exports. This audit did not rerun those
+tests. The adapter exports existing Kenney projects; it does not create them from
+PNGs. These are offline authoring tools, not renderer runtime dependencies.
 
 The related [2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer)
 offers a complementary experiment: its documented quad mode accepts `[LEFT,
@@ -102,8 +109,9 @@ FRONT, RIGHT, BACK]` sprite views and outputs OBJ. That could help create true
 four-way character geometry, while Kenney Shape's `.vox` output fits the current
 renderer ingestion path for compact vehicle parts. OBJ does not currently plug
 into this renderer, and neither tool replaces BN vehicle assembly or character
-equipment layering. Track a shared importer and asset-validation prototype in
-[`sprite_to_voxel_pipeline.md`](sprite_to_voxel_pipeline.md).
+equipment layering. The adapted Go CLI now exports VOX directly; OBJ import is
+not required for that route. See the [asset workflow](sprite_to_voxel_pipeline.md)
+for the integration boundary and the backlog for remaining trials.
 
 ## Validation matrix
 

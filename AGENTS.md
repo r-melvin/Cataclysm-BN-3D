@@ -154,6 +154,10 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 
 - **Docs**: [Building](./docs/en/dev/guides/building/cmake.md), [Formatting](./docs/en/dev/guides/formatting.md), [Dev Index](./docs/en/dev/).
 - **Project backlog**: [Backlog](./BACKLOG.md).
+- **Outstanding-work tracking**: `BACKLOG.md` is the single current task list. Research/review documents
+  retain historical findings and rationale; link to the backlog rather than maintaining parallel open
+  lists. Update the backlog when selecting, completing or deferring work, and verify old findings against
+  current source before reintroducing them.
 - **Review**: [LLM Guide](./.github/llm_review_guide.md).
 
 - When fixing a bug, preserve requested behavior and visible content unless the user explicitly asks to remove it; fix the underlying issue instead of suppressing the affected feature.
