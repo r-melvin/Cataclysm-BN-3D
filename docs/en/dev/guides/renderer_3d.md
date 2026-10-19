@@ -73,6 +73,19 @@ currently shown as annotations in the gallery rather than changing palette
 colors. Comparison packages preserve the profile file and render a scaled top
 footprint and side elevation beside the source sprite and captured views.
 
+## Renderer diagnostics
+
+Set `CATA_R3D_DEBUG_CHUNKS=1` before launching to log a chunk-work sample after
+the initial visible chunks are built and once per second afterward. `frame_ms`
+is renderer CPU time; `mesh_ms` measures CPU meshing;
+`upload_ms` measures chunk buffer creation and geometry upload; and `light_ms`
+measures light sampling and light-buffer upload. The sample also reports the
+visible, rebuilt, deferred, and failed chunk counts, geometry size, uploaded
+bytes, and estimated bytes held by resident chunk buffers. The initial visible
+scene is built synchronously, so its first sample shows that cost even though
+there is no deferred queue. These measurements separate mesh work, light work,
+and queued rebuilds before changing the existing scheduling policy.
+
 ## Comparison reports
 
 BN ships the `HitButton_iso` reference and `UltimateCataclysm` tilesets; no external

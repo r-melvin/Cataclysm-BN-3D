@@ -99,6 +99,20 @@ struct chunk_gpu {
     std::vector<light_ref> refs; // where each vertex samples its light
     std::vector<uint32_t> light; // current RGBA8 light per vertex
     uint64_t light_key = 0;      // light_key() the stream was last computed for
+    uint64_t gpu_bytes = 0;
+};
+
+struct chunk_work_stats {
+    size_t rebuilt = 0;
+    size_t failed = 0;
+    size_t pending = 0;
+    size_t visible = 0;
+    uint64_t vertices = 0;
+    uint64_t indices = 0;
+    uint64_t upload_bytes = 0;
+    double mesh_ms = 0.0;
+    double upload_ms = 0.0;
+    double light_ms = 0.0;
 };
 
 // What the last drawn frame showed, so mouse picks match the picture on screen.
@@ -127,6 +141,7 @@ struct state {
     bool init_failed = false;
     unsigned failed_epoch = 0;
     uint64_t frame = 0;
+    std::chrono::steady_clock::time_point last_chunk_report{};
     bool drawn = false;
     // The tileset load the cached sprites and meshes were built from.
     uint64_t tileset_loads = 0;
@@ -231,6 +246,7 @@ auto release_chunk( state &s, chunk_gpu &c ) -> void
     c.refs.clear();
     c.light.clear();
     c.light_key = 0;
+    c.gpu_bytes = 0;
     c.built = false;
 }
 
@@ -248,6 +264,7 @@ struct rebuild_chunk_options {
     const tripoint_abs_sm &pos;
     uint64_t stamp;
     const submap_lookup &lookup;
+    chunk_work_stats &stats;
 };
 
 auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
@@ -257,27 +274,43 @@ auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
     const auto &pos = options.pos;
     auto stamp = options.stamp;
     const auto &lookup = options.lookup;
+    auto &stats = options.stats;
 
+    const auto mesh_started = std::chrono::steady_clock::now();
     auto mesh = chunk_mesh( build_chunk_mesh( { .pos = pos, .lookup = lookup, .cache = s.cache, .tiles = *tilecontext } ) );
+    stats.mesh_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
+        mesh_started ).count();
+    stats.vertices += mesh.vertices.size();
+    stats.indices += mesh.indices.size();
     release_chunk( s, c );
     c.stamp = stamp;
     c.built = true;
     c.uprights = std::move( mesh.uprights );
     if( mesh.indices.empty() ) {
+        ++stats.rebuilt;
         return true;
     }
     const auto vertex_bytes = static_cast<uint32_t>( mesh.vertices.size() * sizeof( vertex ) );
     const auto light_bytes = static_cast<uint32_t>( mesh.light.size() * sizeof( uint32_t ) );
     const auto index_bytes = static_cast<uint32_t>( mesh.indices.size() * sizeof( uint32_t ) );
+    const auto upload_started = std::chrono::steady_clock::now();
     c.positions = s.device.create_buffer( SDL_GPU_BUFFERUSAGE_VERTEX, vertex_bytes );
     c.lights = s.device.create_buffer( SDL_GPU_BUFFERUSAGE_VERTEX, light_bytes );
     c.indices = s.device.create_buffer( SDL_GPU_BUFFERUSAGE_INDEX, index_bytes );
     if( !c.positions || !c.lights || !c.indices ||
         !s.device.upload( { .dst = c.positions, .data = mesh.vertices.data(), .size = vertex_bytes } ) ||
         !s.device.upload( { .dst = c.indices, .data = mesh.indices.data(), .size = index_bytes } ) ) {
+        stats.upload_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
+            upload_started ).count();
+        ++stats.failed;
         release_chunk( s, c );
         return false;
     }
+    stats.upload_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
+        upload_started ).count();
+    ++stats.rebuilt;
+    stats.upload_bytes += static_cast<uint64_t>( vertex_bytes ) + index_bytes;
+    c.gpu_bytes = static_cast<uint64_t>( vertex_bytes ) + light_bytes + index_bytes;
     c.batches = std::move( mesh.batches );
     c.refs = std::move( mesh.light_refs );
     c.light = std::move( mesh.light );
@@ -586,6 +619,7 @@ struct update_chunk_light_options {
     const tripoint_bub_ms &center;
     const light_sampler &sampler;
     uint64_t key;
+    chunk_work_stats &stats;
 };
 
 auto update_chunk_light( const update_chunk_light_options &options ) -> void
@@ -597,11 +631,13 @@ auto update_chunk_light( const update_chunk_light_options &options ) -> void
     const auto &center = options.center;
     const auto &sampler = options.sampler;
     auto key = options.key;
+    auto &stats = options.stats;
 
     c.light_key = key;
     if( c.refs.empty() ) {
         return;
     }
+    const auto light_started = std::chrono::steady_clock::now();
     constexpr auto border = static_cast<int>( SEEX + 2 );
     const auto chunk_origin = tripoint_abs_ms( project_to<coords::ms>( pos ) );
     const auto base = tripoint_bub_ms( center.x() + ( chunk_origin.x() - origin.x() ),
@@ -650,8 +686,11 @@ auto update_chunk_light( const update_chunk_light_options &options ) -> void
                          static_cast<uint8_t>( ( ( tile >> 8 ) & 255u ) * shade / 255u * r.tint_g / 255u ),
                          static_cast<uint8_t>( ( ( tile >> 16 ) & 255u ) * shade / 255u * r.tint_b / 255u ) );
     }
-    s.device.upload( { .dst = c.lights, .data = c.light.data(),
-                       .size = static_cast<uint32_t>( c.light.size() * sizeof( uint32_t ) ), .cycle = true } );
+    const auto light_bytes = static_cast<uint32_t>( c.light.size() * sizeof( uint32_t ) );
+    s.device.upload( { .dst = c.lights, .data = c.light.data(), .size = light_bytes, .cycle = true } );
+    stats.light_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
+        light_started ).count();
+    stats.upload_bytes += light_bytes;
 }
 
 // Cuts a hole around the player through whatever stands in front of them (see r3d_block.frag).
@@ -1399,6 +1438,7 @@ auto shutdown() -> void
     s.epoch_valid = false;
     s.drawn = false;
     s.shown.valid = false;
+    s.last_chunk_report = {};
 }
 
 auto draw( const draw_options &options ) -> bool
@@ -1489,6 +1529,9 @@ auto draw( const draw_options &options ) -> bool
     }
 
     ++s.frame;
+    const auto render_started = std::chrono::steady_clock::now();
+    static const auto debug_chunk_work = static_cast<bool>( std::getenv( "CATA_R3D_DEBUG_CHUNKS" ) !=
+        nullptr );
     maybe_take_screenshot( s );
     if( !s.env_camera_applied ) {
         apply_env_camera( s.cam );
@@ -1601,6 +1644,7 @@ auto draw( const draw_options &options ) -> bool
     // A newly opened view must be complete before waiting for the player's next key.
     // Later edits retain the normal bounded rebuild budget.
     auto builds_left = s.chunks.empty() ? std::numeric_limits<int>::max() : max_chunk_builds_per_frame;
+    auto chunk_stats = chunk_work_stats{};
     for( auto z = static_cast<int>( z_lo ); z <= z_hi; ++z ) {
         for( auto gy = static_cast<int>( 0 ); gy < here.getmapsize(); ++gy ) {
             for( auto gx = static_cast<int>( 0 ); gx < here.getmapsize(); ++gx ) {
@@ -1619,13 +1663,20 @@ auto draw( const draw_options &options ) -> bool
                 }
                 auto &c = s.chunks[chunk_key{ .x = pos.x(), .y = pos.y(), .z = pos.z() }];
                 c.last_used = s.frame;
-                if( ( !c.built || c.stamp != stamp ) && builds_left > 0 ) {
-                    --builds_left;
-                    rebuild_chunk( { .s = s, .c = c, .pos = pos, .stamp = stamp, .lookup = lookup } );
+                ++chunk_stats.visible;
+                if( !c.built || c.stamp != stamp ) {
+                    if( builds_left > 0 ) {
+                        --builds_left;
+                        rebuild_chunk( { .s = s, .c = c, .pos = pos, .stamp = stamp, .lookup = lookup,
+                                         .stats = chunk_stats } );
+                    } else {
+                        ++chunk_stats.pending;
+                    }
                 }
                 if( c.built && !c.batches.empty() ) {
                     if( c.light_key != frame_light_key ) {
-                        update_chunk_light( { .s = s, .c = c, .pos = pos, .origin = origin, .center = center, .sampler = sampler, .key = frame_light_key } );
+                        update_chunk_light( { .s = s, .c = c, .pos = pos, .origin = origin, .center = center,
+                                              .sampler = sampler, .key = frame_light_key, .stats = chunk_stats } );
                     }
                     visible.push_back( { .chunk = &c, .offset = { ox, oy, oz } } );
                 }
@@ -1752,6 +1803,30 @@ auto draw( const draw_options &options ) -> bool
     }
     const auto dst = SDL_FRect{ .x = x, .y = y, .w = w, .h = h };
     SDL_RenderTexture( renderer, result, nullptr, &dst );
+
+    const auto report_time = std::chrono::steady_clock::now();
+    if( debug_chunk_work && ( s.last_chunk_report == std::chrono::steady_clock::time_point{} ||
+                              report_time - s.last_chunk_report >= std::chrono::seconds( 1 ) ) ) {
+        s.last_chunk_report = report_time;
+        auto resident_bytes = uint64_t( 0 );
+        for( const auto &entry : s.chunks ) {
+            resident_bytes += entry.second.gpu_bytes;
+        }
+        const auto frame_ms = std::chrono::duration<double, std::milli>(
+                                  std::chrono::steady_clock::now() - render_started ).count();
+        DebugLog( DL::Info, DC::Main ) << "r3d chunks: frame_ms=" << frame_ms
+                                       << " mesh_ms=" << chunk_stats.mesh_ms
+                                       << " upload_ms=" << chunk_stats.upload_ms
+                                       << " light_ms=" << chunk_stats.light_ms
+                                       << " visible=" << chunk_stats.visible
+                                       << " rebuilt=" << chunk_stats.rebuilt
+                                       << " pending=" << chunk_stats.pending
+                                       << " failed=" << chunk_stats.failed
+                                       << " vertices=" << chunk_stats.vertices
+                                       << " indices=" << chunk_stats.indices
+                                       << " upload_bytes=" << chunk_stats.upload_bytes
+                                       << " resident_bytes=" << resident_bytes;
+    }
 
     // Drop chunks that have not been needed for a while (the player moved on).
     for( auto it = s.chunks.begin(); it != s.chunks.end(); ) {

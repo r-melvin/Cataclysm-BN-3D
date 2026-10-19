@@ -83,12 +83,15 @@ defaults here.
 
 4. **Instrument chunk work, then replace count-only scheduling if needed
    (high responsiveness value, medium effort).** BN currently limits later builds
-   by count but builds all initial visible chunks synchronously. The reference's
+   by count but builds all initial visible chunks synchronously. An opt-in
+   `CATA_R3D_DEBUG_CHUNKS=1` diagnostic now records per-second renderer, mesh,
+   upload and light times; visible, rebuilt, deferred and failed chunk counts;
+   geometry and upload volume; and resident chunk-buffer bytes. The reference's
    pump uses roughly 4.75 ms foreground slices, 6.5 ms current-body bootstrap and
-   30 ms while covered; these are reference choices, not BN targets. First record
-   build/upload time, pending chunks, frame latency and memory on cold start,
-   travel, destruction and tileset changes. Then prioritize nearby visible chunks
-   and use a time allowance. Preserve BN's complete initial view before waiting
+   30 ms while covered; these are reference choices, not BN targets. Collect and
+   compare diagnostic samples on cold start, travel, destruction and tileset
+   changes before prioritizing nearby visible chunks or using a time allowance.
+   Preserve BN's complete initial view before waiting
    indefinitely for input: progressive work needs redraws while idle and a safe
    interim presentation. A budget checked only between whole chunks cannot cap a
    single expensive chunk. Snapshot data and reject stale generations if work is
