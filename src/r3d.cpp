@@ -1763,9 +1763,10 @@ auto draw( const draw_options &options ) -> bool
     auto avatar_silhouette = chunk_mesh{};
     auto draw_avatar_silhouette = static_cast<bool>( false );
     if( get_option<bool>( "R3D_AVATAR_SILHOUETTE" ) ) {
-        auto silhouette_view = entities_view;
-        silhouette_view.avatar_only = true;
-        avatar_silhouette = build_entity_mesh( silhouette_view );
+        // Flip the flag instead of copying the view and its upright/marker vectors.
+        entities_view.avatar_only = true;
+        avatar_silhouette = build_entity_mesh( entities_view );
+        entities_view.avatar_only = false;
         draw_avatar_silhouette = static_cast<bool>( !avatar_silhouette.empty() &&
                                  upload_dynamic( { .s = s, .buffer = s.silhouette_positions, .capacity = s.silhouette_position_bytes,
                                          .usage = SDL_GPU_BUFFERUSAGE_VERTEX, .data = avatar_silhouette.vertices.data(),
