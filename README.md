@@ -11,6 +11,8 @@
 - Optional alpha-silhouette voxel models for loose items; enable them in
   **Options → Graphics** after enabling the 3D renderer. Supported transparent
   sprites keep their pixel silhouette, including corners and notches.
+- Shared presentation profiles provide box/slab furniture dimensions and contact
+  anchors, plus per-face sprite materials for furniture, walls and openings.
 - Vehicle wheels use faceted 3D geometry.
 - Authored `.vox` item models can replace sprite-derived volumes when present in
   the renderer's item asset directory. Models and profiles prepare off-thread,

@@ -1,4 +1,5 @@
 #include "catch/catch.hpp"
+#include "r3d_furniture_profiles.h"
 #include "r3d_presentation_profiles.h"
 
 #include <algorithm>
@@ -57,6 +58,63 @@ TEST_CASE("r3d_profile_face_sources_validate_identity_crop_and_ambiguity", "[r3d
         {"face":"top","tileset":"test","sprite":"t_wall"},
         {"face":"top","tileset":"test","sprite":"t_grass"}]}]})");
     CHECK_THROWS(r3d::load_presentation_profiles(duplicate));
+}
+
+TEST_CASE("r3d_furniture_authored_bounds_rotate_contacts_without_stretching", "[r3d][profiles]") {
+    const auto facing = GENERATE(0, 1, 2, 3);
+    const auto flip = GENERATE(false, true);
+    const auto contact = GENERATE(false, true);
+    const auto back = std::array<
+        r3d::face_bit, 4>{r3d::face_north, r3d::face_east, r3d::face_south, r3d::face_west};
+    const auto profile =
+        r3d::furniture_proportions{.size = {0.4f, 0.6f, 0.8f}, .anchor = {0.25f, 0.75f, 0.2f}};
+    const auto bounds = r3d::furniture_profile_bounds(
+        {.fitted = {.x0 = -0.42f, .x1 = 1.0f, .y0 = 0.0f, .y1 = 0.9f},
+         .profile = profile,
+         .facing = facing,
+         .flip = flip,
+         .wall_contacts = static_cast<uint8_t>(contact ? back[facing] : 0)});
+    CHECK(bounds.x1 - bounds.x0 == Approx(facing % 2 == 0 ? 0.4f : 0.6f));
+    CHECK(bounds.y1 - bounds.y0 == Approx(facing % 2 == 0 ? 0.6f : 0.4f));
+    if (contact) {
+        switch (facing) {
+            case 0:
+                CHECK(bounds.y0 == Approx(-0.42f));
+                break;
+            case 1:
+                CHECK(bounds.x1 == Approx(1.42f));
+                break;
+            case 2:
+                CHECK(bounds.y1 == Approx(1.42f));
+                break;
+            case 3:
+                CHECK(bounds.x0 == Approx(-0.42f));
+                break;
+        }
+    } else {
+        // The local anchor maps to the tile centre in every orientation.
+        const auto ax = flip ? 0.75f : 0.25f;
+        const auto anchors = std::array<std::array<float, 2>, 4>{
+            {{ax, 0.75f}, {0.25f, ax}, {1.0f - ax, 0.25f}, {0.75f, 1.0f - ax}}};
+        CHECK(bounds.x0 + anchors[facing][0] * (bounds.x1 - bounds.x0) == Approx(0.5f));
+        CHECK(bounds.y0 + anchors[facing][1] * (bounds.y1 - bounds.y0) == Approx(0.5f));
+    }
+    const auto vertical = r3d::furniture_profile_height(profile, 0.9f);
+    CHECK(vertical.base_offset == Approx(-0.16f));
+    CHECK(vertical.top == Approx(0.74f));
+}
+
+TEST_CASE("r3d_furniture_omitted_axes_preserve_native_fitting", "[r3d][profiles]") {
+    const auto profile = r3d::furniture_proportions{};
+    const auto fitted = r3d::box_layout{.x0 = -0.42f, .x1 = 1.0f, .y0 = -0.42f, .y1 = 0.29f};
+    const auto bounds = r3d::furniture_profile_bounds({.fitted = fitted, .profile = profile});
+    CHECK(bounds.x0 == fitted.x0);
+    CHECK(bounds.x1 == fitted.x1);
+    CHECK(bounds.y0 == fitted.y0);
+    CHECK(bounds.y1 == fitted.y1);
+    const auto vertical = r3d::furniture_profile_height(profile, 0.9f);
+    CHECK(vertical.top == 0.9f);
+    CHECK(vertical.base_offset == 0.0f);
 }
 
 #if defined(TILES)
@@ -354,5 +412,67 @@ TEST_CASE("r3d_furniture_profiles_parse_explicit_front_sources", "[r3d][profiles
     const auto profiles = r3d::load_presentation_profiles(input);
     REQUIRE(profiles.at("furniture:f_locker").face_sources.size() == 1);
     CHECK(profiles.at("furniture:f_locker").face_sources[0].face == r3d::profile_face::front);
+}
+TEST_CASE("r3d_furniture_profile_sizes_reach_mesh_and_surface_cache", "[r3d][profiles][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto scale = GENERATE(1.0f, 0.1f);
+    const auto id = std::string(GENERATE("f_locker", "f_chair", "f_trashcan", "f_table"));
+    const auto pos = tripoint_abs_sm(get_map().get_abs_sub(), 0);
+    auto sm = submap(pos, {});
+    sm.set_all_ter(t_floor);
+    const auto furniture = furn_str_id(id).id();
+    sm.set_furn(point_sm_ms(5, 5), furniture);
+    const auto lookup = [&sm, &pos](const tripoint_abs_sm& requested) -> const submap* {
+        return requested == pos ? &sm : nullptr;
+    };
+    auto cache = r3d::tile_info_cache{};
+    const auto original = cache.furniture({.id = furniture, .tiles = *tilecontext});
+    const auto baseline = r3d::build_chunk_mesh(
+        {.pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    cache.set_presentation_profiles(
+        {{"furniture:" + id,
+          {.size = {0.4f * scale, 0.6f * scale, 0.8f}, .support_anchor = {0.25f, 0.75f, 0.2f}}}});
+    const auto art = cache.furniture({.id = furniture, .tiles = *tilecontext});
+    CHECK(art.sh.height == Approx(0.74f));
+    CHECK(art.base_offset == Approx(-0.16f));
+    const auto mesh = r3d::build_chunk_mesh(
+        {.pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    auto low = std::array<float, 3>{100, 100, 100};
+    auto high = std::array<float, 3>{-100, -100, -100};
+    for (auto i = size_t(0); i < mesh.vertices.size(); i += 4) {
+        auto furniture_face = false;
+        for (auto j = size_t(0); j < 4; ++j) {
+            furniture_face = furniture_face || mesh.vertices[i + j].z != Approx(r3d::floor_height);
+        }
+        if (!furniture_face) { continue; }
+        for (auto j = size_t(0); j < 4; ++j) {
+            const auto& vertex = mesh.vertices[i + j];
+            const auto point = std::array<float, 3>{vertex.x, vertex.y, vertex.z};
+            for (auto axis = size_t(0); axis < 3; ++axis) {
+                low[axis] = std::min(low[axis], point[axis]);
+                high[axis] = std::max(high[axis], point[axis]);
+            }
+        }
+    }
+    // No wall or row: the authored point sits at the centre of the cell, above the floor.
+    CHECK(low[0] == Approx(5.5f - 0.1f * scale));
+    CHECK(high[0] == Approx(5.5f + 0.3f * scale));
+    CHECK(low[1] == Approx(-5.5f - 0.15f * scale));
+    CHECK(high[1] == Approx(-5.5f + 0.45f * scale));
+    CHECK(low[2] == Approx(-0.06f));
+    CHECK(high[2] == Approx(art.sh.height));
+    cache.set_presentation_profiles({});
+    CHECK(
+        cache.furniture({.id = furniture, .tiles = *tilecontext}).sh.height == original.sh.height);
+    const auto restored = r3d::build_chunk_mesh(
+        {.pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    REQUIRE(restored.vertices.size() == baseline.vertices.size());
+    for (auto i = size_t(0); i < baseline.vertices.size(); ++i) {
+        CHECK(restored.vertices[i].x == baseline.vertices[i].x);
+        CHECK(restored.vertices[i].y == baseline.vertices[i].y);
+        CHECK(restored.vertices[i].z == baseline.vertices[i].z);
+    }
 }
 #endif

@@ -15,6 +15,7 @@
 #include <SDL3/SDL.h>
 
 #include "coordinates.h"
+#include "r3d_furniture_profiles.h"
 #include "r3d_gpu.h"
 #include "r3d_presentation_profiles.h"
 #include "r3d_sprite_voxels.h"
@@ -66,6 +67,8 @@ struct tile_info {
     shape sh;
     sprite_ref backdrop; // opaque background layer, drawn first when the tileset has one
     sprite_ref sprite;   // foreground layer (alpha tested, may be sparse)
+    furniture_proportions proportions;
+    float base_offset = 0.0f; // vertical contact offset for authored furniture
     float depth_scale = 1.0f; // furniture depth, anchored at its back after wall fitting
     bool tree  = false;   // the level above holds its treetop, which this sprite already shows
     bool stairs = false;   // the level above holds its treetop, which this sprite already shows

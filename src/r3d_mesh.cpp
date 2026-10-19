@@ -536,8 +536,12 @@ auto emit_box( const emit_box_options &options ) -> void
     if( !s.valid ) {
         return;
     }
-    const auto bounds = box_layout( place_furniture_box( { .box = b, .flip = s.flip, .facing = facing, .joined = joined, .wall_contacts = wall_contacts,
-                                    .depth_scale = depth_scale } ) );
+    auto bounds = box_layout( place_furniture_box( { .box = b, .flip = s.flip, .facing = facing, .joined = joined, .wall_contacts = wall_contacts,
+                              .depth_scale = depth_scale } ) );
+    if( options.materials ) {
+        bounds = furniture_profile_bounds( { .fitted = bounds, .profile = options.materials->proportions,
+                                             .facing = facing, .flip = s.flip, .wall_contacts = wall_contacts } );
+    }
     const auto fx0 = static_cast<float>( bounds.x0 );
     const auto fx1 = static_cast<float>( bounds.x1 );
     const auto fy0 = static_cast<float>( bounds.y0 );
@@ -644,8 +648,9 @@ auto emit_box( const emit_box_options &options ) -> void
 
     // Legs: every tile of a bench or table stands on one pair of legs, one at each side
     // across its row (the row runs along x before the turn), in the middle of the tile.
-    constexpr auto leg = static_cast<float>( 0.1f );
-    constexpr auto inset = static_cast<float>( 0.05f );
+    const auto footprint = std::min( fx1 - fx0, fy1 - fy0 );
+    const auto leg = std::min( 0.1f, footprint * 0.25f );
+    const auto inset = std::min( 0.05f, footprint * 0.1f );
     const auto across_y = static_cast<bool>( ( facing & 1 ) == 0 );
     const auto a0 = static_cast<float>( ( ( across_y ? fx0 : fy0 ) + ( across_y ? fx1 : fy1 ) - leg ) *
                                         0.5f );
@@ -1497,6 +1502,13 @@ auto tile_info_cache::furniture( const furniture_options &options ) -> const til
         info.sh = classify_furniture( traits );
         resolve_layers( { .tiles = tiles, .id = f.id.str(), .category = C_FURNITURE, .out = info, .subtile = subtile, .rota = rota } );
         if( info.sh.kind == shape_kind::prism ) {
+            const auto profile = profiles_.find( presentation_profile_key( "furniture", f.id.str() ) );
+            if( profile != profiles_.end() ) {
+                info.proportions = { .size = profile->second.size, .anchor = profile->second.support_anchor };
+                const auto vertical = furniture_profile_height( info.proportions, info.sh.height );
+                info.base_offset = vertical.base_offset;
+                info.sh.height = vertical.top;
+            }
             apply_profile_materials( { .profiles = profiles_, .category = "furniture", .id = f.id.str(), .tiles = tiles, .out = info } );
         }
         if( info.sh.kind == shape_kind::block ) {
@@ -2288,7 +2300,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                 }
             }
             const auto box_faces = uint8_t( visible_faces( fs, nb ) | ( fs.slab > 0.0f ? 0 : all_sides ) );
-            emit_box( { .sink = sink, .s = spr, .x = lx, .y = ly, .z0 = ts.height, .z1 = fs.height, .b = layout, .faces = box_faces, .refs = refs, .facing = facing, .joined = joined,
+            emit_box( { .sink = sink, .s = spr, .x = lx, .y = ly, .z0 = ts.height + furn.base_offset, .z1 = fs.height, .b = layout, .faces = box_faces, .refs = refs, .facing = facing, .joined = joined,
                         .wall_contacts = wall_contacts, .slab = fs.slab, .depth_scale = furn.depth_scale, .materials = &furn } );
 
         }

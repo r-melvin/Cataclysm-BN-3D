@@ -90,6 +90,34 @@ colors. Comparison packages preserve the profile file and render a scaled top
 footprint and side elevation beside the source sprite and captured views.
 
 
+Box and slab furniture also consumes `size` and `support_anchor`. For furniture,
+axes are local width (east), depth (south), and height before its clockwise
+facing rotation; mirroring also mirrors the width anchor. For example:
+
+```json
+{
+  "category": "furniture",
+  "id": "f_trashcan",
+  "size": [0.4, 0.6, 0.8],
+  "support_anchor": [0.5, 0.5, 0.0]
+}
+```
+
+A nonzero width/depth is exact, replacing native row extension and locker depth
+reduction on that axis. Its anchor sits at the tile centre; explicit anchors can
+also reposition inferred spans. Adjacent thin walls take precedence over the
+horizontal anchor: translate the authored span flush to the wall without
+stretching it. With opposite wall contacts, the back wall wins on the depth
+axis, otherwise the north/west wall wins. Omitted axes retain native wall fitting
+and row joins. Height is measured from the support point on the floor; the
+normalized vertical anchor can place part of the model below that surface.
+The cached top height follows the same geometry; the existing one-level marker
+height clamp still applies. Legs
+stay within small authored footprints. These overrides do not change furniture
+collision, storage, reach, movement or other native gameplay properties.
+Upright, natural-block and panel furniture retain their inferred geometry.
+`depth_fraction` remains an item extrusion control, not a furniture-box size.
+
 Wall profiles also support `face_sources` for explicit side and top materials.
 These are opt-in entries in the same version-1 file, for example:
 

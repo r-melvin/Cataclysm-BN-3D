@@ -174,3 +174,4 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - When removing a profile/schema field, search all renderer, gallery, documentation and test consumers for remaining references before rebuilding.
 - Window presentation must cover native broken/empty frames as well as `WINDOW`-flagged terrain. These frames deliberately lack that gameplay flag; preserve native flags and validate the actual open/broken terrain IDs.
 - Lua fixture tools must use verified binding names rather than assuming C++ methods are exported. Preflight all map bounds before mutating any fixture tile. Paste fixture source into the sandboxed console; `dofile` is unavailable.
+- A private `--datadir` also relocates tileset discovery to `<datadir>/gfx/`; provide that directory (or a symlink to the installed `gfx`) when testing private renderer assets.

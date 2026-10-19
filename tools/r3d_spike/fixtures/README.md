@@ -33,3 +33,20 @@ marks which states were actually captured. The script constructs native terrain
 states directly; it does not establish that every bash/open interaction has been
 tested. Vehicles, props, roofs, lighting and platform fixtures remain in the
 [project backlog](../../../BACKLOG.md#r3d-07-reproducible-visual-fixtures-and-gpu-acceptance-checks).
+
+## Furniture proportions and contact points
+
+Paste `furniture.lua` into the same private Lua console. It replaces a 13 × 11
+area with four columns (bin, chair, locker, table). Each column has a piece backed
+by the north wall, a separate piece, and a joined pair. Use the native unprofiled
+view as a baseline, then add furniture profiles as described in the
+[renderer guide](../../../docs/en/dev/guides/renderer_3d.md). Reload the tileset
+or restart to install changed profiles. Work on a private data copy as well as a
+private save; do not modify installed artwork during normal play.
+
+Check exact dimensions, anchors, wall contact, front orientation, and legs at
+several camera angles. Repeat with one authored axis at a time, thin walls both
+on and off, and with profiles removed. Omitted dimensions must keep native joins
+and wall fitting. Explicit spans stay exact, so a short authored width can leave
+a visible gap in a joined row. Wall contact takes precedence over horizontal
+anchors. The script does not alter the furniture's native gameplay properties.

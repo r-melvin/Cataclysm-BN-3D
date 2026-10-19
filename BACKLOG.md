@@ -62,15 +62,26 @@ both axes and both wall thicknesses, including sheet/UV identity and unchanged
 profiled geometry. Furniture box/slab faces now share the donor resolver:
 `top`, non-front `side`, and explicit `front` overrides preserve native handles
 and doors when no front donor is supplied. Footprints, row joins, wall fitting,
-slabs, feet and undersides remain inferred; this is not yet arbitrary furniture
-shape/anchor support. Both binaries build; the combined renderer/onboarding run
+slabs, feet and undersides retain their native structure. Box/slab furniture now
+consumes local width/depth/height and support anchors: exact authored spans rotate
+and mirror with the piece, translate flush to thin walls, and update cached top
+heights. Omitted dimensions preserve native row/depth fitting. Arbitrary geometry
+families and upright/panel/natural-block profiles remain outstanding. Both binaries build; the combined renderer/onboarding run
 passes 158 cases (37,778 assertions), including per-face donor checks for
 lockers, chairs, bins and tables. A private Xvfb/Vulkan scene confirms upright
 broken/empty windows and the open door leaf; a reusable native Lua scene builder
 and instructions now live in `tools/r3d_spike/fixtures/`. The saved private scene
 reloads and exits normally (0), with turn 1,327,697 and moves 100 unchanged and
 no Vulkan validation errors. Native 2D and 3D references were inspected. Geometry-family overrides and equivalent upright/panel furniture and vehicle
-face consumers from the original proposal remain outstanding.
+face consumers from the original proposal remain outstanding. Furniture-dimension
+validation builds both targets and passes 161 renderer/onboarding cases (53,088
+assertions), including real emitted bounds, narrow legs, rotated/mirrored anchors,
+wall contacts and profile removal. `fixtures/furniture.lua` supplies isolated,
+joined and wall-backed native props for visual review. A private Xvfb/software-
+Vulkan run executes that script with authored profiles, rotates the view, saves
+and exits 0; turn 1,327,697 and moves 100 are unchanged. Evidence is under
+`/tmp/bn-furniture-acceptance/`. Hoder chair transparency still limits inferred
+solid materials; this check does not establish the complete tileset/art matrix.
 
 Define those fields for a bin, chair, locker, window, door, tree, loose item and
 vehicle corner. Bind sprite crops to a tileset/sprite identity; cover footprint,
