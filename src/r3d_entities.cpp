@@ -746,6 +746,79 @@ auto emit_vehicle_tile_quads( const emit_vehicle_tile_quads_options &options ) -
     }
 }
 
+/// The flat view's rotation index (quarter turns) for a vehicle part.
+auto vehicle_part_rota( const vehicle &veh, int part_idx ) -> int
+{
+    const auto dir_deg = static_cast<int>( std::lround( units::to_degrees( veh.cpart(
+            part_idx ).direction ) ) );
+    return ( ( dir_deg / 90 ) % 4 + 4 ) % 4;
+}
+
+struct vehicle_part_sprite_options {
+    const entity_view &view;
+    const vehicle &veh;
+    int part_idx;
+    const vpart_id &id;
+    int subtile = 0;
+};
+
+/// The tileset art the flat view draws for a vehicle part, without the "unknown" fallback.
+auto vehicle_part_sprite( const vehicle_part_sprite_options &options ) -> const tile_info &
+{
+    return options.view.cache.named( {
+        .category = C_VEHICLE_PART,
+        .id = "vp_" + options.id.str(),
+                             .tiles = options.view.tiles,
+                             .subtile = options.subtile,
+                             .rota = vehicle_part_rota( options.veh, options.part_idx ),
+                             .allow_unknown = false
+    } );
+}
+
+struct neighbour_trim_options {
+    const entity_view &view;
+    const vehicle &veh;
+    const std::map<point, vehicle_render_profile> &cells;
+    point mount;
+    /// -1 for the left side (smaller mount y), +1 for the right.
+    int side;
+};
+
+/// Inset of the open side taken from the nearest fore/aft neighbour on the same row that also
+/// has that side open and whose sprite is trimmed there.
+auto neighbour_trim( const neighbour_trim_options &options ) -> std::optional<float>
+{
+    const auto &cells = options.cells;
+    for( const auto dx : { 1, -1, 2, -2 } ) {
+        const auto it = cells.find( point( options.mount.x + dx, options.mount.y ) );
+        if( it == cells.end() || it->second.main_part_idx < 0 ||
+            cells.contains( point( options.mount.x + dx, options.mount.y + options.side ) ) ) {
+            continue;
+        }
+        auto mod = char{ 0 };
+        const auto &nid = options.veh.part_id_string( it->second.main_part_idx, false, mod );
+        if( nid.is_null() ) {
+            continue;
+        }
+        const auto &ninfo = options.view.cache.named( { .category = C_VEHICLE_PART, .id = "vp_" + nid.str(),
+                            .tiles = options.view.tiles, .allow_unknown = false } );
+        if( !ninfo.main().valid ) {
+            continue;
+        }
+        const auto nb = get_sprite_opaque_bounds( ninfo.main() );
+        if( !nb.has_trim ) {
+            continue;
+        }
+        if( options.side < 0 && nb.local_r_min > -0.48f ) {
+            return nb.local_r_min;
+        }
+        if( options.side > 0 && nb.local_r_max < 0.48f ) {
+            return nb.local_r_max;
+        }
+    }
+    return std::nullopt;
+}
+
 struct add_vehicles_options {
     quad_sink &sink;
     const entity_view &view;
@@ -867,21 +940,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             }
 
             const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
-            auto rota = 0;
-            if( veh.cpart( i ).direction != 0_degrees ) {
-                const auto dir_deg = static_cast<int>( std::lround( units::to_degrees( veh.cpart(
-                        i ).direction ) ) );
-                rota = ( ( dir_deg / 90 ) % 4 + 4 ) % 4;
-            }
-
-            const auto &info = view.cache.named( {
-                .category = C_VEHICLE_PART,
-                .id = "vp_" + id_str,
-                .tiles = view.tiles,
-                .subtile = subtile,
-                .rota = rota,
-                .allow_unknown = false
-            } );
+            const auto &info = vehicle_part_sprite( { .view = view, .veh = veh, .part_idx = i, .id = id, .subtile = subtile } );
 
             const auto *spr = info.sprite.valid ? &info.sprite : ( info.backdrop.valid ? &info.backdrop :
                               nullptr );
@@ -909,20 +968,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         }
                     }
                     const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
-                    auto rota = 0;
-                    if( veh.cpart( cell.main_part_idx ).direction != 0_degrees ) {
-                        const auto dir_deg = static_cast<int>( std::lround( units::to_degrees( veh.cpart(
-                                cell.main_part_idx ).direction ) ) );
-                        rota = ( ( dir_deg / 90 ) % 4 + 4 ) % 4;
-                    }
-                    const auto &info = view.cache.named( {
-                        .category = C_VEHICLE_PART,
-                        .id = "vp_" + id.str(),
-                                        .tiles = view.tiles,
-                                        .subtile = subtile,
-                                        .rota = rota,
-                                        .allow_unknown = false
-                    } );
+                    const auto &info = vehicle_part_sprite( { .view = view, .veh = veh, .part_idx = cell.main_part_idx, .id = id, .subtile = subtile } );
                     if( info.sprite.valid || info.backdrop.valid ) {
                         main_sprite_opt = info;
                     }
@@ -935,20 +981,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                      cell.accessory_part_idx ).id : veh.cpart( cell.accessory_part_idx ).proxy_part_id;
                 if( !id.is_null() ) {
                     const auto subtile = veh.cpart( cell.accessory_part_idx ).open ? open_ : 0;
-                    auto rota = 0;
-                    if( veh.cpart( cell.accessory_part_idx ).direction != 0_degrees ) {
-                        const auto dir_deg = static_cast<int>( std::lround( units::to_degrees( veh.cpart(
-                                cell.accessory_part_idx ).direction ) ) );
-                        rota = ( ( dir_deg / 90 ) % 4 + 4 ) % 4;
-                    }
-                    const auto &info = view.cache.named( {
-                        .category = C_VEHICLE_PART,
-                        .id = "vp_" + id.str(),
-                                        .tiles = view.tiles,
-                                        .subtile = subtile,
-                                        .rota = rota,
-                                        .allow_unknown = false
-                    } );
+                    const auto &info = vehicle_part_sprite( { .view = view, .veh = veh, .part_idx = cell.accessory_part_idx, .id = id, .subtile = subtile } );
                     if( info.sprite.valid || info.backdrop.valid ) {
                         roof_sprite_opt = info;
                     }
@@ -983,17 +1016,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         }
                     }
                     const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
-                    const auto dir_deg = static_cast<int>( std::lround( units::to_degrees(
-                            wheel_part.direction ) ) );
-                    const auto rota = ( ( dir_deg / 90 ) % 4 + 4 ) % 4;
-                    const auto &info = view.cache.named( {
-                        .category = C_VEHICLE_PART,
-                        .id = "vp_" + id.str(),
-                                        .tiles = view.tiles,
-                                        .subtile = subtile,
-                                        .rota = rota,
-                                        .allow_unknown = false
-                    } );
+                    const auto &info = vehicle_part_sprite( { .view = view, .veh = veh, .part_idx = wheel_idx, .id = id, .subtile = subtile } );
                     if( info.sprite.valid || info.backdrop.valid ) {
                         wheel_sprite_opt = info;
                     }
@@ -1041,56 +1064,16 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             if( !has_left ) {
                 if( my_bounds.has_trim && my_bounds.local_r_min > -0.48f ) {
                     r_l_rel = my_bounds.local_r_min;
-                } else {
-                    for( const auto dx : { 1, -1, 2, -2 } ) {
-                        const auto it = cells.find( point( cell.mount.x() + dx, cell.mount.y() ) );
-                        if( it != cells.end() &&
-                            cells.find( point( cell.mount.x() + dx, cell.mount.y() - 1 ) ) == cells.end() ) {
-                            if( it->second.main_part_idx >= 0 ) {
-                                auto mod = char{ 0 };
-                                const auto &nid = veh.part_id_string( it->second.main_part_idx, false, mod );
-                                if( !nid.is_null() ) {
-                                    const auto &ninfo = view.cache.named( { .category = C_VEHICLE_PART, .id = "vp_" + nid.str(),
-                                                                            .tiles = view.tiles, .allow_unknown = false } );
-                                    if( ninfo.main().valid ) {
-                                        const auto nb = get_sprite_opaque_bounds( ninfo.main() );
-                                        if( nb.has_trim && nb.local_r_min > -0.48f ) {
-                                            r_l_rel = nb.local_r_min;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                } else if( const auto trim = neighbour_trim( { .view = view, .veh = veh, .cells = cells, .mount = point( cell.mount.x(), cell.mount.y() ), .side = -1 } ) ) {
+                    r_l_rel = *trim;
                 }
             }
 
             if( !has_right ) {
                 if( my_bounds.has_trim && my_bounds.local_r_max < 0.48f ) {
                     r_r_rel = my_bounds.local_r_max;
-                } else {
-                    for( const auto dx : { 1, -1, 2, -2 } ) {
-                        const auto it = cells.find( point( cell.mount.x() + dx, cell.mount.y() ) );
-                        if( it != cells.end() &&
-                            cells.find( point( cell.mount.x() + dx, cell.mount.y() + 1 ) ) == cells.end() ) {
-                            if( it->second.main_part_idx >= 0 ) {
-                                auto mod = char{ 0 };
-                                const auto &nid = veh.part_id_string( it->second.main_part_idx, false, mod );
-                                if( !nid.is_null() ) {
-                                    const auto &ninfo = view.cache.named( { .category = C_VEHICLE_PART, .id = "vp_" + nid.str(),
-                                                                            .tiles = view.tiles, .allow_unknown = false } );
-                                    if( ninfo.main().valid ) {
-                                        const auto nb = get_sprite_opaque_bounds( ninfo.main() );
-                                        if( nb.has_trim && nb.local_r_max < 0.48f ) {
-                                            r_r_rel = nb.local_r_max;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                } else if( const auto trim = neighbour_trim( { .view = view, .veh = veh, .cells = cells, .mount = point( cell.mount.x(), cell.mount.y() ), .side = 1 } ) ) {
+                    r_r_rel = *trim;
                 }
             }
 
