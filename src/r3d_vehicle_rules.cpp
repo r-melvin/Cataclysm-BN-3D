@@ -37,7 +37,9 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
             !info.has_flag( "OPENABLE" ) ) {
             layer.roles.push_back( vehicle_render_role::opaque_structure );
         }
-        if( info.has_flag( "DOOR" ) || info.location == "door" ) {
+        // Stock vehicle doors are openable obstacles; window curtains and shutters are not.
+        if( info.has_flag( "DOOR" ) || info.location == "door" ||
+            ( info.has_flag( "OPENABLE" ) && info.has_flag( "OBSTACLE" ) ) ) {
             layer.roles.push_back( vehicle_render_role::door );
         }
         if( info.has_flag( "OPENABLE" ) ) {

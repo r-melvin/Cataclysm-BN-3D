@@ -149,8 +149,8 @@ TEST_CASE("r3d_wheel_layer_prefers_intact_over_broken", "[r3d][vehicle]") {
         return r3d::vehicle_render_layer{
             .part_idx = idx, .roles = {r3d::vehicle_render_role::wheel}, .broken = broken};
     };
-    const auto detail = r3d::vehicle_render_layer{
-        .part_idx = 9, .roles = {r3d::vehicle_render_role::detail}};
+    const auto detail =
+        r3d::vehicle_render_layer{.part_idx = 9, .roles = {r3d::vehicle_render_role::detail}};
     CHECK(r3d::preferred_wheel_layer(std::vector<r3d::vehicle_render_layer>{}) == nullptr);
     CHECK(r3d::preferred_wheel_layer(std::vector{detail}) == nullptr);
     const auto broken_first = std::vector{detail, wheel_layer(1, true), wheel_layer(2, false)};
@@ -197,9 +197,7 @@ TEST_CASE("r3d_only_floored_vehicle_tiles_raise_the_item_surface", "[r3d][vehicl
     const auto height_with = [](const std::vector<const char*>& ids) {
         auto veh = vehicle(vproto_id("none"), 0, 0);
         const auto mount = tripoint_mnt_veh::zero();
-        for (const auto id : ids) {
-            REQUIRE(veh.install_part(mount, vpart_id(id), true) >= 0);
-        }
+        for (const auto id : ids) { REQUIRE(veh.install_part(mount, vpart_id(id), true) >= 0); }
         return r3d::vehicle_surface_height(veh, mount);
     };
     CHECK(height_with({"frame_horizontal"}) == Approx(0.0f));
@@ -242,6 +240,8 @@ TEST_CASE("r3d_open_door_stops_being_a_tall_wall", "[r3d][vehicle]") {
     CHECK(profile.is_tall_cabin);
     CHECK(profile.height == r3d::vehicle_cabin_h);
     CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::openable));
+    CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::door));
+    CHECK(profile.is_door);
     // The stock "door" part is also BOARDABLE, so even a closed door counts as interior and floor.
     CHECK(has_layer_role(profile, door, r3d::vehicle_render_role::interior));
     CHECK(profile.is_interior);
@@ -258,6 +258,38 @@ TEST_CASE("r3d_open_door_stops_being_a_tall_wall", "[r3d][vehicle]") {
         return layer.part_idx == door && layer.open;
     }));
     CHECK(r3d::vehicle_surface_height(veh, mount) == Approx(r3d::chassis_floor_h));
+}
+
+TEST_CASE("r3d_door_role_covers_real_doors_but_not_window_coverings", "[r3d][vehicle]") {
+    const auto check_door_role = [](const std::vector<const char*>& ids, const bool expected) {
+        auto veh = vehicle(vproto_id("none"), 0, 0);
+        const auto mount = tripoint_mnt_veh::zero();
+        const auto parts = install_all(veh, mount, ids);
+        for (const auto open : {false, true}) {
+            CAPTURE(open);
+            veh.part(parts.back()).open = open;
+            const auto profile = r3d::vehicle_profile(veh, mount);
+            CHECK(
+                has_layer_role(profile, parts.back(), r3d::vehicle_render_role::door) == expected);
+            CHECK(profile.is_door == expected);
+        }
+        veh.set_hp(veh.part(parts.back()), 0);
+        REQUIRE(veh.cpart(parts.back()).is_broken());
+        const auto broken = r3d::vehicle_profile(veh, mount);
+        CHECK(has_layer_role(broken, parts.back(), r3d::vehicle_render_role::door) == expected);
+        CHECK_FALSE(broken.is_door);
+    };
+    for (const auto id :
+         {"door", "door_opaque", "door_sliding", "door_trunk", "hatch", "hatch_opaque",
+          "door_internal", "door_shutter"}) {
+        CAPTURE(id);
+        check_door_role({"frame_horizontal", id}, true);
+    }
+    for (const auto id : {"v_curtain", "v_shutter"}) {
+        CAPTURE(id);
+        check_door_role({"frame_horizontal", "windshield_horizontal_front", id}, false);
+    }
+    check_door_role({"frame_horizontal", "windshield_horizontal_front"}, false);
 }
 
 TEST_CASE("r3d_broken_non_wheel_parts_keep_layers_but_drop_profile_flags", "[r3d][vehicle]") {
