@@ -1346,12 +1346,12 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                                .r_min = r_l_rel, .r_max = r_r_rel } );
                 }
 
-                // 1b. Emit solid watertight roof cap at vehicle_cabin_h (0.82f) with tumblehome
+                // 1b. Emit solid watertight roof cap on top of the cell walls with tumblehome
                 const auto p0 = transform.apply( f_top_roof, r_l_roof );
                 const auto p1 = transform.apply( f_top_roof, r_r_roof );
                 const auto p2 = transform.apply( f_bot_roof, r_r_roof );
                 const auto p3 = transform.apply( f_bot_roof, r_l_roof );
-                const auto z_roof = static_cast<float>( z_base + vehicle_cabin_h );
+                const auto z_roof = static_cast<float>( z_base + roof_cap_height( cell.height ) );
                 const auto c_roof = corners_t{{
                         { p0.x, p0.y, z_roof }, { p1.x, p1.y, z_roof },
                         { p2.x, p2.y, z_roof }, { p3.x, p3.y, z_roof }
@@ -1388,7 +1388,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 const auto p1 = transform.apply( f_top_roof, r_r_roof );
                 const auto p2 = transform.apply( f_bot_roof, r_r_roof );
                 const auto p3 = transform.apply( f_bot_roof, r_l_roof );
-                const auto z = z_base + ( cell.has_roof ? vehicle_cabin_h : cell.height ) + 0.003f;
+                const auto z = z_base + ( cell.has_roof ? roof_cap_height( cell.height ) : cell.height ) + 0.003f;
                 const auto corners = corners_t{{ {p0.x, p0.y, z}, {p1.x, p1.y, z}, {p2.x, p2.y, z}, {p3.x, p3.y, z} }};
                 sink.add_colored( { .sprite = rs, .corners = corners, .uvs = make_sprite_uvs( rs ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
             }

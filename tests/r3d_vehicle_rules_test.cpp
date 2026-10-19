@@ -160,6 +160,14 @@ TEST_CASE("r3d_wheel_layer_prefers_intact_over_broken", "[r3d][vehicle]") {
     CHECK(r3d::preferred_wheel_layer(only_broken)->part_idx == 3);
 }
 
+TEST_CASE("r3d_roof_cap_sits_on_the_wall_top", "[r3d][vehicle]") {
+    // Half-height panels and frames keep their wall top; the roof rests on it.
+    CHECK(r3d::roof_cap_height(r3d::vehicle_body_h) == Approx(r3d::vehicle_body_h));
+    CHECK(r3d::roof_cap_height(r3d::vehicle_cabin_h) == Approx(r3d::vehicle_cabin_h));
+    // Wall-less floor cells have nothing to rest on and keep the cabin roof line.
+    CHECK(r3d::roof_cap_height(r3d::chassis_floor_h) == Approx(r3d::vehicle_cabin_h));
+}
+
 #if defined(TILES)
 #    include "cata_tiles.h"
 #    include "cata_utility.h"
@@ -264,7 +272,7 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
     auto roof_quads = 0;
     for (auto i = size_t{0}; i + 3 < roofed.vertices.size(); i += 4) {
         const auto& v = roofed.vertices[i];
-        if (std::abs(v.z - (r3d::floor_height + 0.02f + r3d::vehicle_cabin_h)) < 0.001f) {
+        if (std::abs(v.z - (r3d::floor_height + 0.02f + r3d::vehicle_body_h)) < 0.001f) {
             ++roof_quads;
         }
         // No quad may sample the missing-art roof placeholder over the body cap.
@@ -273,11 +281,15 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
             const auto& corner = roofed.vertices[i + j];
             placeholder &=
                 corner.u >= roof_art.u0 && corner.u <= roof_art.u1 && corner.v >= roof_art.v0
-                && corner.v <= roof_art.v1 && corner.z > r3d::vehicle_cabin_h;
+                && corner.v <= roof_art.v1 && corner.z > r3d::vehicle_body_h;
         }
         CHECK_FALSE(placeholder);
     }
     CHECK(roof_quads > 0);
+    // The roof rests on the half-height panel walls instead of floating at the cabin line.
+    CHECK(std::ranges::none_of(roofed.vertices, [](const auto& vertex) {
+        return std::abs(vertex.z - (r3d::floor_height + 0.02f + r3d::vehicle_cabin_h)) < 0.001f;
+    }));
     view.light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(0, 0, 0); };
     CHECK(r3d::build_vehicle_mesh(view).empty());
 }

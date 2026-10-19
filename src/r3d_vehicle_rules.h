@@ -61,6 +61,9 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
 /// The wheel layer to draw for a mount: an intact wheel wins over a broken one.
 auto preferred_wheel_layer( std::span<const vehicle_render_layer> layers ) -> const vehicle_render_layer *; // *NOPAD*
 
+/// Height of the roof cap above a cell: on top of walls that reach body height, otherwise the cabin line.
+auto roof_cap_height( float wall_height ) -> float;
+
 struct panel_outline_options {
     panel_corner corner;
     float front;

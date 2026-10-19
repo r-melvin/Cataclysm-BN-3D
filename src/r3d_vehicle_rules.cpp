@@ -123,6 +123,11 @@ auto preferred_wheel_layer( std::span<const vehicle_render_layer> layers ) -> co
     return any != layers.end() ? &*any : nullptr;
 }
 
+auto roof_cap_height( float wall_height ) -> float
+{
+    return wall_height >= vehicle_body_h ? wall_height : vehicle_cabin_h;
+}
+
 auto panel_outline( const panel_outline_options &options ) -> std::vector<std::array<float, 2>>
 {
     const auto &o = options;
