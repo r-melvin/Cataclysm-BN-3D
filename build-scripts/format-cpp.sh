@@ -75,11 +75,17 @@ elif (( $# == 0 )); then
 fi
 
 if (( ${#astyle_sources[@]} > 0 )); then
-    if ! command -v astyle >/dev/null 2>&1; then
-        echo "error: Artistic Style executable was not found" >&2
+    if command -v astyle >/dev/null 2>&1 &&
+        [[ "$(astyle --version 2>&1)" == "Artistic Style Version 3.4.7" ]]; then
+        astyle --options=.astylerc -n "${astyle_sources[@]}"
+    elif command -v uvx >/dev/null 2>&1; then
+        uvx --from astyle-py==1.1.0 python tools/r3d_spike/astyle_347.py "${astyle_sources[@]}"
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 tools/r3d_spike/astyle_347.py "${astyle_sources[@]}"
+    else
+        echo "error: install astyle 3.4.7, or Python 3 with astyle-py==1.1.0 (uvx is supported)" >&2
         exit 1
     fi
-    astyle --options=.astylerc -n "${astyle_sources[@]}"
 elif (( $# == 0 )); then
     echo "warning: no astyle C++ files available" >&2
 fi

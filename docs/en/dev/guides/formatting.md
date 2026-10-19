@@ -41,9 +41,20 @@ sudo dnf install astyle clang-tools-extra
 brew install astyle clang-format
 ```
 
+This fork pins top-level C++ formatting to **astyle 3.4.7**: astyle 3.6.x
+mis-indents trailing-return function bodies. The helper accepts a native 3.4.7;
+otherwise it uses `uvx --from astyle-py==1.1.0` to run the bundled 3.4.7 engine.
+Install [uv](https://docs.astral.sh/uv/) for this fallback, or install
+`astyle-py==1.1.0` in the active Python 3 environment. The first `uvx` run needs
+network access; subsequent runs can use its cache. An incompatible system astyle
+is never used to format files. Missing dependencies produce setup instructions.
+
 ### Using the helper
 
 ```sh
+# Prefer touched files during normal development.
+bash build-scripts/format-cpp.sh src/example.cpp tests/example_test.cpp
+# Or format the entire C++ tree.
 just fmt-cpp
 # or, for all staged file types
 just fmt
