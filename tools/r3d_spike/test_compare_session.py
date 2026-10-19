@@ -171,7 +171,8 @@ class SessionLaunchTest(unittest.TestCase):
             root = Path(temporary)
             shaders = root / "data/shaders"
             shaders.mkdir(parents=True)
-            for name in ("r3d_block_vertex.spv", "r3d_block_fragment.spv"):
+            for name in ("r3d_block_vertex.spv", "r3d_block_fragment.spv",
+                         "r3d_silhouette_fragment.spv"):
                 (shaders / name).write_bytes(b"shader")
             result = subprocess.CompletedProcess([], 0, "old build", "")
             with mock.patch.object(session_tool, "ROOT", root), \
@@ -184,6 +185,9 @@ class SessionLaunchTest(unittest.TestCase):
                 session_tool.preflight(root / "game", {"SDL_GPU_DRIVER": "vulkan"}, "darwin")
                 for name in ("r3d_block_vertex.msl", "r3d_block_fragment.msl"):
                     (shaders / name).write_bytes(b"metal shader")
+                with self.assertRaisesRegex(ValueError, "r3d_silhouette_fragment.msl"):
+                    session_tool.preflight(root / "game", {}, "darwin")
+                (shaders / "r3d_silhouette_fragment.msl").write_bytes(b"metal shader")
                 session_tool.preflight(root / "game", {}, "darwin")
 
     def test_launcher_isolates_options_and_clears_inherited_automation(self):
@@ -228,7 +232,7 @@ assert (session / "art-assets/presentation_profiles.json").is_file()
             shaders = checkout / "data/shaders"
             shaders.mkdir(parents=True)
             for suffix in ("spv", "msl", "dxil"):
-                for name in ("r3d_block_vertex", "r3d_block_fragment"):
+                for name in ("r3d_block_vertex", "r3d_block_fragment", "r3d_silhouette_fragment"):
                     (shaders / f"{name}.{suffix}").write_bytes(b"shader")
             output = root / "session"
             env = dict(os.environ, SDL_RENDER_DRIVER="software", CATA_R3D_COMPARE="stale",

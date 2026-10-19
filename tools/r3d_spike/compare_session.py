@@ -329,7 +329,8 @@ def preflight(binary, env, platform=sys.platform):
     suffix = {"vulkan": "spv", "direct3d12": "dxil", "metal": "msl"}.get(backend)
     if suffix is None:
         suffix = "msl" if platform == "darwin" else "dxil" if platform == "win32" else "spv"
-    missing = [f"{name}.{suffix}" for name in ("r3d_block_vertex", "r3d_block_fragment")
+    missing = [f"{name}.{suffix}" for name in ("r3d_block_vertex", "r3d_block_fragment",
+                                                "r3d_silhouette_fragment")
                if not (ROOT / "data" / "shaders" / f"{name}.{suffix}").is_file()]
     if missing:
         raise ValueError("Missing compiled 3D shaders: " + ", ".join(missing) +
