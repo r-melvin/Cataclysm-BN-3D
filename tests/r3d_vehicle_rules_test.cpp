@@ -6,6 +6,7 @@
 #include "vehicle/vehicle_part.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <map>
 #include <ranges>
@@ -385,19 +386,45 @@ TEST_CASE("r3d_broken_wheel_does_not_hide_intact_wheel_on_same_mount", "[r3d][ve
     CHECK(layer->broken);
 }
 
-TEST_CASE("r3d_several_panels_on_one_mount_first_installed_corner_wins", "[r3d][vehicle]") {
+TEST_CASE(
+    "r3d_several_panels_on_one_mount_choose_a_corner_independent_of_install_order",
+    "[r3d][vehicle]") {
+    struct panel_example {
+        const char* id;
+        r3d::panel_corner corner;
+    };
+    // The profile can represent one corner: use NW, NE, SW, SE priority for conflicts.
+    const auto panels = std::array{
+        panel_example{.id = "halfboard_nw", .corner = r3d::panel_corner::front_left},
+        panel_example{.id = "halfboard_ne", .corner = r3d::panel_corner::front_right},
+        panel_example{.id = "halfboard_sw", .corner = r3d::panel_corner::rear_left},
+        panel_example{.id = "halfboard_se", .corner = r3d::panel_corner::rear_right}};
+    for (auto first = size_t{0}; first < panels.size(); ++first) {
+        for (auto second = first + 1; second < panels.size(); ++second) {
+            for (const auto reverse : {false, true}) {
+                CAPTURE(panels[first].id, panels[second].id, reverse);
+                auto veh = vehicle(vproto_id("none"), 0, 0);
+                const auto mount = tripoint_mnt_veh::zero();
+                const auto parts = install_all(
+                    veh, mount,
+                    {"frame_horizontal", panels[reverse ? second : first].id,
+                     panels[reverse ? first : second].id});
+                CHECK(r3d::vehicle_profile(veh, mount).corner == panels[first].corner);
+                // Broken panels keep their sprite layer but cannot override an intact corner.
+                const auto preferred = parts[reverse ? 2 : 1];
+                veh.set_hp(veh.part(preferred), 0);
+                REQUIRE(veh.cpart(preferred).is_broken());
+                CHECK(r3d::vehicle_profile(veh, mount).corner == panels[second].corner);
+            }
+        }
+    }
+}
+
+TEST_CASE("r3d_unshaped_panels_do_not_erase_an_authored_corner", "[r3d][vehicle]") {
     auto veh = vehicle(vproto_id("none"), 0, 0);
     const auto mount = tripoint_mnt_veh::zero();
-    install_all(veh, mount, {"frame_horizontal", "halfboard_nw"});
-    REQUIRE(r3d::vehicle_profile(veh, mount).corner == r3d::panel_corner::front_left);
-    install_all(veh, mount, {"halfboard_se"});
-    const auto profile = r3d::vehicle_profile(veh, mount);
-    // Observed: parts_at_relative() lists the earliest-installed panel last, and each panel
-    // overwrites the corner, so the first installed shaped panel wins.
-    CHECK(profile.corner == r3d::panel_corner::front_left);
-    auto reversed = vehicle(vproto_id("none"), 0, 0);
-    install_all(reversed, mount, {"frame_horizontal", "halfboard_se", "halfboard_nw"});
-    CHECK(r3d::vehicle_profile(reversed, mount).corner == r3d::panel_corner::rear_right);
+    install_all(veh, mount, {"frame_horizontal", "halfboard_se", "halfboard_horizontal"});
+    CHECK(r3d::vehicle_profile(veh, mount).corner == r3d::panel_corner::rear_right);
 }
 
 TEST_CASE("r3d_main_part_is_the_highest_z_order_below_nine", "[r3d][vehicle]") {

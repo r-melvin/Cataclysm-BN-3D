@@ -96,10 +96,17 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
         if( half_panel || full_panel ) {
             // The loader appends the JSON shapes[].direction token to each generated id.
             const auto &id = info.id.str();
-            if( id.ends_with( "_nw" ) ) { data.corner = panel_corner::front_left; }
-            else if( id.ends_with( "_ne" ) ) { data.corner = panel_corner::front_right; }
-            else if( id.ends_with( "_sw" ) ) { data.corner = panel_corner::rear_left; }
-            else if( id.ends_with( "_se" ) ) { data.corner = panel_corner::rear_right; }
+            auto corner = panel_corner::none;
+            if( id.ends_with( "_nw" ) ) { corner = panel_corner::front_left; }
+            else if( id.ends_with( "_ne" ) ) { corner = panel_corner::front_right; }
+            else if( id.ends_with( "_sw" ) ) { corner = panel_corner::rear_left; }
+            else if( id.ends_with( "_se" ) ) { corner = panel_corner::rear_right; }
+            // One profile represents one corner. Conflicts use NW, NE, SW, SE priority (enum
+            // order), independent of installation order; unshaped panels cannot erase it.
+            if( corner != panel_corner::none &&
+                ( data.corner == panel_corner::none || corner < data.corner ) ) {
+                data.corner = corner;
+            }
         }
         data.is_windshield |= has_role( vehicle_render_role::glass );
         data.is_openable |= has_role( vehicle_render_role::openable );
