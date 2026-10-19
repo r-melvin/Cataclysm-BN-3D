@@ -89,6 +89,43 @@ currently shown as annotations in the gallery rather than changing palette
 colors. Comparison packages preserve the profile file and render a scaled top
 footprint and side elevation beside the source sprite and captured views.
 
+
+Wall profiles also support `face_sources` for explicit side and top materials.
+These are opt-in entries in the same version-1 file, for example:
+
+```json
+{
+  "category": "terrain",
+  "id": "t_wall",
+  "face_sources": [
+    {
+      "face": "side",
+      "tileset": "UltimateCataclysm",
+      "sprite": "t_wall_edge",
+      "rotation": 0,
+      "crop": [0.0, 0.25, 1.0, 1.0]
+    }
+  ]
+}
+```
+
+The example illustrates the format, not a recommended crop for every tileset.
+`tileset` is the exact tileset option ID; `sprite` must exist in that tileset.
+The source must name a concrete foreground sprite, such as `t_wall_edge`,
+rather than a multitile container without foreground art. Optional `rotation`
+is in clockwise quarter turns (0 to 3). `crop` is
+[left, top, right, bottom] in normalized, unrotated source-sprite coordinates;
+it defaults to the whole sprite. A donor retains its own texture sheet and
+ownership. One source per face per tileset is allowed. Invalid profiles are
+reported through asset-loading warnings; absent donors and other tilesets keep
+the normal wall material. Installing/reloading profiles rebuilds affected
+cached geometry. The renderer does not change terrain collision, visibility,
+door/window states or native part colours to apply these textures.
+
+Currently these face sources apply to solid wall terrain. Window/door surrounds,
+furniture families, vehicle layers and runtime palette material regions remain
+in [the presentation backlog](../../../../BACKLOG.md#r3d-03-complete-the-presentation-profile-shape-and-material-contract).
+
 ## Renderer diagnostics
 
 Set `CATA_R3D_DEBUG_CHUNKS=1` before launching to log a chunk-work sample after

@@ -42,7 +42,8 @@ sprites available in the shipped tilesets and marks the states actually present
 in the checkpoint. Items with entries in
 `data/raw/r3d/presentation_profiles.json` also show a scaled top footprint and
 side elevation with their support point, plus material-region names and VOX
-palette slots. The profile file is bundled with the tileset sources so gallery
+palette slots. Profiles with wall face donors list their exact tileset/sprite
+identities, rotations and crop bounds for review. The profile file is bundled with the tileset sources so gallery
 values match the renderer build. Separate gameplay checkpoints are needed to compare rendered
 geometry for states absent from this scene.
 No complete marker is written if saving or either renderer fails. A genuine disk-write

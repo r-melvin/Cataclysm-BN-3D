@@ -171,3 +171,4 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 
 - After adding a new test source, reconfigure CMake: the test-source glob is not watched. Verify the new cases appear with `--list-test-names-only` before counting their assertions as validation.
 - Test-only inspection of selected saved JSON fields must call `allow_omitted_members()` on each partially inspected object. Keep production deserialization strict; unexpected debug-log errors still fail validation.
+- When removing a profile/schema field, search all renderer, gallery, documentation and test consumers for remaining references before rebuilding.

@@ -464,6 +464,8 @@ auto advance_assets( state &s ) -> void
             DebugLog( DL::Warn, DC::Main ) << "r3d asset: " << warning;
         }
         s.presentation_profiles = std::move( prepared->profiles );
+        release_all_chunks( s );
+        s.cache.set_presentation_profiles( s.presentation_profiles );
         s.pending_assets = std::move( *prepared );
         s.asset_changed_frame = s.frame + 1;
     }
@@ -2015,6 +2017,7 @@ auto shutdown() -> void
     s.vehicle_vox_parts.clear();
     s.item_vox_models.clear();
     s.presentation_profiles.clear();
+    s.cache.set_presentation_profiles( {} );
     s.asset_preparation.cancel();
     s.pending_assets.reset();
     s.asset_request_started = false;
@@ -2256,6 +2259,7 @@ auto draw( const draw_options &options ) -> bool
         s.vehicle_vox_parts.clear();
         s.item_vox_models.clear();
         s.presentation_profiles.clear();
+        s.cache.set_presentation_profiles( {} );
         s.pending_assets.reset();
         s.asset_preparation.request( asset_root );
         s.asset_request_started = true;

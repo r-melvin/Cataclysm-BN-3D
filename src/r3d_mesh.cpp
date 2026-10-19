@@ -3,6 +3,7 @@
 #include "r3d_mesh.h"
 #include "r3d_door_geometry.h"
 #include "r3d_sprite_voxels.h"
+#include "r3d_profile_materials.h"
 
 #include <algorithm>
 #include <array>
@@ -1158,6 +1159,12 @@ auto tile_info_cache::set_thin_walls( bool on ) -> void
     }
 }
 
+auto tile_info_cache::set_presentation_profiles( presentation_profile_map profiles ) -> void
+{
+    profiles_ = std::move( profiles );
+    clear();
+}
+
 auto tile_info_cache::set_voxel_items( bool on ) -> void
 {
     if( on != voxel_items_ ) {
@@ -1351,6 +1358,37 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
                 // The cap a shade lighter than the sides, so the top of a wall reads as a top
                 // even where the paint is one colour.
                 info.cap_tint = lighten( wall_tint( art.top_color, preset ), 1.18f );
+            }
+        }
+    }
+    // Authored wall faces override presentation only; native geometry/knowledge stays intact.
+    if( info.wall_connection && info.sh.kind == shape_kind::block ) {
+        const auto profile = profiles_.find( presentation_profile_key( "terrain", t.id.str() ) );
+        const auto *tileset = tiles.current_tileset();
+        if( profile != profiles_.end() && tileset ) {
+            for( const auto &source : profile->second.face_sources ) {
+                const auto *source_tile = tileset->find_tile_type( source.sprite );
+                if( source.tileset != tileset->get_tileset_id() || !source_tile ) { continue; }
+                // A donor must name concrete foreground art, not a multitile container
+                // whose missing foreground would choose an unrelated fallback piece.
+                const auto *foreground = source_tile->sprite.fg.pick( 0 );
+                if( !foreground || foreground->empty() ) { continue; }
+                const auto data = tiles.get_sprite_draw_data( {
+                    .id = source.sprite, .category = C_NONE, .pos = tripoint_bub_ms( 0, 0, 0 ),
+                                .rotation = source.rotation
+                } );
+                if( !data ) { continue; }
+                const auto sprite = to_sprite_ref( *data );
+                const auto cropped = crop_profile_sprite( { .sprite = sprite, .source = source,
+                                     .tileset = tileset->get_tileset_id() } );
+                if( !cropped ) { continue; }
+                if( source.face == profile_face::side ) {
+                    info.side = *cropped;
+                    info.side_tint = 0xffffffu;
+                } else {
+                    info.cap = *cropped;
+                    info.cap_tint = 0xffffffu;
+                }
             }
         }
     }

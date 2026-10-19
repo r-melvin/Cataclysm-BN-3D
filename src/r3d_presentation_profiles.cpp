@@ -34,6 +34,46 @@ auto valid_positive_size( const std::array<float, 3> &size ) -> bool
     } );
 }
 
+auto read_face_sources( const JsonObject &entry ) -> std::vector<profile_face_source>
+{
+    auto sources = std::vector<profile_face_source> {};
+    if( !entry.has_member( "face_sources" ) ) { return sources; }
+    for( const auto source : entry.get_array( "face_sources" ) ) {
+        const auto object = source.get_object();
+        const auto face = object.get_string( "face" );
+        if( face != "side" && face != "top" ) {
+            object.throw_error( "wall face must be side or top", "face" );
+        }
+        const auto selected_face = face == "side" ? profile_face::side : profile_face::top;
+        auto donor = profile_face_source{
+            .face = selected_face,
+            .tileset = object.get_string( "tileset" ),
+                             .sprite = object.get_string( "sprite" ),
+                             .rotation = object.get_int( "rotation", 0 )
+        };
+        if( donor.tileset.empty() || donor.sprite.empty() ||
+            donor.rotation < 0 || donor.rotation > 3 ) {
+            object.throw_error( "invalid face source identity or orientation" );
+        }
+        if( object.has_member( "crop" ) ) {
+            const auto crop = object.get_array( "crop" );
+            if( crop.size() != 4 ) { object.throw_error( "expected four crop coordinates", "crop" ); }
+            for( auto i = size_t( 0 ); i < donor.crop.size(); ++i ) {
+                donor.crop[i] = static_cast<float>( crop.get_float( i ) );
+            }
+        }
+        const auto &crop = donor.crop;
+        const auto valid_coordinates = std::ranges::all_of( crop, []( const auto value ) { return value >= 0.0f && value <= 1.0f; } );
+        if( !valid_coordinates || crop[0] >= crop[2] || crop[1] >= crop[3] ) {
+            object.throw_error( "crop must be a nonempty rectangle within the source sprite", "crop" );
+        }
+        const auto duplicate = std::ranges::any_of( sources, [&donor]( const auto & existing ) { return existing.tileset == donor.tileset && existing.face == donor.face; } );
+        if( duplicate ) { object.throw_error( "duplicate face source for this tileset" ); }
+        sources.push_back( std::move( donor ) );
+    }
+    return sources;
+}
+
 } // namespace
 
 auto load_presentation_profiles( std::istream &input ) -> presentation_profile_map
@@ -53,7 +93,8 @@ auto load_presentation_profiles( std::istream &input ) -> presentation_profile_m
         auto profile = presentation_profile {
             .size = read_vec3( entry, "size", {} ),
             .support_anchor = read_vec3( entry, "support_anchor", { 0.5f, 0.5f, 0.0f } ),
-            .depth_fraction = static_cast<float>( entry.get_float( "depth_fraction", 0.0 ) )
+            .depth_fraction = static_cast<float>( entry.get_float( "depth_fraction", 0.0 ) ),
+            .face_sources = read_face_sources( entry )
         };
         if( !valid_positive_size( profile.size ) || profile.depth_fraction < 0.0f ||
             profile.depth_fraction > 4.0f ||

@@ -44,10 +44,19 @@ Sources: [agent guidelines](AGENTS.md),
 
 ## R3D-03: Complete the presentation-profile shape and material contract
 
-**Status: design/implementation follow-up.** Size, support-anchor and depth
-profiles work. Material regions are gallery annotations, not runtime material
-mappings. Geometry-family overrides, source face regions and per-tileset texture
-donors from the original proposal are not implemented.
+**Status: partially implemented; broader shape/material contract remains open.**
+Size, support-anchor and depth profiles work. Solid wall terrain now supports
+per-tileset side/top donors and normalized source crops, with exact sprite
+identity checks, preserved source-sheet ownership, fallback and profile-triggered
+cache/chunk invalidation. The renderer guide documents the opt-in format and
+comparison galleries list donor identities and crops. Both binaries build;
+154 combined renderer/onboarding tests pass (37,051 assertions), including real
+wall mesh sheet/crop checks, invalid donors and profile removal. All 14 tooling
+tests pass. A private Xvfb/software-Vulkan profile-install smoke captures a frame
+and exits 0 without validation errors (`/tmp/bn-face-profile-smoke.*`).
+Material regions are still gallery annotations, not runtime palette mappings.
+Geometry-family overrides and equivalent furniture/window/door/vehicle face
+consumers from the original proposal remain outstanding.
 
 Define those fields for a bin, chair, locker, window, door, tree, loose item and
 vehicle corner. Bind sprite crops to a tileset/sprite identity; cover footprint,

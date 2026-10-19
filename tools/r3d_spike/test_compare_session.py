@@ -37,7 +37,7 @@ class SessionPackagingTest(unittest.TestCase):
                 directory.mkdir(parents=True)
                 image = bytes.fromhex("89504e470d0a1a0a0000000d49484452") + struct.pack(">II", 16, 16)
                 (directory / "atlas.png").write_bytes(image)
-                tiles = [{"id": "f_chair", "fg": 1}, {"id": "carbondioxide_tank", "fg": 1},
+                tiles = [{"id": "t_floor", "fg": 0}, {"id": "f_chair", "fg": 1}, {"id": "carbondioxide_tank", "fg": 1},
                          {"id": "t_door_c", "fg": 2},
                          {"id": "t_door_o", "fg": 3}, {"id": "t_door_b", "fg": 4}]
                 (directory / "tile_config.json").write_text(json.dumps({
@@ -50,7 +50,10 @@ class SessionPackagingTest(unittest.TestCase):
                 "category": "item", "id": "carbondioxide_tank", "size": [0.48, 0.34, 0.86],
                 "support_anchor": [0.5, 0.5, 0], "depth_fraction": 0.38,
                 "material_regions": [{"name": "tank_shell", "role": "painted metal",
-                                      "palette_indices": [1]}]}]}))
+                                      "palette_indices": [1]}]}, {
+                "category": "terrain", "id": "t_floor",
+                "face_sources": [{"face": "top", "tileset": "UltimateCataclysm",
+                                  "sprite": "<source>", "crop": [0.25, 0.25, 0.75, 0.75]}]}]}))
             with mock.patch.object(session_tool, "ROOT", root):
                 session_tool.render_art_gallery(capture)
             page = (capture / "art-gallery/index.html").read_text()
@@ -62,6 +65,10 @@ class SessionPackagingTest(unittest.TestCase):
             self.assertIn("Presentation profile", page)
             self.assertIn('<svg class="profile-diagram"', page)
             self.assertIn("support anchors", page)
+            self.assertIn("Face sources", page)
+            self.assertIn("&lt;source&gt;", page)
+            self.assertNotIn("<source>", page)
+            self.assertIn("crop [0.25, 0.25, 0.75, 0.75]", page)
             self.assertIn("tank_shell", page)
             self.assertIn("painted metal", page)
             self.assertIn("<td>closed</td>", page)

@@ -16,6 +16,7 @@
 
 #include "coordinates.h"
 #include "r3d_gpu.h"
+#include "r3d_presentation_profiles.h"
 #include "r3d_sprite_voxels.h"
 #include "r3d_shapes.h"
 #include "r3d_wall_rules.h"
@@ -131,6 +132,8 @@ class tile_info_cache
         auto set_voxel_items( bool on ) -> void;
         /// Switch wall profiles and clear cached geometry inputs.
         auto set_thin_walls( bool on ) -> void;
+        /// Install newly prepared wall-face donors and invalidate derived texture lookups.
+        auto set_presentation_profiles( presentation_profile_map profiles ) -> void;
         auto wall_half_width() const -> float {
             return thin_walls_ ? wall_half_thickness : 0.5f;
         }
@@ -172,6 +175,7 @@ class tile_info_cache
         auto ceiling( uint32_t &tint ) const -> sprite_ref;
 
     private:
+        presentation_profile_map profiles_;
         std::unordered_map<int, tile_info> terrain_;
         std::unordered_map<int, tile_info> furniture_;
         std::unordered_map<std::string, tile_info> named_;

@@ -215,6 +215,14 @@ def render_art_gallery(capture, assets_root=None):
             anchor = profile.get("support_anchor", [0.5, 0.5, 0])
             regions = profile.get("material_regions", [])
             region_list = "".join(f'<li>{html.escape(region.get("name", "region"))}: {html.escape(region.get("role", "unassigned"))} (palette {html.escape(", ".join(map(str, region.get("palette_indices", []))))})</li>' for region in regions)
+            face_list = "".join(
+                f'<li>{html.escape(str(source.get("face", "face")))}: '
+                f'{html.escape(str(source.get("tileset", "")))}/'
+                f'{html.escape(str(source.get("sprite", "")))}; '
+                f'rotation {html.escape(str(source.get("rotation", 0)))}; '
+                f'crop {html.escape(str(source.get("crop", [0, 0, 1, 1])))}</li>'
+                for source in profile.get("face_sources", []))
+            face_details = f'<strong>Face sources</strong><ul>{face_list}</ul>' if face_list else ""
             forward, right, up = (value if value > 0 else 1.0 for value in size)
             scale = 72 / max(forward, right, up)
             footprint_width, footprint_depth, elevation_width, elevation_height = (
@@ -235,7 +243,7 @@ def render_art_gallery(capture, assets_root=None):
                        f'<rect x="{elevation_x}" y="{elevation_bottom - elevation_height:g}" width="{elevation_width:g}" height="{elevation_height:g}" fill="#30465b" stroke="#9cf"/>'
                        f'<path d="M{elevation_support_x - 5:g} {elevation_support_y:g}h10m-5 -5v10" stroke="#ff6868" stroke-width="2"/>'
                        '</svg>')
-            profile_details = (f'<section class="profile"><strong>Presentation profile</strong><p>Size F/R/U: {html.escape(", ".join(map(str, size)))} tiles; support anchor: {html.escape(", ".join(map(str, anchor)))}; sprite depth: {html.escape(str(profile.get("depth_fraction", "inferred")))}</p>{diagram}<p class="anchor-legend">Red crosses mark support anchors; F = forward, R = right, U = up.</p><ul>{region_list}</ul></section>')
+            profile_details = (f'<section class="profile"><strong>Presentation profile</strong><p>Size F/R/U: {html.escape(", ".join(map(str, size)))} tiles; support anchor: {html.escape(", ".join(map(str, anchor)))}; sprite depth: {html.escape(str(profile.get("depth_fraction", "inferred")))}</p>{diagram}<p class="anchor-legend">Red crosses mark support anchors; F = forward, R = right, U = up.</p><ul>{region_list}</ul>{face_details}</section>')
         views = [f'<a href="../view_3d_yaw_{angle}.png"><img loading="lazy" width="240" src="../view_3d_yaw_{angle}.png">3D yaw {angle*45-45}°</a>' for angle in range(8)]
         views.append('<a href="../view_2d.png"><img loading="lazy" width="240" src="../view_2d.png">2D checkpoint</a>')
         sections.append(f'<article><h3>{html.escape(record["category"])}: <code>{html.escape(record["id"])}</code></h3><p>{placements} placement(s); example tile ({record["x"]}, {record["y"]}); support anchor ({record["support_x"]}, {record["support_y"]}).</p><div class="sprites">{"".join(pictures)}</div>{profile_details}<div class="views">' + " ".join(views) + '</div></article>')
