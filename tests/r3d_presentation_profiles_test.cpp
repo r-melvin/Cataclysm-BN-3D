@@ -475,4 +475,64 @@ TEST_CASE("r3d_furniture_profile_sizes_reach_mesh_and_surface_cache", "[r3d][pro
         CHECK(restored.vertices[i].z == baseline.vertices[i].z);
     }
 }
+TEST_CASE("r3d_missing_wall_art_uses_material_instead_of_unknown_glyph", "[r3d][profiles][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("hoder", {}, false, true, false);
+    REQUIRE_FALSE(tilecontext->get_sprite_draw_data(
+        {.id = "t_wall_w", .category = C_TERRAIN, .pos = tripoint_bub_ms(0, 0, 0)}));
+    auto cache = r3d::tile_info_cache{};
+    const auto generic = cache.terrain({.id = t_wall, .tiles = *tilecontext});
+    const auto missing = cache.terrain({.id = ter_str_id("t_wall_w").id(), .tiles = *tilecontext});
+    REQUIRE(generic.main().valid);
+    CHECK(missing.main().sheet == generic.main().sheet);
+    CHECK(missing.main().u0 == generic.main().u0);
+    CHECK(missing.main().v0 == generic.main().v0);
+    // Even with native wall textures selected, missing art must use the material atlas.
+    auto sides = std::make_shared<r3d::wall_sides>();
+    sides->atlas = generic.main().owner;
+    auto width = 0.0f;
+    auto height = 0.0f;
+    REQUIRE(SDL_GetTextureSize(sides->atlas.get(), &width, &height));
+    sides->width = static_cast<int>(width);
+    sides->height = static_cast<int>(height);
+    sides->cell = std::min(sides->width, sides->height);
+    sides->names = {"plaster"};
+    sides->rules.by_prefix = {{"t_wall_", "plaster"}};
+    sides->colors = {{"plaster", 0xc4baa0u}};
+    cache.set_wall_sides(sides);
+    cache.set_plaster_atlas(false);
+    const auto wall = cache.terrain({.id = ter_str_id("t_wall_w").id(), .tiles = *tilecontext});
+    CHECK(wall.side.valid);
+    CHECK(wall.cap.valid);
+    CHECK(wall.side.sheet == sides->atlas.get());
+    CHECK_FALSE(wall.elevation.valid);
+}
+TEST_CASE("r3d_wall_elevation_uses_horizontal_edge_art", "[r3d][profiles][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto id = std::string(GENERATE("t_wall", "t_wall_w"));
+    const auto rotation = GENERATE(0, 1, 2, 3);
+    auto cache = r3d::tile_info_cache{};
+    cache.set_wall_sides(std::make_shared<r3d::wall_sides>());
+    const auto art = cache.terrain(
+        {.id = ter_str_id(id).id(), .tiles = *tilecontext, .subtile = 2, .rota = rotation});
+    const auto expected = tilecontext->get_sprite_draw_data(
+        {.id = id,
+         .category = C_TERRAIN,
+         .pos = tripoint_bub_ms(0, 0, 0),
+         .subtile = 2,
+         .rotation = 1});
+    REQUIRE(expected);
+    REQUIRE(art.elevation.valid);
+    auto width = 0.0f;
+    auto height = 0.0f;
+    REQUIRE(SDL_GetTextureSize(expected->texture, &width, &height));
+    CHECK(art.elevation.sheet == expected->texture);
+    CHECK(art.elevation.u0 == Approx(expected->uv0.first + 0.5f / width));
+    CHECK(art.elevation.v0 == Approx(expected->uv0.second + 0.5f / height));
+    CHECK(art.elevation.u1 == Approx(expected->uv1.first - 0.5f / width));
+    CHECK(art.elevation.v1 == Approx(expected->uv1.second - 0.5f / height));
+}
 #endif

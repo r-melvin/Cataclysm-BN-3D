@@ -27,6 +27,12 @@ cmake --build --preset linux-slim --target cataclysm-bn-tiles cata_test-tiles
 ./out/build/linux-slim/src/cataclysm-bn-tiles
 ```
 
+In **Options > Graphics > Choose tileset**, select **UltimateCataclysm** (Ultica)
+for the recommended 3D artwork. The renderer uses the selected game tileset;
+enabling 3D does not change an existing selection such as Hoder. Smaller/older
+tilesets have incomplete asset coverage. Missing wall art uses a generic material
+instead of stretching the tileset’s unknown marker across the wall.
+
 In Options > Graphics, select the `gpu` renderer, restart if changing renderers,
 and enable **Voxelised 3D renderer (experimental)**. This setting is off by
 default; disable it in the same menu to return to the standard isometric view.

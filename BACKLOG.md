@@ -92,6 +92,21 @@ Do not restore unused runtime metadata without a rendering consumer.
 Sources: [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md),
 [vehicle research](docs/en/dev/research/vehicle_rendering_research.md).
 
+Wall texture regressions: the elevation path now selects the east-west edge
+(rotation 1), rather than stretching the north-south cut edge into vertical stripes.
+Hoder also lacks native `t_wall_w` art. The renderer now
+uses the wall atlas instead of treating the unknown glyph as an elevation, and
+uses generic wall art if the atlas is absent. Ultica remains the recommended
+selected tileset; enabling 3D preserves existing selections. The native missing-
+art test reproduced five failing assertions before the fix. Both binaries build;
+163 renderer/onboarding tests pass (53,171 assertions). A private Hoder virtual
+run confirms solid wall faces replace the magenta pattern; evidence is under
+`/tmp/bn-wall-regression/`. A second private Ultica run shows the intended grey
+wall elevation (`/tmp/bn-wall-ultica/after.png`). The newer shelter screenshot
+also reports bench seams, corner/row locker differences, and unreadable extruded
+items; those remain active R3D-03/05/07 follow-ups. Broader cross-tileset
+furniture/material acceptance remains in R3D-07.
+
 ## R3D-04: Finish vehicle layer, material and state presentation
 
 **Status: implementation/visual validation; depends on R3D-03/07.** Role lists,

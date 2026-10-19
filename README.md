@@ -28,6 +28,9 @@
   markers, plus sky, fog and weather effects driven by BN time and perception.
 - Simple fork issue forms: describe the problem and attach a report if available.
 
+For the recommended 3D artwork, select **UltimateCataclysm** under
+**Options → Graphics → Choose tileset**; enabling 3D preserves your existing tileset.
+
 See the [3D build, controls, and capture guide](docs/en/dev/guides/renderer_3d.md).
 The renderer is experimental. Linux builds and capture reports have been tested;
 native macOS and Windows execution has not yet been verified. The native UI/HUD, weather overlays and optional first-person view are included;

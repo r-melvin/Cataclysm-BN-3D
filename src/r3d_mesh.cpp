@@ -1355,7 +1355,20 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
     info.wall_connection = traits.wall || traits.window || traits.door;
     info.see_through = traits.transparent;
     if( info.sh.kind != shape_kind::empty ) {
-        resolve_layers( { .tiles = tiles, .id = t.id.str(), .category = C_TERRAIN, .out = info, .subtile = subtile, .rota = rota } );
+        resolve_layers( { .tiles = tiles, .id = t.id.str(), .category = C_TERRAIN, .out = info, .subtile = subtile, .rota = rota,
+                          .allow_unknown = !traits.wall } );
+    }
+    /// An unknown glyph is not a wall elevation. Keep a real generic wall as a fallback
+    /// if the material atlas is unavailable; otherwise prefer the atlas for missing artwork.
+    const auto missing_wall_art = traits.wall && !info.main().valid;
+    if( missing_wall_art ) {
+        resolve_layers( { .tiles = tiles, .id = "t_wall", .category = C_TERRAIN, .out = info,
+                          .subtile = subtile, .rota = rota, .allow_unknown = false } );
+        // Retain the last-resort marker when neither generic art nor a material atlas exists.
+        if( !info.main().valid && !wall_sides_ ) {
+            resolve_layers( { .tiles = tiles, .id = t.id.str(), .category = C_TERRAIN, .out = info,
+                              .subtile = subtile, .rota = rota } );
+        }
     }
     if( info.sh.kind == shape_kind::block && wall_sides_ ) {
         // The id and what it looks like, nearest first, pick the side texture.
@@ -1372,7 +1385,8 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
         // A wall of a patterned material (brick, wood, logs, stone, metal...) keeps the
         // tileset's own look: its sprite is repeated up the sides and tops the wall. Painted
         // and plain walls, whose sprites only give a colour, take the atlas texture instead.
-        const auto patterned_material = static_cast<bool>( !name.empty() && name != "plaster" &&
+        const auto patterned_material = static_cast<bool>( !missing_wall_art && !name.empty() &&
+                                        name != "plaster" &&
                                         info.sprite.valid );
         // A painted or plain wall's sprite is drawn as a front elevation: a band of framing at
         // the top, then coving, the paint and a skirting board. Read that way it is the side,
@@ -1381,9 +1395,9 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
         // top rows), a pale coving line, the paint and a skirting board. That piece is the
         // elevation of every side, whatever piece the tile itself is drawn with from above.
         constexpr auto edge_subtile = static_cast<int>( 2 ); // "edge" in cata_tiles' multitile_keys
-        constexpr auto edge_east_west = static_cast<int>( 0 );
+        constexpr auto edge_east_west = static_cast<int>( 1 );
         constexpr auto cavity_rows = static_cast<float>( 0.125f );
-        if( !patterned_material && !plaster_atlas_ && info.sprite.valid ) {
+        if( !missing_wall_art && !patterned_material && !plaster_atlas_ && info.sprite.valid ) {
             info.elevation = info.sprite;
             if( const auto edge = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = t.id.str(), .category = C_TERRAIN, .pos = tripoint_bub_ms( 0, 0, 0 ), .subtile = edge_subtile, .rotation = edge_east_west } ) ) ) {
                 info.elevation = to_sprite_ref( *edge );

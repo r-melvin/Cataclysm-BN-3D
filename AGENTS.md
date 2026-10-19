@@ -175,3 +175,6 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Window presentation must cover native broken/empty frames as well as `WINDOW`-flagged terrain. These frames deliberately lack that gameplay flag; preserve native flags and validate the actual open/broken terrain IDs.
 - Lua fixture tools must use verified binding names rather than assuming C++ methods are exported. Preflight all map bounds before mutating any fixture tile. Paste fixture source into the sandboxed console; `dofile` is unavailable.
 - A private `--datadir` also relocates tileset discovery to `<datadir>/gfx/`; provide that directory (or a symlink to the installed `gfx`) when testing private renderer assets.
+- Before pasting a Lua fixture, inspect the console/editor UI after startup; queued startup input can miss the console and send pasted source to ordinary gameplay bindings.
+- Renderer texture checks must include missing-art coverage on a smaller bundled tileset (for example Hoder's `t_wall_w`), alongside Ultica; valid unknown sprites must not be mistaken for wall elevations/materials.
+- Native multitile edge rotation 1 is east-west; rotation 0 is north-south. Wall elevations must use the horizontal face art, verified against both the bound source sheet and crop.

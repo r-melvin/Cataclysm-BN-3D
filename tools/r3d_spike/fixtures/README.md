@@ -50,3 +50,9 @@ on and off, and with profiles removed. Omitted dimensions must keep native joins
 and wall fitting. Explicit spans stay exact, so a short authored width can leave
 a visible gap in a joined row. Wall contact takes precedence over horizontal
 anchors. The script does not alter the furniture's native gameplay properties.
+
+For missing-art regression coverage, change the fixture's wall ID from `t_wall`
+to `t_wall_w` and select Hoder. That tileset lacks white-wall artwork: walls must
+use the material atlas, with complete solid sides rather than repeated magenta
+unknown symbols. With no atlas available, the generic wall sprite is the next
+fallback. Repeat with Ultica to check the supported-art path.
