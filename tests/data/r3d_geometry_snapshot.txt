@@ -1,0 +1,17 @@
+item_carbondioxide_tank 176 789184263537bfb7
+item_rock 54 d3959be378a0b1ad
+vehicle_bus_0 2246 c7d8d487ad9caafe
+vehicle_bus_225 2246 434acdc467a38bec
+vehicle_bus_90 2246 53a7d29a9bb4d45e
+vehicle_car_0 1715 41ac7c2ed2fff9ff
+vehicle_car_225 1715 2b855c647893c6b6
+vehicle_car_90 1715 9dd9e0c931f63932
+vehicle_pickup_0 1729 14819ccfc4b4ef33
+vehicle_pickup_225 1729 d42bfe3dd3ebf50c
+vehicle_pickup_90 1729 cb5930dcef68712e
+vehicle_semi_truck_0 4806 e5bd958cc4dd1f8c
+vehicle_semi_truck_225 4806 9bab0297fc5959bd
+vehicle_semi_truck_90 4806 5f9cdfc94bfd0abb
+vehicle_suv_0 1729 7c6ca4bfa1afce17
+vehicle_suv_225 1729 c77116b0417d03bd
+vehicle_suv_90 1729 4b22dfd54aecb0e8
