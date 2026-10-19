@@ -1171,84 +1171,51 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             } else if( shaped_panel ) {
                 // 1. Top Surface Geometry
                 // Native corner outline emitted above.
-            } else if( is_fwd_windshield && main_sprite_opt.has_value() &&
+            } else if( ( is_fwd_windshield || is_rear_windshield ) && main_sprite_opt.has_value() &&
                        main_sprite_opt->get().main().valid ) {
-                // Sloped front windshield: vehicle_cabin_h at rear down to vehicle_body_h at front
+                // Sloped windshield: vehicle_body_h at the outer end up to vehicle_cabin_h at the
+                // cabin end (the roofline, inset by the tumblehome).
                 const auto &ms = main_sprite_opt->get().main();
-                const auto z_front = static_cast<float>( z_base + vehicle_body_h );
-                const auto z_rear = static_cast<float>( z_base + vehicle_cabin_h );
-                const auto p0 = transform.apply( f_top, r_l );
-                const auto p1 = transform.apply( f_top, r_r );
-                const auto p2 = transform.apply( f_bot, r_r_roof );
-                const auto p3 = transform.apply( f_bot, r_l_roof );
-                const auto c = corners_t{{
-                        { p0.x, p0.y, z_front }, { p1.x, p1.y, z_front },
-                        { p2.x, p2.y, z_rear }, { p3.x, p3.y, z_rear }
+                const auto z_low = static_cast<float>( z_base + vehicle_body_h );
+                const auto z_high = static_cast<float>( z_base + vehicle_cabin_h );
+                const auto f_low = is_fwd_windshield ? f_top : f_bot;
+                const auto f_high = is_fwd_windshield ? f_bot : f_top;
+                const auto low_l = transform.apply( f_low, r_l );
+                const auto low_r = transform.apply( f_low, r_r );
+                const auto high_l = transform.apply( f_high, r_l_roof );
+                const auto high_r = transform.apply( f_high, r_r_roof );
+                // Corners run front edge first, like every other vehicle quad.
+                const auto c = is_fwd_windshield ? corners_t{{
+                        { low_l.x, low_l.y, z_low }, { low_r.x, low_r.y, z_low },
+                        { high_r.x, high_r.y, z_high }, { high_l.x, high_l.y, z_high }
+}} :
+                corners_t{{
+                        { high_l.x, high_l.y, z_high }, { high_r.x, high_r.y, z_high },
+                        { low_r.x, low_r.y, z_low }, { low_l.x, low_l.y, z_low }
                     }};
                 sink.add_colored( { .sprite = ms, .corners = c, .uvs = make_sprite_uvs( ms ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
 
-                // Triangular side cheeks connecting sloped glass to 0.50f waistline
+                // Triangular side cheeks connecting the sloped glass to the waistline
                 if( side_spr && side_spr->valid ) {
                     const auto &s = *side_spr;
                     const auto solid_uv = make_solid_uvs( s );
                     if( h_left <= vehicle_body_h ) {
                         const auto shade = compute_side_shade( 0.0f, -1.0f, cos_th, sin_th );
                         const auto cheek_col = no_pull( modulate_light( cell.light, shade ) );
-                        const auto p3_waist = transform.apply( f_bot, r_l );
+                        const auto waist_l = transform.apply( f_high, r_l );
                         const auto cheek_c = corners_t{{
-                                { p3.x, p3.y, z_rear }, { p0.x, p0.y, z_front },
-                                { p0.x, p0.y, z_front }, { p3_waist.x, p3_waist.y, z_front }
+                                { high_l.x, high_l.y, z_high }, { low_l.x, low_l.y, z_low },
+                                { low_l.x, low_l.y, z_low }, { waist_l.x, waist_l.y, z_low }
                             }};
                         sink.add_colored( { .sprite = s, .corners = cheek_c, .uvs = solid_uv, .ref = light_ref{}, .color = cheek_col } );
                     }
                     if( h_right <= vehicle_body_h ) {
                         const auto shade = compute_side_shade( 0.0f, 1.0f, cos_th, sin_th );
                         const auto cheek_col = no_pull( modulate_light( cell.light, shade ) );
-                        const auto p2_waist = transform.apply( f_bot, r_r );
+                        const auto waist_r = transform.apply( f_high, r_r );
                         const auto cheek_c = corners_t{{
-                                { p1.x, p1.y, z_front }, { p2.x, p2.y, z_rear },
-                                { p2_waist.x, p2_waist.y, z_front }, { p1.x, p1.y, z_front }
-                            }};
-                        sink.add_colored( { .sprite = s, .corners = cheek_c, .uvs = solid_uv, .ref = light_ref{}, .color = cheek_col } );
-                    }
-                }
-            } else if( is_rear_windshield && main_sprite_opt.has_value() &&
-                       main_sprite_opt->get().main().valid ) {
-                // Sloped rear windshield: vehicle_cabin_h at front down to vehicle_body_h at rear
-                const auto &ms = main_sprite_opt->get().main();
-                const auto z_front = static_cast<float>( z_base + vehicle_cabin_h );
-                const auto z_rear = static_cast<float>( z_base + vehicle_body_h );
-                const auto p0 = transform.apply( f_top, r_l_roof );
-                const auto p1 = transform.apply( f_top, r_r_roof );
-                const auto p2 = transform.apply( f_bot, r_r );
-                const auto p3 = transform.apply( f_bot, r_l );
-                const auto c = corners_t{{
-                        { p0.x, p0.y, z_front }, { p1.x, p1.y, z_front },
-                        { p2.x, p2.y, z_rear }, { p3.x, p3.y, z_rear }
-                    }};
-                sink.add_colored( { .sprite = ms, .corners = c, .uvs = make_sprite_uvs( ms ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
-
-                // Triangular side cheeks
-                if( side_spr && side_spr->valid ) {
-                    const auto &s = *side_spr;
-                    const auto solid_uv = make_solid_uvs( s );
-                    if( h_left <= vehicle_body_h ) {
-                        const auto shade = compute_side_shade( 0.0f, -1.0f, cos_th, sin_th );
-                        const auto cheek_col = no_pull( modulate_light( cell.light, shade ) );
-                        const auto p0_waist = transform.apply( f_top, r_l );
-                        const auto cheek_c = corners_t{{
-                                { p0.x, p0.y, z_front }, { p3.x, p3.y, z_rear },
-                                { p3.x, p3.y, z_rear }, { p0_waist.x, p0_waist.y, z_rear }
-                            }};
-                        sink.add_colored( { .sprite = s, .corners = cheek_c, .uvs = solid_uv, .ref = light_ref{}, .color = cheek_col } );
-                    }
-                    if( h_right <= vehicle_body_h ) {
-                        const auto shade = compute_side_shade( 0.0f, 1.0f, cos_th, sin_th );
-                        const auto cheek_col = no_pull( modulate_light( cell.light, shade ) );
-                        const auto p1_waist = transform.apply( f_top, r_r );
-                        const auto cheek_c = corners_t{{
-                                { p2.x, p2.y, z_rear }, { p1.x, p1.y, z_front },
-                                { p1_waist.x, p1_waist.y, z_rear }, { p2.x, p2.y, z_rear }
+                                { low_r.x, low_r.y, z_low }, { high_r.x, high_r.y, z_high },
+                                { waist_r.x, waist_r.y, z_low }, { low_r.x, low_r.y, z_low }
                             }};
                         sink.add_colored( { .sprite = s, .corners = cheek_c, .uvs = solid_uv, .ref = light_ref{}, .color = cheek_col } );
                     }
