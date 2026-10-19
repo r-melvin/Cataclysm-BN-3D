@@ -1,3 +1,4 @@
+#include "onboarding.h"
 #include "game.h"
 #include "r3d.h"
 
@@ -515,6 +516,7 @@ game::game() :
     events().subscribe( &*memorial_logger_ptr );
     events().subscribe( &*achievements_tracker_ptr );
     events().subscribe( &*spell_events_ptr );
+    events().subscribe( &onboarding::subscriber() );
     world_generator = std::make_unique<worldfactory>();
     // do nothing, everything that was in here is moved to init_data() which is called immediately after g = new game; in main.cpp
     // The reason for this move is so that g is not uninitialized when it gets to installing the parts into vehicles.
@@ -688,6 +690,7 @@ void game::reenter_fullscreen()
  */
 void game::setup( bool load_world_modfiles )
 {
+    onboarding::reset_progress();
     loading_ui ui( true );
 
     // Clear all dimension overmapbuffers before reloading JSON data.
@@ -1763,6 +1766,7 @@ bool game::cleanup_at_end()
                                  .window( w_rip, point( iStartX, iNameLine ), iStartX + iMaxWidth - 4 - 1 )
                                  .max_length( iMaxWidth - 4 - 1 )
                                  .query_string();
+        onboarding::on_death();
         death_screen();
         const bool is_suicide = uquit == QUIT_SUICIDE;
         events().send<event_type::game_over>( is_suicide, sLastWords );
@@ -3716,6 +3720,8 @@ input_context get_default_mode_input_context()
         ctxt.register_action( "r3d_fp_face_threat" );
 
     }
+    ctxt.register_action( "onboarding_checklist" );
+    ctxt.register_action( "EXPLAIN_SCREEN" );
 #if !defined(__ANDROID__)
     ctxt.register_action( "toggle_fullscreen" );
 #endif
@@ -12565,6 +12571,7 @@ bool game::check_safe_mode_allowed( bool repeat_safe_mode_warnings )
              _( "Spotted %1$s--safe mode is on!  (%2$s to turn it off, %3$s to ignore monster%4$s)" ),
              spotted_creature_name, msg_safe_mode, msg_ignore, whitelist );
     safe_mode_warning_logged = true;
+    onboarding::on_signal( "safe_mode_spotted" );
     return false;
 }
 

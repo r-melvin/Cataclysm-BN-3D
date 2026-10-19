@@ -29,8 +29,9 @@
 See the [3D build, controls, and capture guide](docs/en/dev/guides/renderer_3d.md).
 The renderer is experimental. Linux builds and capture reports have been tested;
 native macOS and Windows execution has not yet been verified. The native UI/HUD, weather overlays and optional first-person view are included;
-see the [UI guide](docs/en/dev/guides/ui_overhaul.md). Guided onboarding remains
-a separate feature port in progress.
+see the [UI guide](docs/en/dev/guides/ui_overhaul.md). Optional guided hints,
+lesson checklists and screen explanations are also included; see the
+[guided onboarding guide](docs/en/dev/guides/guided_onboarding.md).
 Current remaining work, branch integration and deferred ideas are tracked in the
 [project backlog](BACKLOG.md); research documents retain their original evidence.
 

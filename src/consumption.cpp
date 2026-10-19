@@ -1,3 +1,4 @@
+#include "onboarding.h"
 #include "consumption.h" // IWYU pragma: associated
 
 #include "activity_handlers.h"
@@ -1282,6 +1283,10 @@ bool Character::consume_effects( item &food )
         add_effect( effect_bloated, 5_minutes );
     }
 
+    if( is_avatar() ) {
+        onboarding::on_event( "character_eats_item" );
+        onboarding::on_event( "character_consumes_item" );
+    }
     return true;
 }
 

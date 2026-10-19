@@ -1822,6 +1822,27 @@ void options_manager::add_options_interface()
     add( "USE_LANG", interface, translate_marker( "Language" ),
          translate_marker( "Switch Language." ), lang_options, "" );
 
+    add( "ONBOARDING_HINTS", "interface", translate_marker( "Guided hints" ),
+         translate_marker( "Hints for new players: what to try next, shown in the sidebar and the "
+                           "message log, with a few popups for important moments.  They never change "
+                           "the game.  Play Now characters: on for characters made with Play Now, off "
+                           "for others.  Hints only: every character, without popups.  Hints and "
+    "popups: every character." ), {
+        { "off", translate_marker( "Off" ) },
+        { "play_now", translate_marker( "Play Now characters" ) },
+        { "hints", translate_marker( "Hints only" ) },
+        { "full", translate_marker( "Hints and popups" ) }
+    },
+    "play_now" );
+
+    add( "ONBOARDING_SOFT_START", "interface", translate_marker( "Guided start kit" ),
+         translate_marker( "With guided hints on, Play Now! (Default Scenario) starts in the "
+                           "\"Evacuee (guided)\" scenario: the usual evacuation shelter, with a "
+                           "backpack, a flashlight, a bottle of water and a pocket knife.  Off: the "
+                           "usual default scenario." ),
+         true );
+
+
     add_empty_line();
 
     add( title_screen::option_id, interface, translate_marker( "Title screen" ),

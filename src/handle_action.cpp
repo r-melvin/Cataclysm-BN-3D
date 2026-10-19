@@ -1,4 +1,5 @@
 #include "status_report.h"
+#include "onboarding.h"
 #include "action.h"
 #include "advanced_inv.h"
 #include "animation.h"
@@ -1941,6 +1942,7 @@ bool game::handle_action()
         } else {
             ZoneScopedN( "handle_action_get_player_input" );
             // No auto-move, ask player for input
+            onboarding::before_input();
             ctxt = get_player_input( action );
         }
     }
@@ -2067,6 +2069,7 @@ bool game::handle_action()
 
     if( act == ACTION_NULL ) {
         ZoneScopedN( "handle_action_unknown_command" );
+        if( onboarding::handle_action( action ) ) { return false; }
         const input_event &&evt = ctxt.get_raw_input();
         if( !evt.sequence.empty() ) {
             const int ch = evt.get_first_input();
@@ -2088,6 +2091,7 @@ bool game::handle_action()
     {
         ZoneScopedN( "handle_action_gamemode_pre_action" );
         gamemode->pre_action( act );
+        onboarding::on_action( action_ident( act ) );
     }
 
     int soffset = 0;

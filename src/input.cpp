@@ -1,3 +1,4 @@
+#include "onboarding.h"
 #include "input.h"
 #include "r3d.h"
 
@@ -235,7 +236,8 @@ void input_manager::load( const std::string &file_name, bool is_user_preferences
             if( keybinding.has_array( "key" ) ) {
                 for( const std::string line : keybinding.get_array( "key" ) ) {
                     int loaded_keycode = get_keycode( line );
-                    if( loaded_keycode == '\0' ) {
+                    if( loaded_keycode == '\0' &&
+                        !( new_event.type == input_event_t::gamepad && line == "JOY_0" ) ) {
                         debugmsg( "Invalid keybind %s detected for action %s", line, action_id );
                     } else {
                         new_event.sequence.push_back( loaded_keycode );
@@ -244,7 +246,8 @@ void input_manager::load( const std::string &file_name, bool is_user_preferences
             } else { // assume string if not array, and throw if not string
                 std::string line = keybinding.get_string( "key" );
                 int loaded_keycode = get_keycode( line );
-                if( loaded_keycode == '\0' ) {
+                if( loaded_keycode == '\0' &&
+                    !( new_event.type == input_event_t::gamepad && line == "JOY_0" ) ) {
                     debugmsg( "Invalid keybind %s detected for action %s", line, action_id );
                 } else {
                     new_event.sequence.push_back( loaded_keycode );
@@ -979,6 +982,12 @@ const std::string &input_context::handle_input( const int timeout )
             break;
         }
 
+        if( action == CATA_ERROR && next_action.type != input_event_t::mouse &&
+            category != "DEFAULTMODE" ) {
+            const auto &bindings = inp_mngr.get_input_for_action( "EXPLAIN_SCREEN", category );
+            if( std::ranges::find( bindings, next_action ) != bindings.end() &&
+                onboarding::explain_screen( category ) ) { continue; }
+        }
         if( next_action.type == input_event_t::mouse ) {
             if( !handling_coordinate_input && action == CATA_ERROR ) {
                 continue; // Ignore this mouse input.

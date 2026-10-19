@@ -1,3 +1,4 @@
+#include "onboarding.h"
 #include "init.h"
 
 #include "achievement.h"
@@ -411,6 +412,8 @@ void DynamicDataLoader::initialize()
         MonsterGenerator::generator().load_species( jo, src );
     } );
 
+    add( "onboarding_lesson", &onboarding::load_lesson );
+    add( "onboarding_screen", &onboarding::load_screen );
     add( "LOOT_ZONE", &zone_type::load_zones );
     add( "monster_adjustment", &load_monster_adjustment );
     add( "recipe_category", &load_recipe_category );
@@ -592,6 +595,7 @@ void DynamicDataLoader::load_all_from_json( JsonIn &jsin, const std::string &src
 
 void DynamicDataLoader::unload_data()
 {
+    onboarding::reset_lessons();
     finalized = false;
 
     //Moved to the top as a temp hack until vehicles are made into game objects
@@ -780,6 +784,7 @@ void DynamicDataLoader::finalize_loaded_data( loading_ui &ui )
             { _( "Anatomies" ), &anatomy::finalize_all },
             { _( "Mutations" ), &mutation_branch::finalize },
             { _( "Achievements" ), &achievement::finalize },
+            { _( "Guided hints" ), &onboarding::finalize_lessons },
             { _( "Localization" ), &l10n_data::load_mod_catalogues },
             { _( "Enchantments" ), &enchantment::finalize_all },
             { _( "Perks" ), &perk::finalize_all },
@@ -802,6 +807,7 @@ void DynamicDataLoader::finalize_loaded_data( loading_ui &ui )
 
 void DynamicDataLoader::check_consistency( loading_ui &ui )
 {
+    onboarding::check_lessons();
     ui.new_context( _( "Verifying" ) );
 
     using named_entry = std::pair<std::string, std::function<void()>>;

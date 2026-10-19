@@ -1,3 +1,4 @@
+#include "onboarding.h"
 #include "panels.h"
 
 #include "action.h"
@@ -2572,6 +2573,18 @@ static std::vector<window_panel> initialize_default_label_panels()
     return ret;
 }
 
+namespace
+{
+auto draw_onboarding( const avatar & /*you*/, const catacurses::window &w ) -> void
+{
+    werase( w );
+    const auto text = onboarding::sidebar_text( getmaxx( w ) - 1 );
+    fold_and_print( w, point_zero, getmaxx( w ) - 1, c_light_gray, text );
+    wnoutrefresh( w );
+}
+auto onboarding_panel() -> bool { return onboarding::enabled(); }
+}
+
 static std::map<std::string, std::vector<window_panel>> initialize_default_panel_layouts()
 {
     std::map<std::string, std::vector<window_panel>> ret;
@@ -2582,6 +2595,11 @@ static std::map<std::string, std::vector<window_panel>> initialize_default_panel
                  initialize_default_label_narrow_panels() );
     ret.emplace( translate_marker( "labels" ), initialize_default_label_panels() );
 
+    for( auto &[name, panels] : ret ) {
+        const auto width = panels.empty() ? 32 : panels.front().get_width();
+        panels.emplace_back( draw_onboarding, translate_marker( "Next" ), 3, width, true,
+                             onboarding_panel );
+    }
     return ret;
 }
 

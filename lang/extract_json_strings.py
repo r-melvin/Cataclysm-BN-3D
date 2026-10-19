@@ -905,7 +905,18 @@ def extract_nested_category(state, item):
 
 
 # these objects need to have their strings specially extracted
+def extract_onboarding(state, item):
+    """Extract lesson/screen text, including conditional UI variants."""
+    for record in [item, *item.get("variants", [])]:
+        for field in ("title", "short", "text", "extra"):
+            if field in record:
+                writestr(state, record[field],
+                         comment="Guided hint: keep <keybind:...> tags unchanged.")
+
+
 extract_specials = {
+    "onboarding_lesson": extract_onboarding,
+    "onboarding_screen": extract_onboarding,
     "body_part": extract_bodypart,
     "clothing_mod": extract_clothing_mod,
     "construction": extract_construction,

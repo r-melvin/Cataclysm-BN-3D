@@ -311,15 +311,26 @@ combination has received human visual acceptance. Temporary evidence:
 
 ## R3D-13: Integrate guided onboarding
 
-**Status: implemented on a branch, not merged.** Local
-`feat/guided-onboarding` at `44dcdea` includes lessons, screen explanations,
-progress persistence and translation extraction. Its branch guide is
-`docs/en/dev/guides/guided_onboarding.md`.
+**Status: integrated on main; broader UI/platform acceptance remains R3D-07/10.**
+Lessons, F1 checklist, context-specific F2 explanations, progress persistence,
+optional guided start kit and translation extraction are included. Hints-only
+mode finishes logged popup lessons, including active popups loaded from saves
+or carried across an option change, so the welcome lesson cannot block later
+steps. Hints and camera/menu inspection do not spend turns.
 
-Refresh against main, run `[onboarding]` and affected normal UI tests, and check
-option modes, actions, old/new saves, translation coverage and the independent
-Tutorial Game flow. Keep the guided start kit optional; hints must not spend
-turns or alter normal gameplay rules.
+Both game and test targets build. The combined onboarding/renderer/memory/aiming
+run passes 165 cases and 176,496 assertions. Native adapter tests cover option modes,
+start-kit opt-out, save/reset behavior and turn/move preservation. Translation
+extraction includes all 168 unique lesson, screen and conditional-variant strings.
+An Xvfb/software-Vulkan private old-save check exercised the checklist and main
+and inventory explanations, saved progress and reloaded it. Game turn and moves
+remained unchanged. The final reload shows welcome completed and movement active.
+Temporary evidence: `/tmp/bn-onboarding-acceptance/`.
+The complete new-character/Tutorial Game and screen-layout matrix remains
+R3D-07; native macOS/Windows remains R3D-10. Tutorial hints retain their explicit
+native game-type/mod exclusion; this smoke test does not establish that whole flow.
+
+Guide: [guided onboarding](docs/en/dev/guides/guided_onboarding.md).
 
 ## R3D-14: Fog of war and a time-of-day sky
 

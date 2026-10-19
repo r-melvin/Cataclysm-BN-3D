@@ -4121,5 +4121,43 @@
     "category": "TARGET",
     "id": "r3d_fp_select_ahead",
     "bindings": [ { "input_method": "keyboard", "key": "/" } ]
+  },
+  {
+    "type": "keybinding",
+    "name": "Guided hints checklist",
+    "category": "DEFAULTMODE",
+    "id": "onboarding_checklist",
+    "bindings": [ { "input_method": "keyboard", "key": "F1" } ]
+  },
+  {
+    "type": "keybinding",
+    "name": "Explain this screen (guided hints)",
+    "id": "EXPLAIN_SCREEN",
+    "bindings": [ { "input_method": "keyboard", "key": "F2" } ]
+  },
+  {
+    "type": "keybinding",
+    "id": "GOT_IT",
+    "category": "ONBOARDING_POPUP",
+    "name": "Got it",
+    "bindings": [
+      { "input_method": "keyboard", "key": "g" },
+      { "input_method": "keyboard", "key": "RETURN" },
+      { "input_method": "gamepad", "key": "JOY_0" }
+    ]
+  },
+  {
+    "type": "keybinding",
+    "id": "LATER",
+    "category": "ONBOARDING_POPUP",
+    "name": "Remind me later",
+    "bindings": [ { "input_method": "keyboard", "key": "l" }, { "input_method": "gamepad", "key": "JOY_2" } ]
+  },
+  {
+    "type": "keybinding",
+    "id": "STOP_HINTS",
+    "category": "ONBOARDING_POPUP",
+    "name": "Stop hints",
+    "bindings": [ { "input_method": "keyboard", "key": "S" }, { "input_method": "gamepad", "key": "JOY_3" } ]
   }
 ]

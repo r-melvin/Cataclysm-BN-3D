@@ -1,3 +1,4 @@
+#include "onboarding.h"
 #include "character.h"
 
 #include "action.h"
@@ -10912,6 +10913,7 @@ void Character::assign_activity( std::unique_ptr<player_activity> act, bool allo
     }
 
     activity->start_or_resume( *this, resuming );
+    if( is_avatar() && activity ) { onboarding::on_event( "character_starts_activity" ); }
 
     if( is_npc() ) {
         cancel_stashed_activity();
@@ -11021,6 +11023,7 @@ void Character::fall_asleep( const time_duration &duration )
         }
     }
     add_effect( effect_sleep, duration );
+    if( is_avatar() ) { onboarding::on_event( "character_falls_asleep" ); }
 }
 
 bool Character::in_sleep_state() const

@@ -1,3 +1,4 @@
+#include "onboarding.h"
 #include "main_menu.h"
 #include "ui_theme.h"
 
@@ -994,6 +995,8 @@ bool main_menu::new_character_tab()
             play_type = character_type::FULL_RANDOM;
             break;
     }
+    onboarding::prepare_new_game( play_type == character_type::NOW ||
+                                  play_type == character_type::FULL_RANDOM );
     if( !pc.create( play_type, selected_template ) ) {
         load_char_templates();
         MAPBUFFER.clear();

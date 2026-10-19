@@ -1,3 +1,4 @@
+#include "onboarding.h"
 #include "avatar.h" // IWYU pragma: associated
 #include "newcharacter.h" // IWYU pragma: associated
 
@@ -605,6 +606,8 @@ bool avatar::create( character_type type, const std::string &tempname )
             tab = get_max_tabs( prof );
             break;
         case character_type::NOW:
+            if( const auto guided = string_id<scenario>( onboarding::start_scenario() );
+                !guided.str().empty() && guided.is_valid() ) { g->scen = &guided.obj(); }
             //default world, fixed scenario, random name
             randomize( false, points, true );
             break;

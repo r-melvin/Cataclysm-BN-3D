@@ -1,3 +1,4 @@
+#include "onboarding.h"
 // Associated headers here are the ones for which their only non-inline
 // functions are serialization functions.  This allows IWYU to check the
 // includes in such headers.
@@ -1096,6 +1097,8 @@ void avatar::serialize( JsonOut &json ) const
 
 void avatar::store( JsonOut &json ) const
 {
+    json.member( "onboarding" );
+    onboarding::serialize( json );
     player::store( json );
 
     if( g->scen != nullptr ) {
@@ -1183,6 +1186,9 @@ void avatar::deserialize( JsonIn &jsin )
 void avatar::load( const JsonObject &data )
 {
     player::load( data );
+    if( data.has_object( "onboarding" ) ) { onboarding::deserialize( data.get_object( "onboarding" ) ); }
+    else { onboarding::reset_progress(); }
+
 
     data.read( "controlling_vehicle", controlling_vehicle );
 
