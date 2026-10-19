@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 #include <vector>
 #include "coordinates.h"
 
@@ -56,6 +57,9 @@ struct vehicle_render_profile {
 
 /// Classify actual installed parts; roofs do not turn quarterpanels into full walls.
 auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> vehicle_render_profile;
+
+/// The wheel layer to draw for a mount: an intact wheel wins over a broken one.
+auto preferred_wheel_layer( std::span<const vehicle_render_layer> layers ) -> const vehicle_render_layer *; // *NOPAD*
 
 struct panel_outline_options {
     panel_corner corner;

@@ -11,6 +11,7 @@
 #include <set>
 #include <span>
 #include <string_view>
+#include <vector>
 
 TEST_CASE("r3d_native_quarterpanels_stay_half_height_under_roofs", "[r3d][vehicle]") {
     auto veh = vehicle(vproto_id("none"), 0, 0);
@@ -124,6 +125,39 @@ TEST_CASE("r3d_vehicle_profile_preserves_semantic_part_layers", "[r3d][vehicle]"
     CHECK(std::ranges::all_of(profile.layers, [](const auto& layer) {
         return !layer.open && !layer.broken;
     }));
+}
+
+TEST_CASE("r3d_broken_wheels_still_produce_a_wheel", "[r3d][vehicle]") {
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    const auto mount = tripoint_mnt_veh::zero();
+    REQUIRE(veh.install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh.install_part(mount, vpart_id("wheel_mount_medium"), true) >= 0);
+    const auto wheel = veh.install_part(mount, vpart_id("wheel"), true);
+    REQUIRE(wheel >= 0);
+    veh.set_hp(veh.part(wheel), 0);
+    REQUIRE(veh.cpart(wheel).is_broken());
+    const auto profile = r3d::vehicle_profile(veh, mount);
+    CHECK(profile.has_wheel);
+    CHECK(std::ranges::any_of(profile.layers, [wheel](const auto& layer) {
+        return layer.part_idx == wheel && layer.broken;
+    }));
+}
+
+TEST_CASE("r3d_wheel_layer_prefers_intact_over_broken", "[r3d][vehicle]") {
+    const auto wheel_layer = [](const int idx, const bool broken) {
+        return r3d::vehicle_render_layer{
+            .part_idx = idx, .roles = {r3d::vehicle_render_role::wheel}, .broken = broken};
+    };
+    const auto detail = r3d::vehicle_render_layer{
+        .part_idx = 9, .roles = {r3d::vehicle_render_role::detail}};
+    CHECK(r3d::preferred_wheel_layer(std::vector<r3d::vehicle_render_layer>{}) == nullptr);
+    CHECK(r3d::preferred_wheel_layer(std::vector{detail}) == nullptr);
+    const auto broken_first = std::vector{detail, wheel_layer(1, true), wheel_layer(2, false)};
+    REQUIRE(r3d::preferred_wheel_layer(broken_first) != nullptr);
+    CHECK(r3d::preferred_wheel_layer(broken_first)->part_idx == 2);
+    const auto only_broken = std::vector{wheel_layer(3, true)};
+    REQUIRE(r3d::preferred_wheel_layer(only_broken) != nullptr);
+    CHECK(r3d::preferred_wheel_layer(only_broken)->part_idx == 3);
 }
 
 #if defined(TILES)

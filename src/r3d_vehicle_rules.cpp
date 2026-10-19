@@ -71,6 +71,8 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
                                   info.z_order > veh.part_info( data.main_part_idx ).z_order ) ) {
             data.main_part_idx = index;
         }
+        // A broken wheel is still a wheel: it is drawn with its broken sprite.
+        data.has_wheel |= has_role( vehicle_render_role::wheel );
         if( part.is_broken() ) { continue; }
         const auto roof = has_role( vehicle_render_role::roof );
         if( roof ) {
@@ -95,7 +97,6 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
         data.is_windshield |= has_role( vehicle_render_role::glass );
         data.is_openable |= has_role( vehicle_render_role::openable );
         data.is_door |= has_role( vehicle_render_role::door );
-        data.has_wheel |= has_role( vehicle_render_role::wheel );
         data.is_opaque_wall |= has_role( vehicle_render_role::opaque_structure );
         data.is_tall_cabin |= info.has_flag( "WINDSHIELD" ) || info.has_flag( "OPAQUE" ) ||
                               ( info.has_flag( "OBSTACLE" ) && !half_panel && !part.open );
@@ -105,6 +106,21 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
     data.height = data.is_tall_cabin ? vehicle_cabin_h : half_height_panel ? vehicle_body_h :
                   data.is_interior ? chassis_floor_h : vehicle_body_h;
     return data;
+}
+
+auto preferred_wheel_layer( std::span<const vehicle_render_layer> layers ) -> const vehicle_render_layer * // *NOPAD*
+{
+    const auto is_wheel = []( const auto & layer ) {
+        return std::ranges::find( layer.roles, vehicle_render_role::wheel ) != layer.roles.end();
+    };
+    const auto intact = std::ranges::find_if( layers, [&is_wheel]( const auto & layer ) {
+        return is_wheel( layer ) && !layer.broken;
+    } );
+    if( intact != layers.end() ) {
+        return &*intact;
+    }
+    const auto any = std::ranges::find_if( layers, is_wheel );
+    return any != layers.end() ? &*any : nullptr;
 }
 
 auto panel_outline( const panel_outline_options &options ) -> std::vector<std::array<float, 2>>

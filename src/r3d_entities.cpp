@@ -963,10 +963,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                    : ( best_body_spr ? best_body_spr : cell_spr );
             auto wheel_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
             const vox_asset *wheel_vox = nullptr;
-            const auto wheel_layer = std::ranges::find_if( cell.layers, []( const auto & layer ) {
-                return std::ranges::find( layer.roles, vehicle_render_role::wheel ) != layer.roles.end();
-            } );
-            if( wheel_layer != cell.layers.end() ) {
+            const auto wheel_layer = preferred_wheel_layer( cell.layers );
+            if( wheel_layer != nullptr ) {
                 auto modifier = char{ 0 };
                 const auto wheel_idx = wheel_layer->part_idx;
                 const auto &wheel_part = veh.cpart( wheel_idx );
@@ -978,7 +976,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     modifier = 2;
                 }
                 if( !id.is_null() ) {
-                    if( view.vehicle_vox_parts ) {
+                    if( modifier != 2 && view.vehicle_vox_parts ) {
                         const auto vox_part = view.vehicle_vox_parts->find( id.str() );
                         if( vox_part != view.vehicle_vox_parts->end() ) {
                             wheel_vox = &vox_part->second;
