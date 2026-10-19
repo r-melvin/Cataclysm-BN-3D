@@ -51,6 +51,7 @@ struct vehicle_render_profile {
     bool is_door = false;
     bool is_tall_cabin = false;
     bool is_interior = false;
+    bool is_cargo = false; // items stored here rest on the chassis floor
     float height = 0.0f;
     uint32_t light = 0;
 };

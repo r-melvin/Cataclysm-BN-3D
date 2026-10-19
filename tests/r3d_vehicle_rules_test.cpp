@@ -382,6 +382,7 @@ TEST_CASE("r3d_surface_height_follows_floor_parts_not_frames_or_panels", "[r3d][
     CHECK(height_with({"frame_horizontal", "seat", "roof"}) == Approx(r3d::chassis_floor_h));
     CHECK(height_with({"frame_horizontal", "aisle_horizontal", "halfboard_horizontal"})
           == Approx(r3d::chassis_floor_h));
+    CHECK(height_with({"frame_horizontal", "trunk_flat"}) == Approx(r3d::chassis_floor_h));
 }
 
 #if defined(TILES)

@@ -101,6 +101,7 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
         data.is_tall_cabin |= info.has_flag( "WINDSHIELD" ) || info.has_flag( "OPAQUE" ) ||
                               ( info.has_flag( "OBSTACLE" ) && !half_panel && !part.open );
         data.is_interior |= has_role( vehicle_render_role::interior );
+        data.is_cargo |= info.has_flag( "CARGO" );
     }
     data.show_roof = data.has_roof;
     data.height = data.is_tall_cabin ? vehicle_cabin_h : half_height_panel ? vehicle_body_h :
@@ -110,7 +111,8 @@ auto vehicle_profile( const vehicle &veh, const tripoint_mnt_veh &mount ) -> veh
 
 auto vehicle_surface_height( const vehicle &veh, const tripoint_mnt_veh &mount ) -> float
 {
-    return vehicle_profile( veh, mount ).is_interior ? chassis_floor_h : 0.0f;
+    const auto profile = vehicle_profile( veh, mount );
+    return profile.is_interior || profile.is_cargo ? chassis_floor_h : 0.0f;
 }
 
 auto preferred_wheel_layer( std::span<const vehicle_render_layer> layers ) -> const
