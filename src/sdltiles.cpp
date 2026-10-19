@@ -1431,6 +1431,8 @@ static bool draw_window( Font_Ptr &font, const catacurses::window &w, point offs
     //And in some instances of screen change, i.e. inventory.
     bool oldWinCompatible = false;
 
+    // Startup can draw a loading pane before a UI resize callback prepares the caches.
+    reinitialize_framebuffer();
     // clear the oversized buffer proportionally
     invalidate_framebuffer_proportion( win );
 
