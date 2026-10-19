@@ -73,25 +73,12 @@ so parts on different levels overwrite each other. Key cells by the full mount,
 offset each cell's geometry by its mount z, and make the neighbour lookups
 (walls, trim, bumpers, roofs) level-aware.
 
-## Fix `vehicle_profile` classification quirks
-
-Tests found that the `door` render role never fires for stock parts (no part
-has `DOOR` or a `door` location), a closed door counts as interior, and the
-corner of a mount with two shaped panels depends on install order. Base each on
-the right part flags.
-
 ## Make 3D asset loading robust
 
 One failing `.vox` file aborts loading of the rest, stream read errors are not
 checked, assets do not reload with the tileset, and loading on the first frame
 causes a stall. Load per file with isolated errors, check reads, reload with
 the tileset, and load off the first frame.
-
-## Remove 3D renderer dead code
-
-Drop the unreachable `item_geometry::billboard`, the C++ parsing of
-`material_regions` that nothing renders, and the duplicated VOX occupancy
-validation in `read_vox_model` and `extract_vox_surface`.
 
 ## Pin astyle 3.4.7 in the format tooling
 

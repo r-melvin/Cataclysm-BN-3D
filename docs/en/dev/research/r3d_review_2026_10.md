@@ -63,16 +63,28 @@ Phase 4 follows phase 5 (both touch `r3d_entities.cpp`).
 Done: phases 1, 2, 3 (dim unlit parts and creatures; silhouette hidden while driving, on unlit tiles and
 behind creatures; cargo tiles use the chassis floor), 6, and most of 4–5.
 
+Completed follow-ups:
+
+- Front/rear windshields share one emission path. The 17 geometry snapshots pass unchanged after the
+  refactor, including their side-cheek winding.
+- Removed unreachable `item_geometry::billboard` and unused runtime material-region storage/parsing;
+  shared VOX grid validation replaces the duplicate occupancy checks. Gallery material annotations remain
+  in JSON and in comparison packages; the gallery reads them directly.
+- Stock vehicle doors now receive the door role from their `OPENABLE` + `OBSTACLE` flags; window
+  curtains and shutters do not. Broken doors retain their layer role without setting the intact-door flag.
+- Closed doors no longer supply an interior floor just because they are `BOARDABLE`; open opaque doors
+  stop acting as tall walls. Separate seats, aisles and cargo floors remain usable. Door-pocket cargo still
+  rests at chassis-floor height, as required for other cargo. Updated the car, pickup and SUV snapshots
+  at headings 0, 90 and 225 to remove false closed-door floor quads; bus, semi and item scenes are unchanged.
+- Conflicting intact shaped panels use fixed NW, NE, SW, SE corner precedence, independent of install
+  order. Broken panels do not override intact ones, and unshaped panels cannot erase an authored corner.
+
 Open:
 
 - Vehicle mesh caching: dropped. Measured on RelWithDebInfo, five vehicles (car, pickup, SUV, bus, semi;
   ~9k vertices) build in 0.46 ms per frame and the entity mesh in 0.21 ms, about 3% of a 60 fps frame. GPU
   submission was not measured (needs interactive play).
-- Front/rear windshield merge: left as is; the side-cheek winding differs between them and only one test
-  covers that geometry.
 - Multi-level vehicles: moved to `BACKLOG.md`.
-- `vehicle_profile` oddities found by tests: the `door` role never fires for stock parts, a closed door counts
-  as interior, and the corner of a mount with two shaped panels depends on install order.
 - Local astyle 3.6.19 mis-indents functions with trailing return types; format r3d sources with
   `tools/r3d_spike/astyle_347.py` (astyle 3.4.7).
 - Mesh determinism (checked): the same seeded vehicle yields the same quads every run; only their order
