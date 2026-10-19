@@ -1,8 +1,10 @@
 #include "catch/catch.hpp"
+#include "path_info.h"
 #include "r3d_furniture_profiles.h"
 #include "r3d_presentation_profiles.h"
 
 #include <algorithm>
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -535,5 +537,42 @@ TEST_CASE("r3d_wall_elevation_uses_horizontal_edge_art", "[r3d][profiles][tiles]
     CHECK(art.elevation.v0 == Approx(expected->uv0.second + 0.5f / height));
     CHECK(art.elevation.u1 == Approx(expected->uv1.first - 0.5f / width));
     CHECK(art.elevation.v1 == Approx(expected->uv1.second - 0.5f / height));
+}
+TEST_CASE("r3d_bundled_trashcan_materials_are_opaque_and_attached", "[r3d][profiles][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    REQUIRE(input.good());
+    const auto profiles = r3d::load_presentation_profiles(input);
+    const auto& profile = profiles.at("furniture:f_trashcan");
+    REQUIRE(profile.face_sources.size() == 3);
+    for (const auto& source : profile.face_sources) {
+        const auto donor = tilecontext->get_sprite_draw_data(
+            {.id = source.sprite,
+             .category = C_NONE,
+             .pos = tripoint_bub_ms(0, 0, 0),
+             .variant = ""});
+        REQUIRE(donor);
+        REQUIRE(donor->alpha_mask);
+        const auto width = donor->dimensions.w;
+        const auto height = donor->dimensions.h;
+        for (auto y = static_cast<int>(source.crop[1] * height); y < source.crop[3] * height; ++y) {
+            for (auto x = static_cast<int>(source.crop[0] * width); x < source.crop[2] * width;
+                 ++x) {
+                CHECK((*donor->alpha_mask)[static_cast<size_t>(y * width + x)] != 0);
+            }
+        }
+    }
+    auto cache = r3d::tile_info_cache{};
+    cache.set_presentation_profiles(profiles);
+    const auto art = cache.furniture({.id = furn_str_id("f_trashcan").id(), .tiles = *tilecontext});
+    CHECK(art.sh.height == Approx(r3d::floor_height + profile.size[2]));
+    CHECK(art.cap.valid);
+    CHECK(art.front.valid);
+    CHECK(art.side.valid);
+    CHECK(art.front.sheet == art.main().sheet);
+    CHECK(art.side.sheet == art.main().sheet);
+    CHECK(art.cap.sheet == art.main().sheet);
 }
 #endif

@@ -123,6 +123,9 @@ stay within small authored footprints. These overrides do not change furniture
 collision, storage, reach, movement or other native gameplay properties.
 Upright, natural-block and panel furniture retain their inferred geometry.
 `depth_fraction` remains an item extrusion control, not a furniture-box size.
+Bundled examples include the talking doll’s toy proportions and the trashcan’s
+Ultica body/lid crops. The latter deliberately excludes transparent margins and
+the baked ground shadow so each solid face remains connected.
 
 Wall profiles also support `face_sources` for explicit side and top materials.
 These are opt-in entries in the same version-1 file, for example:

@@ -1,9 +1,11 @@
 #include "catch/catch.hpp"
+#include "path_info.h"
 #include "r3d_item_profiles.h"
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <fstream>
 #include <limits>
 #include <string>
 #include <unordered_map>
@@ -285,5 +287,51 @@ TEST_CASE("r3d_particles_face_the_first_person_camera", "[r3d][entities][tiles]"
             CHECK(projected[0].y > projected[3].y);
         }
     }
+}
+TEST_CASE(
+    "r3d_bundled_doll_profile_keeps_the_toy_smaller_than_a_character", "[r3d][items][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto voxel_items = override_option("R3D_VOXEL_ITEMS", "true");
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    REQUIRE(input.good());
+    const auto profiles = r3d::load_presentation_profiles(input);
+    const auto& profile = profiles.at("item:talking_doll");
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    get_avatar().setpos(origin);
+    auto& here = get_map();
+    here.add_item(origin, item::spawn("talking_doll", calendar::turn));
+    auto cache = r3d::tile_info_cache{};
+    cache.set_voxel_items(true);
+    auto cam = r3d::camera{};
+    cam.mode = r3d::camera_mode::first_person;
+    auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .surface = [](const tripoint_bub_ms& /*p*/) { return r3d::floor_height; },
+        .presentation_profiles = &profiles,
+        .upright_billboards = true};
+    const auto mesh = r3d::build_entity_mesh(view);
+    REQUIRE_FALSE(mesh.empty());
+    auto min_z = std::numeric_limits<float>::max();
+    auto max_z = std::numeric_limits<float>::lowest();
+    for (const auto& vertex : mesh.vertices) {
+        min_z = std::min(min_z, vertex.z);
+        max_z = std::max(max_z, vertex.z);
+    }
+    const auto& sprite =
+        cache.named({.category = C_ITEM, .id = "talking_doll", .tiles = *tilecontext}).main();
+    CHECK(max_z - min_z == Approx(profile.size[2] * (sprite.opaque_y1 - sprite.opaque_y0)));
+    CHECK(max_z - min_z < 0.25f);
+    CHECK(here.i_at(origin).size() == 1);
+    here.i_clear(origin);
+    CHECK(r3d::build_entity_mesh(view).empty());
 }
 #endif

@@ -116,8 +116,14 @@ items; those remain active R3D-03/05/07 follow-ups. Dan Guzman's Meredith world 
 backed up privately under `/tmp/bn-meredith-regression/`, using SQLite's backup API
 for consistent database snapshots. His actual shelter has `f_bench_flipped`
 interruptions and `f_wreckage` beside lockers; preserve these native states.
-The apparent voxel character is a loose `talking_doll`, whose authored proportions
-need correction. The marked stairwell, black patches, disconnected trashcan faces,
+The apparent voxel character is a loose `talking_doll`; a bundled profile now
+sets toy proportions. The trashcan has opaque, identity-bound Ultica body/lid
+crops and a compact footprint, preventing its source shadow/transparent margins
+from becoming disconnected faces. Both targets build without new warnings;
+165 renderer/onboarding cases pass (53,480 assertions), including actual donor
+alpha coverage and emitted doll height. A private native run confirms the
+connected trashcan and reduced doll (`profiles-after.png` / `profiles-wide.png`
+under `/tmp/bn-meredith-regression/`). The marked stairwell, black patches,
 bench-state readability and locker corner/row proportions need native mesh and
 visual regressions. The outdoor screenshot adds unknown-art cubes/creatures and
 vehicle panel/state problems; identify exact native IDs before choosing fallbacks. Broader cross-tileset

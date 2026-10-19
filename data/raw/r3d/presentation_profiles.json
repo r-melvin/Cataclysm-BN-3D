@@ -5,12 +5,34 @@
     {
       "category": "item",
       "id": "carbondioxide_tank",
-      "size": [0.48, 0.34, 0.86],
-      "support_anchor": [0.5, 0.5, 0.0],
+      "size": [ 0.48, 0.34, 0.86 ],
+      "support_anchor": [ 0.5, 0.5, 0.0 ],
       "depth_fraction": 0.38,
       "material_regions": [
-        { "name": "tank_shell", "role": "painted metal", "palette_indices": [1, 3] },
-        { "name": "valve", "role": "dark metal and red grips", "palette_indices": [2, 4] }
+        { "name": "tank_shell", "role": "painted metal", "palette_indices": [ 1, 3 ] },
+        { "name": "valve", "role": "dark metal and red grips", "palette_indices": [ 2, 4 ] }
+      ]
+    },
+    { "category": "item", "id": "talking_doll", "size": [ 0.18, 0.06, 0.2 ], "support_anchor": [ 0.5, 0.5, 0 ] },
+    {
+      "category": "furniture",
+      "id": "f_trashcan",
+      "size": [ 0.35, 0.35, 0.32 ],
+      "support_anchor": [ 0.5, 0.5, 0 ],
+      "face_sources": [
+        { "face": "top", "tileset": "UltimateCataclysm", "sprite": "f_trashcan", "crop": [ 0.3125, 0.4375, 0.65625, 0.5625 ] },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_trashcan",
+          "crop": [ 0.3125, 0.59375, 0.65625, 0.9375 ]
+        },
+        {
+          "face": "front",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_trashcan",
+          "crop": [ 0.3125, 0.59375, 0.65625, 0.9375 ]
+        }
       ]
     }
   ]
