@@ -52,6 +52,25 @@ auto read_chunk_header( std::span<const uint8_t> bytes, size_t offset, size_t pa
         .chunk_end = content_end + static_cast<size_t>( *children_size )};
 }
 
+/// Colour index per cell (x fastest, then y, then z); rejects out-of-range cells, colour 0 and
+/// duplicate coordinates.
+auto voxel_grid( const vox_model &model ) -> std::expected<std::vector<uint8_t>, std::string>
+{
+    auto occupied = std::vector<uint8_t>(
+                        static_cast<size_t>( model.size_x ) * model.size_y * model.size_z );
+    for( const auto &cell : model.cells ) {
+        if( cell.color_index == 0 || cell.x >= model.size_x || cell.y >= model.size_y
+            || cell.z >= model.size_z ) {
+            return std::unexpected( "voxel coordinate or color index is outside the model" );
+        }
+        const auto index =
+            ( static_cast<size_t>( cell.z ) * model.size_y + cell.y ) * model.size_x + cell.x;
+        if( occupied[index] != 0 ) { return std::unexpected( "duplicate voxel coordinate" ); }
+        occupied[index] = cell.color_index;
+    }
+    return occupied;
+}
+
 } // namespace
 
 auto read_vox_model( std::span<const uint8_t> bytes ) -> std::expected<vox_model, std::string>
@@ -195,17 +214,8 @@ auto read_vox_model( std::span<const uint8_t> bytes ) -> std::expected<vox_model
             };
         }
     }
-    auto occupied = std::vector<uint8_t>(
-                        static_cast<size_t>( model.size_x ) * model.size_y * model.size_z );
-    for( const auto &cell : model.cells ) {
-        if( cell.color_index == 0 || cell.x >= model.size_x || cell.y >= model.size_y
-            || cell.z >= model.size_z ) {
-            return std::unexpected( "voxel coordinate or color index is outside the model" );
-        }
-        const auto index =
-            ( static_cast<size_t>( cell.z ) * model.size_y + cell.y ) * model.size_x + cell.x;
-        if( occupied[index] != 0 ) { return std::unexpected( "duplicate voxel coordinate" ); }
-        occupied[index] = cell.color_index;
+    if( const auto grid = voxel_grid( model ); !grid ) {
+        return std::unexpected( grid.error() );
     }
     return model;
 }
@@ -227,18 +237,9 @@ auto extract_vox_surface( const vox_model &model ) -> std::expected<vox_surface,
         || model.size_y > 256 || model.size_z > 256 || model.cells.size() > 1'000'000 ) {
         return std::unexpected( "invalid or oversized voxel model" );
     }
-    const auto volume = static_cast<size_t>( model.size_x ) * model.size_y * model.size_z;
-    auto occupied = std::vector<uint8_t>( volume );
-    for( const auto &cell : model.cells ) {
-        if( cell.color_index == 0 || cell.x >= model.size_x || cell.y >= model.size_y
-            || cell.z >= model.size_z ) {
-            return std::unexpected( "voxel coordinate or color index is outside the model" );
-        }
-        const auto index =
-            ( static_cast<size_t>( cell.z ) * model.size_y + cell.y ) * model.size_x + cell.x;
-        if( occupied[index] != 0 ) { return std::unexpected( "duplicate voxel coordinate" ); }
-        occupied[index] = cell.color_index;
-    }
+    const auto grid = voxel_grid( model );
+    if( !grid ) { return std::unexpected( grid.error() ); }
+    const auto &occupied = *grid;
 
     const auto is_occupied = [&occupied, &model]( int x, int y, int z ) {
         if( x < 0 || y < 0 || z < 0 || x >= model.size_x || y >= model.size_y
