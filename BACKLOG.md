@@ -11,25 +11,29 @@ pipeline was checked at `b4e0493`.
 
 ## R3D-01: Asset loading and reload safety
 
-**Status: implementation follow-up.** Malformed VOX models already log a warning
-and fall back individually. However, a thrown file/access/upload exception can
-skip the remaining directory entries; stream read failures are not checked
-explicitly. Assets load on the first 3D frame and do not reload with the tileset.
+**Status: implemented; broader GPU acceptance remains in R3D-07.** Checked,
+bounded reads and per-file exception isolation preserve valid neighbors. A
+cancellable CPU worker prepares profiles/models; the render thread uploads one
+palette per frame and redraws idle gameplay without spending turns. Tileset
+reload and device shutdown discard superseded work and release old resources.
+Capture waits for settled assets and flushes logs before one-shot exit.
 
-Isolate failures per file, check reads, define profile/asset reload and GPU
-resource lifetime, and move preparation off the first visible frame. Preserve
-fallbacks. Validate a bad file between valid assets, failed reads, tileset reload
-and device recreation. See `src/r3d.cpp::load_vox_assets` and the
-[renderer review](docs/en/dev/research/r3d_review_2026_10.md).
+Validation: 103 renderer tests (28,286 assertions), nine capture-tool tests,
+and an Xvfb/software-Vulkan one-shot comparison. The live log confirms an invalid
+VOX is skipped while two vehicle models and one item model become ready. Tests
+cover failed reads, valid neighbors, profile reload, cancellation and stale
+results across device/reload requests. Native GPU recreation and the complete
+visual matrix remain acceptance work, not claims established by these tests.
+Implementation: `src/r3d_asset_loader.cpp` and `src/r3d.cpp`.
 
 ## R3D-02: Pin the working formatter in shared tooling
 
-**Status: implementation follow-up.** The astyle 3.4.7 wrapper works, but the
-normal format target still depends on the installed version. astyle 3.6.x
-mis-indents trailing-return functions. Make developer formatting select the
-compatible version and report setup failures clearly; retain clang-format for
-nested C++ and tests. Verify repeatable formatting on representative code.
-This is local tooling work, not a request to add paid CI.
+**Status: delivered.** Shared formatting accepts native astyle 3.4.7, otherwise
+selects `astyle-py==1.1.0` through uvx or the active Python environment. The wrapper
+pins the 3.4.7 engine and reports setup failures; incompatible system versions
+are never used. Nested C++ and tests retain clang-format. Verified routing,
+trailing-return indentation and repeated-format idempotence on representative
+files, plus the missing-package diagnostic. No paid CI was added.
 
 Sources: [agent guidelines](AGENTS.md),
 [wrapper](tools/r3d_spike/astyle_347.py).
@@ -124,6 +128,15 @@ clothing, overhead levels and occluders. Add targeted texture-sheet/UV and
 normal-refresh-path tests where useful. Retain real saves/captures for visual
 judgment; fingerprints alone do not establish appearance or visibility. Run
 locally; paid GitHub CI is explicitly out of scope.
+
+2026-10-19 Linux virtual-window check: direct saved-world loading exposed a
+loading-screen framebuffer initialization crash, fixed in `84fd8ea`. The paired
+one-shot capture now succeeds with software Vulkan and malformed-asset fallback.
+The full eight-angle session subsequently faults in a Lavapipe 26.2.4 worker after
+two yaw views. Reproduce with a stable software driver and native GPU, distinguish
+driver failure from invalid renderer submissions, and complete view-restoration
+validation before closing this item. Current private evidence is under
+`/tmp/bn-assets-live/` (temporary, not a durable/shared fixture).
 
 Sources: [comparison guide](tools/r3d_spike/COMPARE.md),
 [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md),
@@ -265,7 +278,8 @@ movement. Source: [Dramatic Shape review](docs/en/dev/research/dramatic_shape_vo
 - [Renderer review](docs/en/dev/research/r3d_review_2026_10.md): wheel/depth/roof/
   shared-edge/cargo-floor/lighting/camera/classification fixes are delivered;
   billboard/material/grid dead code and windshield duplication are removed.
-  Remaining findings map to R3D-01/02/07/08/09/16.
+  Asset loading and shared formatter changes are recorded in R3D-01/02 above;
+  remaining acceptance and findings map to R3D-07/08/09/16.
 - [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md):
   size/anchor/depth profiles, galleries/support markers, local contact shading,
   chunk diagnostics and avatar-only silhouettes exist. Extensions/acceptance

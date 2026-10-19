@@ -13,7 +13,8 @@
   sprites keep their pixel silhouette, including corners and notches.
 - Vehicle wheels use faceted 3D geometry.
 - Authored `.vox` item models can replace sprite-derived volumes when present in
-  the renderer's item asset directory.
+  the renderer's item asset directory. Models and profiles prepare off-thread,
+  reload with the tileset, and retain per-file fallbacks for invalid assets.
 - Automated comparisons while playing: a private save copy records a 2D reference,
   eight 3D angles, current saves, settings, and diagnostic logs. Reports are split
   into ZIPs below GitHub's attachment limit. The launcher checks executable/shader
@@ -44,6 +45,9 @@ python3 tools/r3d_spike/compare_session.py --help
 For headless Linux tests, also set `SDL_VIDEODRIVER=dummy`. The CPU compute setting
 avoids requiring an SDL GPU compute device for tests; it does not validate the
 rendered GPU image. This fork uses local checks rather than paid GitHub CI.
+Run interactive game smoke tests in a virtual window (`xvfb-run -a` on Linux),
+with a private `--userdir` and `--configdir`. A software Vulkan installation and
+`--gpu-backend software` allow GPU image checks without a physical display.
 
 The renderer tests include 17 seeded geometry snapshots. For an intentional
 geometry change, regenerate them with `R3D_UPDATE_GEOMETRY_SNAPSHOT=1` on the test
@@ -52,11 +56,12 @@ Snapshots cover mesh positions/light, not textures, UVs or shaders. Use the
 [comparison guide](tools/r3d_spike/COMPARE.md) for real gameplay captures and ZIP
 reports; those are still needed to judge appearance.
 
-Format only touched files. Top-level `src/*.cpp` and `src/*.h` need astyle 3.4.7
-because system astyle 3.6.x mis-indents trailing-return functions. With
-[uv](https://docs.astral.sh/uv/) installed, use
-`uvx --from astyle-py python tools/r3d_spike/astyle_347.py <files>`;
-tests and nested C++ use `clang-format -i <files>`. See [AGENTS.md](AGENTS.md).
+Format only touched files with `bash build-scripts/format-cpp.sh <files>`.
+The helper uses astyle 3.4.7 for top-level C++ because 3.6.x mis-indents
+trailing-return functions; tests and nested C++ use clang-format. Install
+[uv](https://docs.astral.sh/uv/) for the pinned astyle fallback, or install
+`astyle-py==1.1.0` in your Python environment. A native astyle 3.4.7 also works.
+The CMake `format` target uses the same selection. See [AGENTS.md](AGENTS.md).
 
 The separate [Go asset CLI](https://github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline)
 packs directional sprites, voxelizes directly to `.vox`, validates models and
