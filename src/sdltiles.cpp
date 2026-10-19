@@ -2,6 +2,7 @@
 
 #    include "sdltiles.h" // IWYU pragma: associated
 #    include "r3d.h"
+#    include "r3d_asset_loader.h"
 
 #    include "avatar.h"
 #    include "cata_tiles.h"
@@ -3648,6 +3649,7 @@ static void CheckMessages()
         ui_manager::invalidate( rectangle<point>( point_zero, point( WindowWidth, WindowHeight ) ), false );
         ui_manager::redraw_invalidated();
     }
+    r3d::refresh_pending_assets();
     if( needupdate ) {
         try_sdl_update();
     }

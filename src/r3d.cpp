@@ -3,6 +3,7 @@
 #include "r3d.h"
 #include "r3d_capture_messages.h"
 #include "r3d_capture_store.h"
+#include "r3d_asset_loader.h"
 
 #include <algorithm>
 #include <array>
@@ -145,6 +146,10 @@ struct state {
     std::unordered_map<std::string, vox_asset> vehicle_vox_parts;
     std::unordered_map<std::string, vox_asset> item_vox_models;
     presentation_profile_map presentation_profiles;
+    asset_preparer asset_preparation;
+    std::optional<prepared_assets> pending_assets;
+    std::chrono::steady_clock::time_point last_asset_refresh{};
+    uint64_t asset_changed_frame = 0;
     std::unordered_map<chunk_key, chunk_gpu, chunk_key_hash> chunks;
     camera cam;
     unsigned epoch = 0;
@@ -167,7 +172,7 @@ struct state {
     bool map_drawn = false; // the game's map view has been on screen (a game is running)
     vec3 pan; // free camera: offset of the camera target from the viewed tile, world space
     bool walls_on = false; // whether the cache was given the wall side rules and atlas
-    bool voxel_assets_loaded = false;
+    bool asset_request_started = false;
     bool thin_walls = true;
     bool voxel_items = false;
     bool plaster_atlas = false; // whether painted walls take the atlas plaster (see the option)
@@ -395,47 +400,51 @@ auto make_vox_palette_sprite( gpu &device, const vox_model &model ) -> sprite_re
     return sprite;
 }
 
-auto load_vox_assets( gpu &device,
-                      const std::filesystem::path &directory ) -> std::unordered_map<std::string, vox_asset>
+auto assets_pending( const state &s ) -> bool
 {
-    auto assets = std::unordered_map<std::string, vox_asset> {};
-    std::error_code error;
-    if( !std::filesystem::is_directory( directory, error ) ) { return assets; }
-    try {
-        for( const auto &entry : std::filesystem::directory_iterator( directory ) ) {
-            if( !entry.is_regular_file() || entry.path().extension() != ".vox" ) { continue; }
-            auto input = std::ifstream( entry.path(), std::ios::binary );
-            const auto bytes = std::vector<uint8_t>( std::istreambuf_iterator<char>( input ), {} );
-            const auto model = read_vox_model( bytes );
-            if( !model ) {
-                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot load voxel model "
-                                               << entry.path() << ": " << model.error();
-                continue;
-            }
-            const auto surface = extract_vox_surface( *model );
-            if( !surface ) {
-                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot mesh voxel model "
-                                               << entry.path() << ": " << surface.error();
-                continue;
-            }
-            if( surface->faces.empty() ) {
-                DebugLog( DL::Warn, DC::Main ) << "r3d: voxel model is empty: " << entry.path();
-                continue;
-            }
-            auto palette = make_vox_palette_sprite( device, *model );
-            if( !palette.valid ) {
-                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot upload palette for " << entry.path();
-                continue;
-            }
-            const auto id = entry.path().stem().string();
-            assets.emplace( id, vox_asset{
-                .model = *model, .surface = *surface, .palette = std::move( palette )} );
+    return s.asset_preparation.busy() || s.pending_assets.has_value();
+}
+
+auto advance_assets( state &s ) -> void
+{
+    if( auto prepared = s.asset_preparation.poll() ) {
+        DebugLog( DL::Info, DC::Main ) << "r3d assets: prepared " << prepared->vehicle_parts.size()
+                                       << " vehicle models, " << prepared->items.size() << " item models";
+        for( const auto &warning : prepared->warnings ) {
+            DebugLog( DL::Warn, DC::Main ) << "r3d asset: " << warning;
         }
-    } catch( const std::exception &e ) {
-        DebugLog( DL::Warn, DC::Main ) << "r3d: voxel models not loaded from " << directory << ": " <<
-                                       e.what();
+        s.presentation_profiles = std::move( prepared->profiles );
+        s.pending_assets = std::move( *prepared );
+        s.asset_changed_frame = s.frame + 1;
     }
-    return assets;
+    if( !s.pending_assets ) { return; }
+    const auto upload = [&s]( auto & prepared, auto & destination ) {
+        if( prepared.empty() ) { return false; }
+        auto entry = prepared.extract( prepared.begin() );
+        s.asset_changed_frame = s.frame + 1;
+        try {
+            auto palette = make_vox_palette_sprite( s.device, entry.mapped().model );
+            if( !palette.valid ) {
+                DebugLog( DL::Warn, DC::Main ) << "r3d: cannot upload palette for " << entry.key();
+            } else {
+                destination.emplace( entry.key(), vox_asset{
+                    .model = std::move( entry.mapped().model ),
+                    .surface = std::move( entry.mapped().surface ), .palette = std::move( palette ) } );
+            }
+        } catch( const std::exception &error ) {
+            DebugLog( DL::Warn, DC::Main ) << "r3d: cannot upload " << entry.key() << ": " << error.what();
+        }
+        return true;
+    };
+    // One small palette upload per frame; all file I/O and meshing are already off-thread.
+    if( !upload( s.pending_assets->vehicle_parts, s.vehicle_vox_parts ) ) {
+        upload( s.pending_assets->items, s.item_vox_models );
+    }
+    if( s.pending_assets->vehicle_parts.empty() && s.pending_assets->items.empty() ) {
+        s.pending_assets.reset();
+        DebugLog( DL::Info, DC::Main ) << "r3d assets: ready with " << s.vehicle_vox_parts.size()
+                                       << " vehicle models, " << s.item_vox_models.size() << " item models";
+    }
 }
 
 // Height of the solid part of a tile as drawn: 0 for open air, the floor slab, furniture or a
@@ -778,12 +787,14 @@ auto maybe_take_screenshot( state &s ) -> void
     // CATA_R3D_SCREENSHOT=<path> saves the finished previous frame once things have settled;
     // with CATA_R3D_QUIT_AFTER_SHOT set the game then exits, for scripted visual checks.
     const char *path = std::getenv( "CATA_R3D_SCREENSHOT" );
-    if( !path || s.screenshot_taken || s.frame < 40 ) {
+    if( !path || s.screenshot_taken || s.frame < 40 || assets_pending( s ) ||
+        s.frame <= s.asset_changed_frame ) {
         return;
     }
     s.screenshot_taken = true;
     save_screenshot( path );
     if( std::getenv( "CATA_R3D_QUIT_AFTER_SHOT" ) ) {
+        flush_debug_log();
         std::_Exit( 0 );
     }
 }
@@ -1004,8 +1015,24 @@ auto dump_view( const std::string &path, const tripoint_bub_ms &center ) -> void
     }
 }
 
+auto settle_capture_assets() -> void
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds( 30 );
+    while( active() && assets_pending( st() ) && std::chrono::steady_clock::now() < deadline ) {
+        SDL_Delay( 1 );
+        g->invalidate_main_ui_adaptor();
+        ui_manager::redraw();
+    }
+    if( active() && assets_pending( st() ) ) {
+        throw std::runtime_error( "timed out preparing 3D assets for capture" );
+    }
+}
+
 auto capture( const std::string &path ) -> bool
 {
+    g->invalidate_main_ui_adaptor();
+    ui_manager::redraw();
+    settle_capture_assets();
     g->invalidate_main_ui_adaptor();
     ui_manager::redraw();
     const auto ok = static_cast<bool>( save_screenshot( path ) );
@@ -1235,6 +1262,8 @@ auto compare_capture( bool gameplay_boundary ) -> void
                 ui_manager::redraw();
             };
             redraw();
+            // Do not package transient fallbacks while the new tileset's assets prepare.
+            settle_capture_assets();
             // The renderer only uploads the new tileset's textures when it presents, and the
             // capture reads the 3D pass before any present: show one frame so the sheets the
             // meshes sample from are on the GPU (SDL versions differ in when a flush uploads).
@@ -1270,6 +1299,7 @@ auto compare_capture( bool gameplay_boundary ) -> void
         }
 
         if( std::getenv( "CATA_R3D_QUIT_AFTER_SHOT" ) ) {
+            flush_debug_log();
             std::_Exit( ok_3d && ok_2d ? 0 : 1 );
         }
         const auto restored = static_cast<bool>( original_view.restore() );
@@ -1436,13 +1466,28 @@ auto shutdown() -> void
     s.walls_on = false;
     s.vehicle_vox_parts.clear();
     s.item_vox_models.clear();
-    s.voxel_assets_loaded = false;
+    s.presentation_profiles.clear();
+    s.asset_preparation.cancel();
+    s.pending_assets.reset();
+    s.asset_request_started = false;
+    s.last_asset_refresh = {};
     s.tileset_loads = 0;
     s.device.shutdown();
     s.epoch_valid = false;
     s.drawn = false;
     s.shown.valid = false;
     s.last_chunk_report = {};
+}
+
+auto refresh_pending_assets() -> void
+{
+    auto &s = st();
+    if( !g || !active() || !assets_pending( s ) ) { return; }
+    const auto now = std::chrono::steady_clock::now();
+    if( now - s.last_asset_refresh < std::chrono::milliseconds( 33 ) ) { return; }
+    s.last_asset_refresh = now;
+    g->invalidate_main_ui_adaptor();
+    ui_manager::redraw_invalidated();
 }
 
 auto draw( const draw_options &options ) -> bool
@@ -1486,22 +1531,16 @@ auto draw( const draw_options &options ) -> bool
         s.epoch_valid = true;
     }
 
-    if( !s.voxel_assets_loaded ) {
+    if( !s.asset_request_started || tilecontext->tileset_loads() != s.tileset_loads ) {
         const auto asset_root = std::filesystem::path( PATH_INFO::datadir() ) / "raw" / "r3d";
-        s.vehicle_vox_parts = load_vox_assets( s.device, asset_root / "vehicle_parts" );
-        s.item_vox_models = load_vox_assets( s.device, asset_root / "items" );
-        try {
-            auto profiles = std::ifstream( asset_root / "presentation_profiles.json" );
-            if( profiles ) {
-                s.presentation_profiles = load_presentation_profiles( profiles );
-            } else {
-                s.presentation_profiles.clear();
-            }
-        } catch( const std::exception &e ) {
-            s.presentation_profiles.clear();
-            DebugLog( DL::Warn, DC::Main ) << "r3d: presentation profiles not loaded: " << e.what();
-        }
-        s.voxel_assets_loaded = true;
+        s.vehicle_vox_parts.clear();
+        s.item_vox_models.clear();
+        s.presentation_profiles.clear();
+        s.pending_assets.reset();
+        s.asset_preparation.request( asset_root );
+        s.asset_request_started = true;
+    } else {
+        advance_assets( s );
     }
 
     // The wall-side rules and atlas are always loaded (they name each wall's material); the
