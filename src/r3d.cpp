@@ -1924,7 +1924,7 @@ auto face_towards( int dx, int dy ) -> void
 {
     auto &s = st();
     const auto &you = get_avatar();
-    if( you.in_vehicle ) {
+    if( you.controlling_vehicle ) {
         return;
     }
     if( s.cam.first_person() && ( dx != 0 || dy != 0 ) ) {
@@ -1939,7 +1939,7 @@ auto rotate( int dir ) -> void
 
     auto &s = st();
     const auto &you = get_avatar();
-    if( s.cam.first_person() && you.in_vehicle ) {
+    if( s.cam.first_person() && you.controlling_vehicle ) {
         return;
     }
     s.cam.rotate_steps( dir );
@@ -2538,8 +2538,7 @@ auto draw( const draw_options &options ) -> bool
     const auto &you = get_avatar();
     const auto vp = here.veh_at( you.bub_pos() );
     const auto is_controlling = vp && vp->vehicle().player_in_control( you );
-    const auto in_vehicle = ( you.in_vehicle || is_controlling ) && static_cast<bool>( vp );
-    if( !s.comparison_camera && in_vehicle ) {
+    if( !s.comparison_camera && is_controlling ) {
         const auto veh_face = vp->vehicle().face.dir();
         const auto veh_yaw = vehicle_heading_to_yaw( veh_face );
         if( fp ) {
@@ -2551,17 +2550,13 @@ auto draw( const draw_options &options ) -> bool
             s.fp_ease_yaw = 0.0f;
             remember_heading( s );
         }
-        if( is_controlling ) {
-            if( !s.was_controlling_vehicle ) {
-                s.cam.yaw = veh_yaw;
-                s.was_controlling_vehicle = true;
-            } else {
-                s.cam.yaw = wrap_angle( s.cam.yaw + wrap_angle( veh_yaw - s.last_vehicle_yaw ) );
-            }
-            s.last_vehicle_yaw = veh_yaw;
+        if( !s.was_controlling_vehicle ) {
+            s.cam.yaw = veh_yaw;
+            s.was_controlling_vehicle = true;
         } else {
-            s.was_controlling_vehicle = false;
+            s.cam.yaw = wrap_angle( s.cam.yaw + wrap_angle( veh_yaw - s.last_vehicle_yaw ) );
         }
+        s.last_vehicle_yaw = veh_yaw;
     } else if( !s.comparison_camera ) {
         if( fp ) {
             s.cam.exact_fp_yaw = std::nullopt;
