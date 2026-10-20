@@ -2278,12 +2278,6 @@ auto draw_fp_hud( const draw_fp_hud_options &options ) -> void
         const auto cx = static_cast<float>( x + w * 0.5f );
         const auto cy = static_cast<float>( y + h * 0.5f );
         fill( { .x = cx - 2.0f, .y = cy - 2.0f, .w = 4.0f, .h = 4.0f, .r = 255, .g = 255, .b = 255, .a = 200 } );
-        auto label = std::string{};
-        const auto at = std::optional<tripoint_bub_ms>( crosshair() );
-        if( at ) { label = crosshair_description( get_avatar(), here, *at ); }
-        if( !label.empty() ) {
-            text( { .x = cx, .y = cy + 8.0f, .text = label, .color = white } );
-        }
     }
 }
 
