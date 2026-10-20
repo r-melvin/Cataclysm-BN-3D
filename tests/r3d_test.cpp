@@ -738,6 +738,26 @@ TEST_CASE( "r3d_vehicle_heading_to_camera_yaw", "[r3d]" )
                    static_cast<float>( M_PI ) ) );
     CHECK( approx( r3d::vehicle_heading_to_yaw( 180_degrees ), static_cast<float>( M_PI * 0.5 ) ) );
 
+    CHECK( approx( r3d::vehicle_heading_to_fp_yaw( 270_degrees ), 0.0f ) );
+    CHECK( approx( r3d::vehicle_heading_to_fp_yaw( 0_degrees ), static_cast<float>( M_PI * 0.5 ) ) );
+    CHECK( approx( std::abs( r3d::vehicle_heading_to_fp_yaw( 90_degrees ) ),
+                   static_cast<float>( M_PI ) ) );
+    CHECK( approx( r3d::vehicle_heading_to_fp_yaw( 180_degrees ), static_cast<float>( -M_PI * 0.5 ) ) );
+
+    auto fp_cam = r3d::camera{};
+    fp_cam.mode = r3d::camera_mode::first_person;
+    fp_cam.heading = 0;
+    // Walking: without exact_fp_yaw, locked to 45 degree increments
+    CHECK( approx( fp_cam.fp_yaw(), 0.0f ) );
+    fp_cam.heading = 1;
+    CHECK( approx( fp_cam.fp_yaw(), static_cast<float>( M_PI * 0.25 ) ) );
+    CHECK( fp_cam.forward_eighths() == 1 );
+
+    // In a vehicle: with exact_fp_yaw, matches exact vehicle angle continuously
+    fp_cam.exact_fp_yaw = r3d::vehicle_heading_to_fp_yaw( 30_degrees );
+    CHECK( approx( fp_cam.fp_yaw(), static_cast<float>( units::to_radians( 120_degrees ) ) ) );
+    CHECK( fp_cam.forward_eighths() == 3 );
+
     auto cam = r3d::camera{};
     cam.yaw = r3d::vehicle_heading_to_yaw( 270_degrees );
     CHECK( cam.forward_eighths() == 0 );
