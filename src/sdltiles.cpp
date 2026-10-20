@@ -3518,7 +3518,6 @@ static void CheckMessages()
                         if( g ) {
                             g->invalidate_main_ui_adaptor();
                         }
-                        ui_manager::redraw_invalidated();
                         needupdate = true;
                     }
                 }

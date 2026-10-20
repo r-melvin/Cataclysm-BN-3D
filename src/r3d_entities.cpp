@@ -909,6 +909,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
     auto &sink = options.sink;
     const auto &view = options.view;
     auto &here = options.here;
+    const auto &you = get_avatar();
+    const auto p_avatar = you.bub_pos();
+    const auto vp_avatar = here.veh_at( p_avatar );
 
     for( const wrapped_vehicle &wrapped : here.get_vehicles() ) {
         auto &veh = *wrapped.v;
@@ -917,6 +920,11 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
         if( veh_z < view.z_lo || veh_z > view.z_hi ) {
             continue;
         }
+
+        const auto is_driving_this_vehicle = you.in_vehicle && vp_avatar &&
+                                             &vp_avatar->vehicle() == &veh &&
+                                             veh.player_in_control( you );
+        const auto clear_windshield = is_driving_this_vehicle && view.cam.first_person();
 
         const auto pivot_mnt = veh.pivot_anchor[0];
         const auto pivot_sx = static_cast<float>( veh_bub.x() - view.center.x() ) + 0.5f;
@@ -1421,7 +1429,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         { glass_low_r.x, glass_low_r.y, z_low }, { glass_low_l.x, glass_low_l.y, z_low }
                     }};
                 const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
-                sink.add_colored( { .sprite = spr, .corners = c_glass, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                if( !clear_windshield ) {
+                    sink.add_colored( { .sprite = spr, .corners = c_glass, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                }
 
                 // Solid cowl deck under the windshield at z = body_h (0.55f)
                 const auto p0_cowl = transform.apply( f_top, r_l );
@@ -1572,7 +1582,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             { win_mid_r.x, win_mid_r.y, z_mid }, { win_mid_l.x, win_mid_l.y, z_mid }
                         }};
                     const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
-                    sink.add_colored( { .sprite = s, .corners = c_window, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                    if( !clear_windshield ) {
+                        sink.add_colored( { .sprite = s, .corners = c_window, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                    }
 
                     // Lower hatch lid (painted metal)
                     const auto p_mid_l = transform.apply( f_mid, r_l_mid );
@@ -1864,7 +1876,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                     { pane_p0_top.x, pane_p0_top.y, z_top }, { pane_p1_top.x, pane_p1_top.y, z_top },
                                     { pane_p1_mid.x, pane_p1_mid.y, z_mid }, { pane_p0_mid.x, pane_p0_mid.y, z_mid }
                                 }};
-                            sink.add_colored( { .sprite = s, .corners = c_pane, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                            if( !clear_windshield ) {
+                                sink.add_colored( { .sprite = s, .corners = c_pane, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                            }
                         } else {
                             // Front/rear upper wall
                             const auto f_outer = f_center;
@@ -2121,9 +2135,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                     continue;
                 }
                 const auto light = static_cast<uint32_t>( view.light( p ) );
-                if( light == pack_light( 0, 0, 0 ) ) {
-                    continue; // not visible
-                }
+                const auto visible_light = light == pack_light( 0, 0, 0 ) ? seen_in_dark_light : light;
                 const auto id = std::string( ( *stack.begin() )->typeId().str() );
                 const tile_info &sprite = view.cache.named( { .category = C_ITEM, .id = id, .tiles = view.tiles } );
                 auto profile = item_profile( id );
@@ -2149,7 +2161,8 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                 const auto is_hovered = view.hovered && *view.hovered == p;
                 const auto current_item_size = is_hovered ? ( item_size * 1.28f ) : item_size;
                 const auto z_base = frame_z( p ) + view.surface( p ) + ( is_hovered ? 0.04f : 0.02f );
-                const auto item_color = static_cast<uint32_t>( is_hovered ? pack_light( 255, 245, 160 ) : light );
+                const auto item_color = static_cast<uint32_t>( is_hovered ? pack_light( 255, 245,
+                                        160 ) : visible_light );
 
                 if( is_hovered ) {
                     emit_flat( {
@@ -2322,121 +2335,6 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
         }
     }
 
-    if( view.cam.first_person() && !view.avatar_only && you.is_armed() ) {
-        const auto &weapon = you.primary_weapon();
-        const auto item_id = std::string( weapon.typeId().str() );
-        const tile_info &sprite_info = view.cache.named( {
-            .category = C_ITEM,
-            .id = item_id,
-            .tiles = view.tiles
-        } );
-        const auto &sprite = sprite_info.main();
-        if( sprite.valid ) {
-            const auto cam_eye_tile = vec3{ eye_world.x, -eye_world.y, eye_world.z / view.cam.z_scale };
-            const auto fwd_w = vec3( view.cam.fp_forward() );
-            const auto fwd_tile = normalize( vec3{ fwd_w.x, -fwd_w.y, fwd_w.z / view.cam.z_scale } );
-            const auto right_w = vec3( view.cam.ground_right() );
-            const auto right_tile = normalize( vec3{ right_w.x, -right_w.y, 0.0f } );
-            const auto up_tile = vec3{ 0.0f, 0.0f, 1.0f };
-
-            // Gun points away from player, slightly angled towards center
-            const auto gun_dir = normalize( fwd_tile - right_tile * 0.08f );
-            const auto gun_right = normalize( cross( gun_dir, up_tile ) );
-            const auto gun_up = normalize( cross( gun_right, gun_dir ) );
-
-            constexpr auto gun_len = 0.32f;
-            const auto aspect = ( sprite.opaque_y1 > sprite.opaque_y0 && sprite.opaque_x1 > sprite.opaque_x0 ) ?
-                                static_cast<float>( ( sprite.opaque_y1 - sprite.opaque_y0 ) * sprite.size_y ) /
-                                static_cast<float>( ( sprite.opaque_x1 - sprite.opaque_x0 ) * sprite.size_x ) : 0.6f;
-            const auto gun_h = std::clamp( gun_len * aspect, 0.10f, 0.28f );
-            constexpr auto half_thick = 0.015f; // 1 voxel wide (0.030f total thickness)
-
-            const auto p = you.bub_pos();
-            const auto phase = static_cast<float>( p.x() * 3 + p.y() * 5 ) * 0.8f + view.cam.fp_yaw() * 2.0f;
-            const auto bob_x = std::sin( phase ) * 0.008f;
-            const auto bob_y = std::abs( std::cos( phase ) ) * 0.008f;
-
-            const auto base_pos = cam_eye_tile + fwd_tile * 0.28f + right_tile * ( 0.12f + bob_x ) + up_tile *
-                                  ( -0.10f + bob_y );
-
-            const auto d_vec = gun_dir * gun_len;
-            const auto h_vec = gun_up * gun_h;
-            const auto r_vec = gun_right * half_thick;
-
-            const auto v_near_bottom_left = base_pos - r_vec;
-            const auto v_near_bottom_right = base_pos + r_vec;
-            const auto v_near_top_left = base_pos - r_vec + h_vec;
-            const auto v_near_top_right = base_pos + r_vec + h_vec;
-            const auto v_far_bottom_left = base_pos - r_vec + d_vec;
-            const auto v_far_bottom_right = base_pos + r_vec + d_vec;
-            const auto v_far_top_left = base_pos - r_vec + d_vec + h_vec;
-            const auto v_far_top_right = base_pos + r_vec + d_vec + h_vec;
-
-            const auto u0 = static_cast<float>( sprite.u0 + ( sprite.u1 - sprite.u0 ) * sprite.opaque_x0 );
-            const auto u1 = static_cast<float>( sprite.u0 + ( sprite.u1 - sprite.u0 ) * sprite.opaque_x1 );
-            const auto v0 = static_cast<float>( sprite.v0 + ( sprite.v1 - sprite.v0 ) * sprite.opaque_y0 );
-            const auto v1 = static_cast<float>( sprite.v0 + ( sprite.v1 - sprite.v0 ) * sprite.opaque_y1 );
-
-            const auto gun_col = no_pull( view.light( you.bub_pos() ) );
-            const auto solid_uvs = make_solid_uvs( sprite );
-
-            // 1. Right side face
-            const auto c_right = corners_t{{
-                    { v_near_top_right.x, v_near_top_right.y, v_near_top_right.z },
-                    { v_far_top_right.x, v_far_top_right.y, v_far_top_right.z },
-                    { v_far_bottom_right.x, v_far_bottom_right.y, v_far_bottom_right.z },
-                    { v_near_bottom_right.x, v_near_bottom_right.y, v_near_bottom_right.z }
-                }};
-            const auto uv_right = uvs_t{{ { u0, v0 }, { u1, v0 }, { u1, v1 }, { u0, v1 } }};
-            sink.add_colored( { .sprite = sprite, .corners = c_right, .uvs = uv_right, .ref = light_ref{}, .color = gun_col } );
-
-            // 2. Left side face
-            const auto c_left = corners_t{{
-                    { v_far_top_left.x, v_far_top_left.y, v_far_top_left.z },
-                    { v_near_top_left.x, v_near_top_left.y, v_near_top_left.z },
-                    { v_near_bottom_left.x, v_near_bottom_left.y, v_near_bottom_left.z },
-                    { v_far_bottom_left.x, v_far_bottom_left.y, v_far_bottom_left.z }
-                }};
-            const auto uv_left = uvs_t{{ { u1, v0 }, { u0, v0 }, { u0, v1 }, { u1, v1 } }};
-            sink.add_colored( { .sprite = sprite, .corners = c_left, .uvs = uv_left, .ref = light_ref{}, .color = gun_col } );
-
-            // 3. Top face
-            const auto c_top = corners_t{{
-                    { v_near_top_left.x, v_near_top_left.y, v_near_top_left.z },
-                    { v_near_top_right.x, v_near_top_right.y, v_near_top_right.z },
-                    { v_far_top_right.x, v_far_top_right.y, v_far_top_right.z },
-                    { v_far_top_left.x, v_far_top_left.y, v_far_top_left.z }
-                }};
-            sink.add_colored( { .sprite = sprite, .corners = c_top, .uvs = solid_uvs, .ref = light_ref{}, .color = no_pull( modulate_light( gun_col, 0.95f ) ) } );
-
-            // 4. Bottom face
-            const auto c_bot = corners_t{{
-                    { v_near_bottom_right.x, v_near_bottom_right.y, v_near_bottom_right.z },
-                    { v_near_bottom_left.x, v_near_bottom_left.y, v_near_bottom_left.z },
-                    { v_far_bottom_left.x, v_far_bottom_left.y, v_far_bottom_left.z },
-                    { v_far_bottom_right.x, v_far_bottom_right.y, v_far_bottom_right.z }
-                }};
-            sink.add_colored( { .sprite = sprite, .corners = c_bot, .uvs = solid_uvs, .ref = light_ref{}, .color = no_pull( modulate_light( gun_col, 0.70f ) ) } );
-
-            // 5. Front face (barrel/muzzle)
-            const auto c_front = corners_t{{
-                    { v_far_top_right.x, v_far_top_right.y, v_far_top_right.z },
-                    { v_far_top_left.x, v_far_top_left.y, v_far_top_left.z },
-                    { v_far_bottom_left.x, v_far_bottom_left.y, v_far_bottom_left.z },
-                    { v_far_bottom_right.x, v_far_bottom_right.y, v_far_bottom_right.z }
-                }};
-            sink.add_colored( { .sprite = sprite, .corners = c_front, .uvs = solid_uvs, .ref = light_ref{}, .color = no_pull( modulate_light( gun_col, 0.85f ) ) } );
-
-            // 6. Back face (stock/rear)
-            const auto c_back = corners_t{{
-                    { v_near_top_left.x, v_near_top_left.y, v_near_top_left.z },
-                    { v_near_top_right.x, v_near_top_right.y, v_near_top_right.z },
-                    { v_near_bottom_right.x, v_near_bottom_right.y, v_near_bottom_right.z },
-                    { v_near_bottom_left.x, v_near_bottom_left.y, v_near_bottom_left.z }
-                }};
-            sink.add_colored( { .sprite = sprite, .corners = c_back, .uvs = solid_uvs, .ref = light_ref{}, .color = no_pull( modulate_light( gun_col, 0.75f ) ) } );
-        }
-    }
     return sink.finish();
 }
 

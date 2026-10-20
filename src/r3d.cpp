@@ -2287,6 +2287,76 @@ auto draw_fp_hud( const draw_fp_hud_options &options ) -> void
     }
 }
 
+struct draw_first_person_weapon_options {
+    SDL_Renderer *renderer = nullptr;
+    float view_x = 0.0f;
+    float view_y = 0.0f;
+    float view_w = 0.0f;
+    float view_h = 0.0f;
+    const camera &cam;
+};
+
+auto draw_first_person_weapon( const draw_first_person_weapon_options &options ) -> void
+{
+    auto *const renderer = options.renderer;
+    const auto view_x = options.view_x;
+    const auto view_y = options.view_y;
+    const auto view_w = options.view_w;
+    const auto view_h = options.view_h;
+    const auto &cam = options.cam;
+
+    if( !cam.first_person() || !tilecontext ) {
+        return;
+    }
+    const auto &you = get_avatar();
+    if( you.controlling_vehicle || !you.is_armed() ) {
+        return;
+    }
+    const auto &weapon = you.primary_weapon();
+    const auto item_id = std::string( weapon.typeId().str() );
+    const auto data = tilecontext->get_sprite_draw_data( {
+        .id = item_id,
+        .category = C_ITEM,
+        .pos = you.bub_pos()
+    } );
+    if( !data || !data->texture ) {
+        return;
+    }
+    auto src = SDL_FRect{
+        .x = static_cast<float>( data->dimensions.x ),
+        .y = static_cast<float>( data->dimensions.y ),
+        .w = static_cast<float>( data->dimensions.w ),
+        .h = static_cast<float>( data->dimensions.h )
+    };
+    if( data->opaque.w > 0 && data->opaque.h > 0 ) {
+        src.x = static_cast<float>( data->dimensions.x + data->opaque.x );
+        src.y = static_cast<float>( data->dimensions.y + data->opaque.y );
+        src.w = static_cast<float>( data->opaque.w );
+        src.h = static_cast<float>( data->opaque.h );
+    }
+    if( src.w <= 0.0f || src.h <= 0.0f ) {
+        return;
+    }
+
+    const auto target_h = view_h * 0.35f;
+    const auto aspect = src.w / src.h;
+    const auto target_w = std::clamp( target_h * aspect, view_h * 0.18f, view_w * 0.40f );
+
+    const auto p = you.bub_pos();
+    const auto phase = static_cast<float>( p.x() * 3 + p.y() * 5 ) * 0.8f + cam.fp_yaw() * 2.0f;
+    const auto bob_x = std::sin( phase ) * ( view_w * 0.008f );
+    const auto bob_y = std::abs( std::cos( phase ) ) * ( view_h * 0.012f );
+
+    const auto dst = SDL_FRect{
+        .x = view_x + view_w * 0.65f - target_w * 0.5f + bob_x,
+        .y = view_y + view_h - target_h * 0.92f + bob_y,
+        .w = target_w,
+        .h = target_h
+    };
+    SDL_SetTextureScaleMode( data->texture, SDL_SCALEMODE_NEAREST );
+    SDL_RenderTextureRotated( renderer, data->texture, &src, &dst, -8.0, nullptr, SDL_FLIP_HORIZONTAL );
+}
+
 } // namespace
 
 auto draw( const draw_options &options ) -> bool
@@ -2304,7 +2374,6 @@ auto draw( const draw_options &options ) -> bool
     if( !forced_3d_on_start ) {
         forced_3d_on_start = true;
         get_options().get_option( "RENDERER_3D" ).setValue( "true" );
-        get_options().get_option( "R3D_CAMERA_MODE" ).setValue( "first_person" );
         sync_camera_mode( s.cam );
     }
     s.drawn = false;
@@ -2591,10 +2660,21 @@ auto draw( const draw_options &options ) -> bool
     -> float {
         return surface_height( s, here, p );
     }, .vehicle_vox_parts = &s.vehicle_vox_parts, .item_vox_models = &s.item_vox_models,
-    .presentation_profiles = &s.presentation_profiles, .vehicle_mount_visible = [&here]( const tripoint_bub_ms & p )
+    .presentation_profiles = &s.presentation_profiles, .vehicle_mount_visible = [&here, &you, vp, &sampler]( const tripoint_bub_ms & p )
     {
         static const auto fullbright = static_cast<bool>( std::getenv( "CATA_R3D_FULLBRIGHT" ) != nullptr );
-        return here.inbounds( p ) && ( fullbright || here.pl_sees( p, -1 ) );
+        if( !here.inbounds( p ) ) {
+            return false;
+        }
+        if( fullbright ) {
+            return true;
+        }
+        const auto veh_opt = here.veh_at( p );
+        if( you.in_vehicle && vp && veh_opt && &vp->vehicle() == &veh_opt->vehicle() ) {
+            return true;
+        }
+        return here.pl_sees( p, -1 ) || here.pl_line_of_sight( p, -1 ) ||
+               sampler.color_at( p ) != pack_light( 0, 0, 0 );
     }, .hovered = s.hovered };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
 
@@ -2841,6 +2921,7 @@ auto draw( const draw_options &options ) -> bool
     }
     const auto dst = SDL_FRect{ .x = x, .y = y, .w = w, .h = h };
     SDL_RenderTexture( renderer, result, nullptr, &dst );
+    draw_first_person_weapon( { .renderer = renderer, .view_x = x, .view_y = y, .view_w = w, .view_h = h, .cam = s.cam } );
     s.texts.clear();
     auto frame = hud_frame{};
     frame.x = x;
