@@ -2571,13 +2571,39 @@ auto draw( const draw_options &options ) -> bool
         auto ease_y = static_cast<float>( 0.0f );
         auto ease_z = static_cast<float>( 0.0f );
         const auto stand = static_cast<float>( surface_height( s, here, player_pos ) );
-        update_fp_ease( { .s = s, .pos = bub_to_abs( player_pos ), .surface = stand, .offset_x = ease_x, .offset_y = ease_y, .offset_z = ease_z } );
-        // The camera stands on the player's tile, at the height of what they stand on.
-        s.cam.target = tile_to_world( {
-            static_cast<float>( player_pos.x() - center.x() ) + 0.5f + ease_x,
-            static_cast<float>( player_pos.y() - center.y() ) + 0.5f + ease_y,
-            static_cast<float>( player_pos.z() - center.z() ) + stand + ease_z
-        } );
+        if( is_controlling && vp ) {
+            s.fp_prev_valid = false;
+            s.fp_easing = false;
+            s.cam.tween_yaw = 0.0f;
+            s.fp_ease_yaw = 0.0f;
+            s.fp_ease_ms = 0;
+            const auto &veh = vp->vehicle();
+            const auto mount = vp->mount();
+            const auto pivot_mnt = veh.pivot_anchor[0];
+            const auto veh_bub = veh.bub_ms_location();
+            const auto pivot_sx = static_cast<float>( veh_bub.x() - center.x() ) + 0.5f;
+            const auto pivot_sy = static_cast<float>( veh_bub.y() - center.y() ) + 0.5f;
+            const auto theta = static_cast<float>( units::to_radians( veh.face.dir() ) );
+            const auto cos_th = static_cast<float>( std::cos( theta ) );
+            const auto sin_th = static_cast<float>( std::sin( theta ) );
+            const auto rel_f = static_cast<float>( mount.x() - pivot_mnt.x() );
+            const auto rel_r = static_cast<float>( mount.y() - pivot_mnt.y() );
+            const auto seat_scene_x = pivot_sx + rel_f * cos_th - rel_r * sin_th;
+            const auto seat_scene_y = pivot_sy + rel_f * sin_th + rel_r * cos_th;
+            s.cam.target = tile_to_world( {
+                seat_scene_x,
+                seat_scene_y,
+                static_cast<float>( player_pos.z() - center.z() ) + stand
+            } );
+        } else {
+            update_fp_ease( { .s = s, .pos = bub_to_abs( player_pos ), .surface = stand, .offset_x = ease_x, .offset_y = ease_y, .offset_z = ease_z } );
+            // The camera stands on the player's tile, at the height of what they stand on.
+            s.cam.target = tile_to_world( {
+                static_cast<float>( player_pos.x() - center.x() ) + 0.5f + ease_x,
+                static_cast<float>( player_pos.y() - center.y() ) + 0.5f + ease_y,
+                static_cast<float>( player_pos.z() - center.z() ) + stand + ease_z
+            } );
+        }
         // Looking at another level (look mode's < and >) tilts the view towards it, 45 degrees
         // per level at most one level's worth; the eye stays where the player stands.
         constexpr auto level_tilt = static_cast<float>( 0.7854f );
