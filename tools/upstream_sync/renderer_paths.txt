@@ -1,0 +1,21 @@
+# Paths owned by this fork's frontend. Upstream changes to these are reviewed by hand and are
+# normally NOT taken. One git pathspec per line (globs allowed); '#' starts a comment.
+src/r3d_*
+src/shaders/**
+src/cata_tiles*
+src/sdl*
+src/sdltiles*
+src/tileset*
+src/cursesport*
+src/wincurse*
+src/ncurses_def*
+src/onboarding*
+src/status_report*
+src/ui_theme*
+data/shaders/**
+data/raw/r3d/**
+data/json/onboarding/**
+gfx/**
+tests/r3d_*
+tests/onboarding*
+tests/status_report*
