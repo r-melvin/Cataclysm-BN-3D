@@ -542,6 +542,21 @@ Known obstacles to settle before building:
 - Coordinate with the UI redesign (docs/en/dev/research/ui_redesign/) for the checklist
   and hint presentation.
 
+## UI-02: Retire the curses interface
+
+**Status: decided, not started.** Owner decision (2026-10-21): retire the curses build and
+the character-cell drawing model (`CURSES` option, `ncurses_def.cpp`, `wincurse.cpp`,
+`cursesport.cpp` as the screen model). The new UI (docs/en/dev/research/ui_redesign/)
+needs no character-cell backend. Open to moving to a different 3D frontend if that
+improves accessibility; not yet evaluated.
+
+Consequences to cost before starting:
+- Screen-reader support can no longer lean on a terminal; the self-voicing/accessibility
+  tree work in the redesign plan becomes the only path.
+- Every screen is still written against the cell grid (`cursesport`); retirement happens
+  screen by screen as the new widget layer replaces them, not as one deletion.
+- Fork-only decision: upstream keeps curses, so expect merge friction in the touched files.
+
 ## Audit references and completed foundations
 
 - [Renderer review](docs/en/dev/research/r3d_review_2026_10.md): wheel/depth/roof/
