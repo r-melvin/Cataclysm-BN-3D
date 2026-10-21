@@ -111,8 +111,8 @@ face materials, anchors and fallback without changing gameplay flags. Validate
 resolution, crop bounds, source texture sheet and missing/invalid overrides.
 Do not restore unused runtime metadata without a rendering consumer.
 
-Sources: [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md),
-[vehicle research](docs/en/dev/research/vehicle_rendering_research.md).
+Sources: [Dramatic Shape review](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/dramatic_shape_voxel_review.md),
+[vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).
 
 Wall texture regressions: the elevation path now selects the east-west edge
 (rotation 1), rather than stretching the north-south cut edge into vertical stripes.
@@ -192,7 +192,7 @@ The automatic one-shot did not reach its frame threshold while idle; the virtual
 window was captured directly. This is one fixture, not the original outdoor save.
 
 Source and acceptance matrix:
-[vehicle research](docs/en/dev/research/vehicle_rendering_research.md).
+[vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).
 
 ## R3D-05: Expand authored props and run asset-pipeline trials
 
@@ -214,7 +214,7 @@ Windows/macOS Kenney export is unverified in the tool's README and belongs to
 that project's validation.
 
 Procedure and visual gates:
-[sprite-to-voxel pipeline](docs/en/dev/research/sprite_to_voxel_pipeline.md).
+[sprite-to-voxel pipeline](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/sprite_to_voxel_pipeline.md).
 
 ## R3D-06: Directional characters with equipment layers
 
@@ -228,8 +228,8 @@ wielded layers, with sprite fallback for missing directional assets. Check
 walking toward/away/sideways, stopping, camera rotation and mixed equipment.
 Mirroring one image cannot synthesize a correct face or back.
 
-Sources: [asset trial](docs/en/dev/research/sprite_to_voxel_pipeline.md),
-[Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md).
+Sources: [asset trial](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/sprite_to_voxel_pipeline.md),
+[Dramatic Shape review](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/dramatic_shape_voxel_review.md).
 
 ## R3D-07: Reproducible visual fixtures and GPU acceptance checks
 
@@ -303,8 +303,8 @@ shared fixtures). The extracted report is under the latter directory's
 `extracted/` subdirectory. Five formatter and nine capture-tool tests pass.
 
 Sources: [comparison guide](tools/r3d_spike/COMPARE.md),
-[Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md),
-[vehicle validation matrix](docs/en/dev/research/vehicle_rendering_research.md).
+[Dramatic Shape review](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/dramatic_shape_voxel_review.md),
+[vehicle validation matrix](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).
 
 ## R3D-08: Measure frame cost and decide chunk scheduling
 
@@ -336,8 +336,8 @@ unmeasured. Reuse avatar geometry or cache only with evidence of worthwhile
 savings and an invalidation plan.
 
 Sources: [diagnostics](docs/en/dev/guides/renderer_3d.md),
-[measurements](docs/en/dev/research/r3d_review_2026_10.md),
-[chunk research](docs/en/dev/research/dramatic_shape_voxel_review.md).
+[measurements](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/r3d_review_2026_10.md),
+[chunk research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/dramatic_shape_voxel_review.md).
 
 ## R3D-09: Audit complete-vehicle visibility and knowledge boundaries
 
@@ -370,7 +370,7 @@ expectations independently; do not suppress them or change BN perception to
 make the renderer test green. Private logs: `/tmp/bn-backlog-visibility-baseline-tests.log`
 and `/tmp/bn-backlog-renderer-vision-tests.log` (temporary evidence).
 
-Source: [vehicle visibility research](docs/en/dev/research/vehicle_rendering_research.md).
+Source: [vehicle visibility research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).
 
 ## R3D-10: Native macOS and Windows validation
 
@@ -476,7 +476,7 @@ Unknown/memorized geometry retains the existing knowledge treatment; it does
 not become visible merely through fog. Evaluate these effects with the saved
 fixture matrix before adding another weather renderer. Cover indoor/underground scenes, weather,
 cutaways, first person and remembered terrain. Keep BN lighting/knowledge
-in control. See the [Dramatic Shape constraints](docs/en/dev/research/dramatic_shape_voxel_review.md)
+in control. See the [Dramatic Shape constraints](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/dramatic_shape_voxel_review.md)
 and R3D-11's branch guide.
 
 ## R3D-15: Improve turn-based driving presentation
@@ -498,7 +498,7 @@ x/y and one vehicle-wide base height. Key by full mount, offset geometry by
 mount z, and make wall/trim/bumper/roof neighbors level-aware. Verify parts at
 the same x/y on different levels never overwrite each other.
 
-Source: [renderer review](docs/en/dev/research/r3d_review_2026_10.md).
+Source: [renderer review](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/r3d_review_2026_10.md).
 
 ## R3D-17: Vehicle-free play mode
 
@@ -513,23 +513,79 @@ Keep default BN and 2D behavior unchanged.
 **Status: deliberately deferred.** Revisit after core presentation/validation.
 Shadow/reflection passes must respect BN visibility and not introduce gameplay
 light. R3D-12 covers camera-only first person; these effects imply no real-time
-movement. Source: [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md).
+movement. Source: [Dramatic Shape review](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/dramatic_shape_voxel_review.md).
+
+## UI-01: One guided start (tutorial as chapter one)
+
+**Status: decided, not started.** Combine the built-in Tutorial Game and Guided Play
+into one path, with guided play as the baseline.
+
+Decisions (owner, 2026-10-21):
+- The Tutorial becomes chapter one of the guided start; the separate Tutorial and
+  Guided Play New Game entries go away. The same character continues into the real
+  world with the guided lessons.
+- Guided play opens on the first New Game. A dialog offers to turn it off; once off it
+  stays off for later New Games (stored with the profile, not the character).
+
+Known obstacles to settle before building:
+- The tutorial is a separate special world (`TUTORIAL`, `special_game_type::TUTORIAL`,
+  `gamemode_tutorial.cpp`). A character cannot move between worlds, so chapter one
+  must run inside the player's own world, e.g. the tutorial complex as a start location
+  or overmap special, with `g->gamemode` active only until it is finished. Check how
+  much of `tutorial_game` depends on owning the whole world.
+- Once turned off there must be a way back on: keep one replay route (an option or a
+  single New Game toggle) so removing the entries does not remove the feature.
+- The tutorial's lessons (`tut_lesson`) and the guided lessons (`onboarding_core`,
+  `data/json/onboarding/`) overlap; merge them into the JSON lesson set rather than
+  running two systems. Existing guided progress saves must keep loading.
+- Translations of the removed menu entries and lesson text change.
+- Coordinate with the UI redesign (`docs-archive:docs/en/dev/research/ui_redesign/`) for the checklist
+  and hint presentation.
+
+## UI-02: Retire the curses interface
+
+**Status: decided, not started.** Owner decision (2026-10-21): retire the curses build and
+the character-cell drawing model (`CURSES` option, `ncurses_def.cpp`, `wincurse.cpp`,
+`cursesport.cpp` as the screen model). The new UI (`docs-archive:docs/en/dev/research/ui_redesign/`)
+needs no character-cell backend. Open to moving to a different 3D frontend if that
+improves accessibility; not yet evaluated.
+
+Consequences to cost before starting:
+- Screen-reader support can no longer lean on a terminal; the self-voicing/accessibility
+  tree work in the redesign plan becomes the only path.
+- Every screen is still written against the cell grid (`cursesport`); retirement happens
+  screen by screen as the new widget layer replaces them, not as one deletion.
+- Fork-only decision: upstream keeps curses, so expect merge friction in the touched files.
+
+## UI-03: Frontend decision and repo scope
+
+**Status: decided (owner, 2026-10-21).** Recorded here so the UI redesign and the repo trim
+share one set of constraints.
+- Stay on SDL3 + SDL_GPU. The M1 gate in `docs-archive:docs/en/dev/research/ui_redesign/` (an `accesskit-c`
+  SDL spike) decides whether to fall back to Godot; the fallback conditions in 06_frontend_options
+  are accepted.
+- Keep Windows, macOS and Android build support (their packaging files stay).
+- Keep deno and the docs site: dropping them was tried (PR #7) and reverted as more effort than it is worth.
+- Keep translations, tilesets and sound. Research docs go to an archive branch and player guides
+  to the wiki.
+- Upstream merges take game logic only, not renderer work: see
+  docs/en/dev/guides/upstream_sync.md and `tools/upstream_sync/check.sh`.
 
 ## Audit references and completed foundations
 
-- [Renderer review](docs/en/dev/research/r3d_review_2026_10.md): wheel/depth/roof/
+- [Renderer review](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/r3d_review_2026_10.md): wheel/depth/roof/
   shared-edge/cargo-floor/lighting/camera/classification fixes are delivered;
   billboard/material/grid dead code and windshield duplication are removed.
   Asset loading and shared formatter changes are recorded in R3D-01/02 above;
   remaining acceptance and findings map to R3D-07/08/09/16.
-- [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md):
+- [Dramatic Shape review](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/dramatic_shape_voxel_review.md):
   size/anchor/depth profiles, galleries/support markers, local contact shading,
   chunk diagnostics and avatar-only silhouettes exist. Extensions/acceptance
   map to R3D-03/05/06/07/08/18.
-- [Vehicle research](docs/en/dev/research/vehicle_rendering_research.md): role
+- [Vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md): role
   lists, shaped panels, faceted wheels and bundled wheel models supersede its
   no-layer-list/box-wheel findings. Remaining work is R3D-03/04/05/07/09/16.
-- [Asset pipeline research](docs/en/dev/research/sprite_to_voxel_pipeline.md):
+- [Asset pipeline research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/sprite_to_voxel_pipeline.md):
   VOX ingestion and the separate Go CLI supersede the old OBJ-export obstacle.
   R3D-05/06 cover remaining asset trials and character integration.
 - [Renderer](docs/en/dev/guides/renderer_3d.md),
