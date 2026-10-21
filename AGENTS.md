@@ -103,7 +103,7 @@ cmake --build build --target style-json-parallel
 - **Local build quirks**: if `mold` is missing, configure with `cmake --preset linux-full -DLINKER=lld` (re-running the preset without it resets the linker). If SDL_GPU device creation fails in tests, run them with `CATA_TEST_COMPUTE_ACCELERATION=cpu`.
 - **No CI on this fork**: GitHub Actions does not run here. Before pushing renderer changes, run `CATA_TEST_COMPUTE_ACCELERATION=cpu ./out/build/linux-full/tests/cata_test-tiles "[r3d]"` locally and report the result; do not wait on `gh pr checks`.
 - **r3d geometry snapshot**: `tests/r3d_geometry_snapshot_test.cpp` fingerprints seeded vehicle and item meshes against `tests/data/r3d_geometry_snapshot.txt`. A failure means renderer geometry changed: for a refactor that is a regression; for an intended change, regenerate with `R3D_UPDATE_GEOMETRY_SNAPSHOT=1` and name the changed scenes in the commit.
-- **3D renderer findings**: see [r3d review and status](./docs/en/dev/research/r3d_review_2026_10.md) for known renderer defects, deferred work and `vehicle_profile` quirks before changing `src/r3d_*`.
+- **3D renderer findings**: see the r3d review and status (branch `docs-archive`: `git show docs-archive:docs/en/dev/research/r3d_review_2026_10.md`) for known renderer defects, deferred work and `vehicle_profile` quirks before changing `src/r3d_*`.
 
 - **Verify**: Build and fix any issues. Do not skip the game binary target when validating code changes; build `cataclysm-bn-tiles` together with tests.
 
