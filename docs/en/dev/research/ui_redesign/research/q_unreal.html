@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unreal Engine 5.x as a frontend for a large C++ game</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="unreal-engine-5-x-as-a-frontend-for-a-large-c-game">Unreal Engine 5.x as a frontend for a large C++ game</h1>
+<p>Status: partial. The WebSearch budget ran out after 16 searches (limit 200 per session, shared across agents), and several Epic pages returned HTTP 403/503 (the EULA, licence and FAQ pages). Sections 4 and 5 are thin. Every claim below is tagged VERIFIED or NOT VERIFIED.</p>
+<h2 id="scope-caveat-read-first">Scope caveat (read first)</h2>
+<ul>
+<li>The official Epic pages that could be fetched carry the header "Unreal Engine 5.8 Documentation". The user asked about 5.4 to 5.7. Where a page is labelled 5.8, that is the only version it was checked against. Behaviour in 5.4 to 5.7 is NOT VERIFIED unless stated.
+</li>
+<li>Release notes for 5.5 to 5.7 were not retrieved, so version-to-version changes are NOT VERIFIED.
+</li></ul>
+<h2 id="1-accessibility">1. Accessibility</h2>
+<h3 id="1a-slate-umg-screen-reader">1a. Slate / UMG screen reader</h3>
+<table><thead><tr><th>Claim</th><th>Status</th><th>Source</th></tr></thead><tbody><tr><td>The screen reader plugin is marked <strong>Experimental</strong>: "Learn to use this Experimental feature, but use caution when shipping with it."</td><td>VERIFIED (5.8 page)</td><td><a href="https://dev.epicgames.com/documentation/unreal-engine/supporting-screen-readers-in-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/supporting-screen-readers-in-unreal-engine</a></td></tr><tr><td>Third-party screen readers are supported on <strong>Windows</strong> and <strong>VoiceOver on iOS</strong>. The page names no other platform.</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>macOS, Linux, Android, consoles: support</td><td>NOT VERIFIED</td><td>not stated on any fetched page</td></tr><tr><td>Windows support goes through <strong>UI Automation (UIA)</strong></td><td>NOT VERIFIED. The phrase "Windows UI Automation" appears only in a third-party blog (StraySpark), which cites no official source</td><td><a href="https://www.strayspark.studio/blog/game-accessibility-2026-unreal-engine">https://www.strayspark.studio/blog/game-accessibility-2026-unreal-engine</a></td></tr><tr><td>Enabled by config <code>Accessibility.Enable=1</code> in the project or engine config</td><td>VERIFIED (5.8 page)</td><td>same as above</td></tr><tr><td>Built-in UMG widgets: Text Block, Editable Text Box, Slider, Button, Checkbox</td><td>VERIFIED (5.8 page)</td><td>same as above</td></tr><tr><td>Slate Screen Reader plugin: "plug-and-play", vocalises Slate and UMG elements on focus; supports buttons, sliders, text fields, lists, windows; enabling it also enables TTS</td><td>VERIFIED (5.8 Epic page "blind accessibility features overview")</td><td><a href="https://dev.epicgames.com/documentation/unreal-engine/blind-accessibility-features-overview-in-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/blind-accessibility-features-overview-in-unreal-engine</a></td></tr><tr><td>Text To Speech plugin supports <strong>English only</strong> "across all platforms"</td><td>VERIFIED (same page)</td><td>same</td></tr><tr><td>Screen Reader subsystem: a registered user is inactive by default, and <code>ActivateUser()</code> is needed</td><td>VERIFIED from an Epic API index excerpt returned by search (page not fetched)</td><td><a href="https://dev.epicgames.com/documentation/unreal-engine/API/Plugins/SlateScreenReader/USlateScreenReaderEngineSubsyste-/ActivateUser">https://dev.epicgames.com/documentation/unreal-engine/API/Plugins/SlateScreenReader/USlateScreenReaderEngineSubsyste-/ActivateUser</a></td></tr><tr><td>Custom C++ widgets: override <code>SWidget::CreateAccessibleWidget()</code> and return a new <code>FSlateAccessibleWidget</code>. Example: <code>FSlateAccessibleButton</code> in <code>SlateAccessibleWidgets.h</code></td><td>VERIFIED (5.8 page). Note the user's name <code>CreateAccessibleWidget</code> is the method on <code>SWidget</code></td><td>supporting-screen-readers page</td></tr><tr><td>Compile-time removal: <code>bCompileWithAccessibilitySupport = false</code></td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>UMG per-widget settings: Accessible Behavior (Auto, Summary, Custom, Tool Tip, Not Accessible) and "Can Children Be Accessible"</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Known limitations beyond "Experimental"</td><td>NOT VERIFIED. The 5.8 page lists none</td><td>same</td></tr><tr><td>Changes in 5.5, 5.6 or 5.7</td><td>NOT VERIFIED. Release notes were not retrieved</td><td>none</td></tr><tr><td>Screen reader reads TTS "in a packaged game"</td><td>NOT VERIFIED</td><td>none</td></tr></tbody></table>
+<h3 id="1b-colour-vision-deficiency">1b. Colour vision deficiency</h3>
+<table><thead><tr><th>Claim</th><th>Status</th><th>Source</th></tr></thead><tbody><tr><td>Enum <code>EColorVisionDeficiency</code>: <code>NormalVision</code>, <code>Deuteranope</code>, <code>Protanope</code>, <code>Tritanope</code></td><td>VERIFIED (5.8 API page)</td><td><a href="https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/SlateCore/EColorVisionDeficiency">https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/SlateCore/EColorVisionDeficiency</a></td></tr><tr><td>Enum page says whether it is editor-only or ships in packaged games</td><td>NOT VERIFIED. The page does not say</td><td>same</td></tr><tr><td><code>UWidgetBlueprintLibrary::SetColorVisionDeficiencyType</code> applies correction to the game window; the page gives a severity of 0 to 1</td><td>NOT VERIFIED for current versions. Seen only in a 4.26 docs excerpt returned by search. A forum post gives 0 to 10 instead</td><td><a href="https://docs.unrealengine.com/4.26/BlueprintAPI/Widget/Accessibility/SetColorVisionDeficiencyType/">https://docs.unrealengine.com/4.26/BlueprintAPI/Widget/Accessibility/SetColorVisionDeficiencyType/</a></td></tr><tr><td>Editor colour-vision preview exists</td><td>NOT VERIFIED beyond a forum thread on bug UE-49566 (fixed in 4.18)</td><td><a href="https://issues.unrealengine.com/issue/UE-49566">https://issues.unrealengine.com/issue/UE-49566</a></td></tr><tr><td><code>r.ColorBlindness.Type</code> CVar; editor menu "Window &gt; Developer Tools &gt; Color Blindness Simulation"; described as a development tool and not player-facing</td><td>NOT VERIFIED. Third-party blog only</td><td>strayspark blog</td></tr><tr><td>Built-in player-facing colour correction is shipped</td><td>NOT VERIFIED. The 4.26 excerpt suggests a correction function exists, but shipping status is unknown</td><td>none</td></tr></tbody></table>
+<h3 id="1c-text-scaling-and-dpi">1c. Text scaling and DPI</h3>
+<table><thead><tr><th>Claim</th><th>Status</th></tr></thead><tbody><tr><td>Built-in player-facing text scaling or DPI curve for UMG</td><td>NOT VERIFIED. The third-party blog says you build user-configurable scaling yourself, and cites no official source</td></tr><tr><td>Rich Text support with customisable font sizes</td><td>NOT VERIFIED (blog)</td></tr></tbody></table>
+<h3 id="1d-input-commonui-and-enhanced-input">1d. Input: CommonUI and Enhanced Input</h3>
+<p>Source for this section: <a href="https://dev.epicgames.com/documentation/unreal-engine/common-ui-plugin-for-advanced-user-interfaces-in-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/common-ui-plugin-for-advanced-user-interfaces-in-unreal-engine</a> (5.8 page)</p>
+<table><thead><tr><th>Claim</th><th>Status</th></tr></thead><tbody><tr><td>Input routing gives widgets selective interactivity and focus management</td><td>VERIFIED</td></tr><tr><td>Controller-specific button icons are supported</td><td>VERIFIED</td></tr><tr><td>Cardinal navigation management for gamepads</td><td>VERIFIED</td></tr><tr><td>Action bar / Common Input action icons and automatic gamepad vs keyboard glyph switching</td><td>NOT VERIFIED. Not on the fetched page. A separate Epic page on "Common Input and keys" returned an empty table of contents</td></tr><tr><td>Enhanced Input rebinding is built on the framework, and remapping UI is hand-built</td><td>NOT VERIFIED. Only a third-party blog says it, and that blog cites no source</td></tr></tbody></table>
+<h2 id="2-embedding-a-c-codebase">2. Embedding a C++ codebase</h2>
+<table><thead><tr><th>Claim</th><th>Status</th><th>Source</th></tr></thead><tbody><tr><td>Engine compiles with C++20 by default and requires C++20 to build</td><td>VERIFIED (5.8 page)</td><td><a href="https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine</a></td></tr><tr><td>C++23 usable in engine modules</td><td>NOT VERIFIED. The page does not say</td><td>same</td></tr><tr><td>The coding standard avoids STL: prefer engine containers; standard containers and strings "should be avoided except in interop code"</td><td>VERIFIED</td><td>same</td></tr><tr><td><code>&lt;atomic&gt;</code> "should be used in new code"; <code>&lt;regex&gt;</code> only in editor-only code</td><td>VERIFIED</td><td>same</td></tr><tr><td><code>TArray</code>, <code>TMap</code>, <code>TSet</code>, <code>FString</code> have move semantics; <code>MoveTemp</code> is UE's <code>std::move</code></td><td>VERIFIED</td><td>same</td></tr><tr><td>UE's own allocator and FMalloc details</td><td>NOT VERIFIED. The page does not cover them</td><td>same</td></tr><tr><td>Exceptions disabled by default; RTTI disabled by default; how to enable (<code>bForceEnableExceptions</code>, <code>bUseRTTI</code> on the target rules)</td><td>NOT VERIFIED. The search returned nothing on UBT defaults and the search budget was exhausted before this could be checked</td><td>none</td></tr><tr><td>Precompiled headers, UBT module layout for a 300+ kLOC external codebase</td><td>NOT VERIFIED</td><td>none</td></tr><tr><td>Threading and blocking loops with the game thread</td><td>NOT VERIFIED</td><td>none</td></tr><tr><td>Case studies of large non-UE C++ codebases embedded in UE</td><td>NOT VERIFIED. Not searched</td><td>none</td></tr></tbody></table>
+<p>Key constraint, derived from the verified rules and not from external evidence: the codebase uses C++23 and the engine demands C++20. Whether the engine can compile a C++23 module is NOT VERIFIED and must be tested.</p>
+<h2 id="3-licensing">3. Licensing</h2>
+<table><thead><tr><th>Claim</th><th>Status</th><th>Source</th></tr></thead><tbody><tr><td>Royalty of 5% on lifetime gross revenue above the first $1 million, for shipped products that incorporate engine code</td><td>NOT VERIFIED against primary EULA text. The EULA, licence and FAQ pages returned HTTP 403 or 503. The figure appears in search excerpts only</td><td><a href="https://www.unrealengine.com/en-US/license;">https://www.unrealengine.com/en-US/license;</a> <a href="https://gateway.unrealengine.com/en-US/faq">https://gateway.unrealengine.com/en-US/faq</a> (both failed)</td></tr><tr><td>Epic Games Store sales are royalty-free</td><td>NOT VERIFIED. Search excerpt only</td><td>Twinmotion FAQ (403)</td></tr><tr><td>Rate may fall to 3.5% if the game ships on the Epic Games Store at or before other stores</td><td>NOT VERIFIED. Search excerpt only; several Epic pages still show 5%</td><td><a href="https://map.twinmotion.com/en-US/faq">https://map.twinmotion.com/en-US/faq</a> (403)</td></tr><tr><td>Quarterly reporting: payments due 45 days after the quarter; per-product royalty reports</td><td>NOT VERIFIED</td><td>search excerpt only</td></tr><tr><td>Non-game commercial use: seat fee $1,850 per seat per year</td><td>NOT VERIFIED</td><td>search excerpt only</td></tr><tr><td>EULA forbids redistributing engine source code</td><td>NOT VERIFIED from current EULA. A UE4-era Gentoo wiki draft says each user must accept the EULA and redistribution is not allowed. The page is marked outdated</td><td><a href="https://wiki.gentoo.org/wiki/User:Maffblaster/Drafts/Unreal_Engine">https://wiki.gentoo.org/wiki/User:Maffblaster/Drafts/Unreal_Engine</a></td></tr><tr><td>Engine source access requires an Epic account with GitHub linked and EULA acceptance</td><td>NOT VERIFIED for current versions. A UE 4.27 docs excerpt says the repository requires subscriber status</td><td><a href="https://docs.unrealengine.com/4.27/ProgrammingAndScripting/DownloadingSourceCode">https://docs.unrealengine.com/4.27/ProgrammingAndScripting/DownloadingSourceCode</a></td></tr><tr><td>Open-source CC-BY-SA game whose players must compile the engine: permitted</td><td>NOT VERIFIED. No source found. Treat as a legal question for the licensing team</td><td>none</td></tr><tr><td>Logo/splash: the startup logo is not mandatory; the preferred route is an in-game credits notice "[Product] uses the Unreal® Engine" plus a trademark line</td><td>NOT VERIFIED. UE4-era Epic staff replies on community forums, not the EULA</td><td><a href="https://answers.unrealengine.com/questions/453664/view.html;">https://answers.unrealengine.com/questions/453664/view.html;</a> <a href="https://forums.unrealengine.com/t/permission-regarding-ue4-intro-logo/438816">https://forums.unrealengine.com/t/permission-regarding-ue4-intro-logo/438816</a></td></tr><tr><td>Unreal splash screen may not be modified</td><td>NOT VERIFIED. Forum post only</td><td>same forum</td></tr><tr><td>Whether "Made with Unreal Engine" needs a trademark licence</td><td>NOT VERIFIED</td><td>none</td></tr></tbody></table>
+<p>Licensing risks for an open-source CC-BY-SA game (analysis, not verified fact): CC-BY-SA covers the game's own work. It does not change what the EULA allows for engine code. Anything that bundles engine binaries or source must be checked against the EULA in full. The EULA text is required before any decision.</p>
+<h2 id="4-platforms-and-ci">4. Platforms and CI</h2>
+<table><thead><tr><th>Claim</th><th>Status</th><th>Source</th></tr></thead><tbody><tr><td>Editor minimum on Linux: Rocky Linux 8 or RHEL 8 or newer; kernel 4.18 or newer; glibc 2.28 or newer (2.35 recommended for slow starts)</td><td>VERIFIED (5.8 page)</td><td><a href="https://dev.epicgames.com/documentation/unreal-engine/linux-development-requirements-for-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/linux-development-requirements-for-unreal-engine</a></td></tr><tr><td>Recommended Linux editor: Ubuntu 22.04; quad-core 2.5 GHz+; 32 GB RAM; GeForce 2080 class; 8 GB VRAM or more</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Vulkan RHI: AMD RADV 24.2.8+ (25.0.0+ recommended), NVIDIA 570+</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Nanite and Virtual Shadow Maps on Linux require <code>VK_KHR_shader_atomic_int64</code></td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Development on Ubuntu 22.04 or Rocky 8 with clang 20.1.8</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Disk space is not listed as a requirement</td><td>VERIFIED (5.8 page; the page gives no disk minimum)</td><td>same</td></tr><tr><td>Linux or Windows <strong>game</strong> build targets (cook and package for each platform)</td><td>NOT VERIFIED. Not fetched</td><td>none</td></tr><tr><td>macOS editor support</td><td>NOT VERIFIED</td><td>none</td></tr><tr><td>Steam Deck Verified status for UE games; Steam Deck performance</td><td>NOT VERIFIED from Valve. One SteamDeckHQ weekly roundup lists a UE5 game as Playable, not Verified. A Spanish blog reports 30 to 40 FPS. Neither is authoritative</td><td><a href="https://steamdeckhq.com/steam-deck-verified-highlights-8-3-26-8-9-26/">https://steamdeckhq.com/steam-deck-verified-highlights-8-3-26-8-9-26/</a> ; <a href="https://www.noticias3d.com/noticia/93778/steam-deck-unreal-engine.html">https://www.noticias3d.com/noticia/93778/steam-deck-unreal-engine.html</a></td></tr><tr><td>Engine source disk use: about 190 GiB installed, 340+ GiB to build (UE 5.4)</td><td>NOT VERIFIED. Arch Linux wiki, third-party</td><td><a href="https://wiki.archlinux.org/title/Unreal_Engine_5">https://wiki.archlinux.org/title/Unreal_Engine_5</a></td></tr><tr><td>Forum guidance: plan for 150 to 200 GB free for a 5.8.1 install</td><td>NOT VERIFIED. Forum</td><td><a href="https://forums.unrealengine.com/t/storage-required-to-install-unreal-engine-5-8-1/2740177">https://forums.unrealengine.com/t/storage-required-to-install-unreal-engine-5-8-1/2740177</a></td></tr><tr><td>Build time: at least an hour, possibly many hours (macOS / Xcode)</td><td>NOT VERIFIED. Single forum comment; no Windows or Linux figure</td><td><a href="https://forums.unrealengine.com/t/required-disk-space-to-install-ue5-from-source/2742506">https://forums.unrealengine.com/t/required-disk-space-to-install-ue5-from-source/2742506</a></td></tr><tr><td>Linux source build is <code>Setup.sh</code>, <code>GenerateProjectFiles.sh</code>, then <code>Build.sh</code></td><td>NOT VERIFIED. Arch wiki; <code>make -jN</code> cautioned against</td><td>Arch wiki</td></tr><tr><td>Source repository access is gated by Epic account plus GitHub link</td><td>NOT VERIFIED for current versions (see section 3)</td><td>none</td></tr><tr><td>GitHub-hosted runner feasibility for a UE build (disk, time, licence)</td><td>NOT VERIFIED. Not searched</td><td>none</td></tr><tr><td>Packaged game sizes</td><td>NOT VERIFIED. Not searched</td><td>none</td></tr><tr><td>Nanite and Lumen can be turned off for low-end targets</td><td>NOT VERIFIED. Not fetched; the Nanite page did not cover it</td><td>none</td></tr></tbody></table>
+<h2 id="5-rendering">5. Rendering</h2>
+<table><thead><tr><th>Claim</th><th>Status</th><th>Source</th></tr></thead><tbody><tr><td>Nanite supports Opaque and Masked materials; Translucent materials are not supported</td><td>VERIFIED (5.8 page)</td><td><a href="https://dev.epicgames.com/documentation/unreal-engine/nanite-virtualized-geometry-in-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/nanite-virtualized-geometry-in-unreal-engine</a></td></tr><tr><td>Nanite does not support Forward Rendering, VR stereo, MSAA, Lighting Channels, or distance culling</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Nanite instances are hard-capped at 16 million streamed in the scene</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Nanite needs DX12 with SM6 on current desktop and console; SSDs recommended</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Nanite skeletal meshes are supported; morph targets are not; WPO is limited</td><td>VERIFIED (5.8 page)</td><td>same</td></tr><tr><td>Nanite supports runtime-generated or procedural meshes</td><td>NOT VERIFIED. The 5.8 page does not address procedural or runtime-generated meshes</td><td>same</td></tr><tr><td>Realtime Mesh Component (RMC): runtime, procedural, voxel-capable; faster and lighter than ProceduralMeshComponent; supports UE 5.5 to 5.8</td><td>NOT VERIFIED. Vendor listing on Fab only. The GitHub page returned 404</td><td><a href="https://www.fab.com/listings/bb2e4fbb-617c-41d3-aac6-e181eddf8b3b">https://www.fab.com/listings/bb2e4fbb-617c-41d3-aac6-e181eddf8b3b</a></td></tr><tr><td>RMC runtime Nanite generation works on unmodified engines</td><td>NOT VERIFIED. Vendor claim</td><td>same</td></tr><tr><td>RMC Core is free and open source; Pro adds Nanite, SDF and Lumen cards</td><td>NOT VERIFIED. Vendor claim</td><td>same</td></tr><tr><td>ProceduralMeshComponent limits</td><td>NOT VERIFIED. Not fetched</td><td>none</td></tr><tr><td>Sprite billboards, sky and weather built-ins</td><td>NOT VERIFIED. Not searched</td><td>none</td></tr></tbody></table>
+<h2 id="summary-table">Summary table</h2>
+<table><thead><tr><th>Area</th><th>Verified</th><th>Open</th></tr></thead><tbody><tr><td>Screen reader</td><td>Experimental; Windows and iOS VoiceOver; widget list; <code>CreateAccessibleWidget</code> override; <code>bCompileWithAccessibilitySupport</code></td><td>macOS, Linux, UIA details, 5.4 to 5.7 changes</td></tr><tr><td>Colour vision</td><td>Enum values</td><td>Shipping status, CVar, severity range</td></tr><tr><td>Text scaling</td><td>Nothing built-in verified</td><td>DPI curve</td></tr><tr><td>CommonUI</td><td>Input routing, controller icons, gamepad navigation</td><td>Action bar, glyph switching, Enhanced Input remap</td></tr><tr><td>C++</td><td>C++20 default and required; STL policy; containers</td><td>C++23 use, exceptions, RTTI, UBT defaults</td></tr><tr><td>Licensing</td><td>Nothing primary</td><td>5% rate, source redistribution, logo wording, CC-BY-SA question</td></tr><tr><td>Linux</td><td>Editor minimums and recommended hardware; Vulkan extension</td><td>Game build targets, macOS, Steam Deck</td></tr><tr><td>Source build</td><td>Nothing official</td><td>Disk size, build time, GitHub runner feasibility</td></tr><tr><td>Rendering</td><td>Nanite material, mesh, and count limits</td><td>Procedural and runtime Nanite, RMC claims, billboards, sky</td></tr></tbody></table>
+<h2 id="could-not-verify">Could not verify</h2>
+<ol>
+<li>EULA text: royalty rate, $1M threshold, Epic Games Store terms, seat fee, source redistribution, splash and logo clauses. HTTP 403/503 on all EULA, licence and FAQ pages.
+</li>
+<li>Engine versions 5.4 to 5.7: every fetched official page is labelled 5.8.
+</li>
+<li>Release notes for 5.5, 5.6 and 5.7 (screen reader, colour vision, C++ changes).
+</li>
+<li>macOS and Linux screen reader support; Windows UIA integration.
+</li>
+<li>Colour vision deficiency: shipping vs editor-only; the CVar; severity range.
+</li>
+<li>Text scaling and DPI curve in UMG.
+</li>
+<li>CommonUI action bar and glyph switching; Enhanced Input remapping.
+</li>
+<li>UBT defaults for exceptions, RTTI, and C++23 compilation.
+</li>
+<li>Engine source access and redistribution terms in the current EULA.
+</li>
+<li>Splash and logo requirements in the current EULA.
+</li>
+<li>Open-source CC-BY-SA games that require players to build the engine.
+</li>
+<li>Linux and Windows game build targets, macOS editor, Steam Deck Verified status.
+</li>
+<li>Source-build disk and time figures for 5.4 to 5.8 (only third-party numbers found).
+</li>
+<li>GitHub-hosted runner feasibility, packaged game sizes, Lumen and Nanite off switches.
+</li>
+<li>RealtimeMesh plugin claims and limitations; ProceduralMeshComponent; Nanite and runtime meshes.
+</li>
+<li>Sky, weather, and sprite billboard built-ins.
+</li>
+<li>Engine case studies for embedding large external C++ codebases.
+</li></ol>
+<h2 id="sources-used">Sources used</h2>
+<ul>
+<li><a href="https://dev.epicgames.com/documentation/unreal-engine/supporting-screen-readers-in-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/supporting-screen-readers-in-unreal-engine</a> (5.8, fetched)
+</li>
+<li><a href="https://dev.epicgames.com/documentation/unreal-engine/blind-accessibility-features-overview-in-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/blind-accessibility-features-overview-in-unreal-engine</a> (5.8, fetched)
+</li>
+<li><a href="https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/SlateCore/EColorVisionDeficiency">https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/SlateCore/EColorVisionDeficiency</a> (5.8, fetched)
+</li>
+<li><a href="https://dev.epicgames.com/documentation/unreal-engine/common-ui-plugin-for-advanced-user-interfaces-in-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/common-ui-plugin-for-advanced-user-interfaces-in-unreal-engine</a> (5.8, fetched)
+</li>
+<li><a href="https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine</a> (5.8, fetched)
+</li>
+<li><a href="https://dev.epicgames.com/documentation/unreal-engine/linux-development-requirements-for-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/linux-development-requirements-for-unreal-engine</a> (5.8, fetched)
+</li>
+<li><a href="https://dev.epicgames.com/documentation/unreal-engine/nanite-virtualized-geometry-in-unreal-engine">https://dev.epicgames.com/documentation/unreal-engine/nanite-virtualized-geometry-in-unreal-engine</a> (5.8, fetched)
+</li>
+<li><a href="https://docs.unrealengine.com/4.26/BlueprintAPI/Widget/Accessibility/SetColorVisionDeficiencyType/">https://docs.unrealengine.com/4.26/BlueprintAPI/Widget/Accessibility/SetColorVisionDeficiencyType/</a> (4.26, search excerpt)
+</li>
+<li><a href="https://docs.unrealengine.com/4.27/ProgrammingAndScripting/DownloadingSourceCode">https://docs.unrealengine.com/4.27/ProgrammingAndScripting/DownloadingSourceCode</a> (4.27, search excerpt)
+</li>
+<li><a href="https://www.strayspark.studio/blog/game-accessibility-2026-unreal-engine">https://www.strayspark.studio/blog/game-accessibility-2026-unreal-engine</a> (third party, fetched; not authoritative)
+</li>
+<li><a href="https://wiki.archlinux.org/title/Unreal_Engine_5">https://wiki.archlinux.org/title/Unreal_Engine_5</a> (third party, search excerpt)
+</li>
+<li><a href="https://www.fab.com/listings/bb2e4fbb-617c-41d3-aac6-e181eddf8b3b">https://www.fab.com/listings/bb2e4fbb-617c-41d3-aac6-e181eddf8b3b</a> (vendor listing, search excerpt)
+</li>
+<li><a href="https://steamdeckhq.com/steam-deck-verified-highlights-8-3-26-8-9-26/">https://steamdeckhq.com/steam-deck-verified-highlights-8-3-26-8-9-26/</a> (search excerpt)
+</li>
+<li><a href="https://www.unrealengine.com/en-US/license,">https://www.unrealengine.com/en-US/license,</a> <a href="https://gateway.unrealengine.com/en-US/faq,">https://gateway.unrealengine.com/en-US/faq,</a> <a href="https://map.twinmotion.com/en-US/faq">https://map.twinmotion.com/en-US/faq</a> (failed: 403/503)
+</li></ul>
+</main>
+</body>
+</html>

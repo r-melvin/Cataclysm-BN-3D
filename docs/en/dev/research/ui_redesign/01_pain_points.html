@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>01. Pain points, ranked</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="README.html">Summary</a><a href="01_pain_points.html" class="current">01 Pain points</a><a href="02_patterns.html">02 Patterns</a><a href="03_design.html">03 Design</a><a href="04_architecture.html">04 Architecture</a><a href="05_plan.html">05 Plan</a><a href="06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="01-pain-points-ranked">01. Pain points, ranked</h1>
+<p>Sourced complaints about Cataclysm (DDA and BN) menus and about the UIs of comparable games, ranked by how many distinct sources the research actually read. Verbatim quotes with links; the full lists are in <code>research/a_cdda_bn_pain_points.md</code> and the per-game files.</p>
+<h2 id="how-much-to-trust-this">How much to trust this</h2>
+<ul>
+<li><strong>Reddit, YouTube comments and the Steam discussion board were not reachable</strong> from the research tools (blocked, age-gated or 403). The brief asked for r/cataclysmbn, r/cataclysmdda, r/roguelikes, r/gamedesign and accessibility subreddits; none were mined. Nothing below comes from Reddit. This is the largest gap in the research.
+</li>
+<li>CDDA/BN evidence comes from GitHub issues (read via the API), the CDDA Discourse forum (read via its JSON endpoint) and the 151 most recent Steam reviews of CDDA (via the reviews API). Counts are "distinct items read", not a population survey; a count of 16 means sixteen things, not sixteen percent.
+</li>
+<li>Comparable-game quotes were fetched through a summarising fetch tool; the agents flagged that wording may not be character-exact. Items marked [snippet] were never opened.
+</li>
+<li>Many "UI audit" GitHub issues are developer-filed. They are counted separately where it matters.
+</li></ul>
+<h2 id="cataclysm-dda-bn-pain-points">Cataclysm (DDA + BN) pain points</h2>
+<table><thead><tr><th>Rank</th><th>Pain point</th><th>Distinct sources</th><th>Where</th></tr></thead><tbody><tr><td>1</td><td>Menus overloaded, too many options, nested menus, every action throws the whole list at you</td><td>16</td><td>Steam, GitHub, Discourse</td></tr><tr><td>2</td><td>Keybindings inconsistent and hard to learn; rebinding breaks menus; default conflicts</td><td>15</td><td>Steam, GitHub</td></tr><tr><td>3</td><td>ImGui and curses-ImGui defects in upstream CDDA (blurry fonts, no wrap, mouse offset, crashes)</td><td>15</td><td>GitHub, Discourse</td></tr><tr><td>4</td><td>Text overflow, truncation, layout not fitting the screen or font size</td><td>14</td><td>GitHub, Steam</td></tr><tr><td>5</td><td>Pocket / nested-container mental model confuses players (CDDA; BN does not have pockets but has the same inventory UI lineage)</td><td>10</td><td>Steam, Discourse, GitHub</td></tr><tr><td>6</td><td>Mouse support missing or inconsistent</td><td>6</td><td>GitHub, Steam</td></tr><tr><td>7</td><td>Filter/sort/search gaps in inventory-like screens</td><td>5</td><td>GitHub (BN mostly)</td></tr><tr><td>8</td><td>Hidden actions and features; "double menu" from multi-purpose keys</td><td>5</td><td>GitHub, Steam</td></tr><tr><td>9</td><td>Selection or tab state resets on reopen</td><td>3</td><td>GitHub (BN)</td></tr><tr><td>10</td><td>Slow menus with many items</td><td>2</td><td>GitHub</td></tr></tbody></table>
+<h3 id="1-menus-overloaded">1. Menus overloaded</h3>
+<blockquote><p>"The menus in this game are excessively complicated. There are way too many options, and I don't want to read a novel just to open and drink a stupid bottle of water." ... "Instead of coding proper situational menus, they just throw the entire list at you every time." Steam review, negative, 2026-07-20. <a href="https://steamcommunity.com/profiles/76561197981255486/recommended/2330750/">https://steamcommunity.com/profiles/76561197981255486/recommended/2330750/</a></p></blockquote>
+<blockquote><p>"This game is fire but good lord the inventory is so bad" Steam review, positive, 2025-05-21. <a href="https://steamcommunity.com/profiles/76561198170937002/recommended/2330750/">https://steamcommunity.com/profiles/76561198170937002/recommended/2330750/</a></p></blockquote>
+<blockquote><p>"Many UIs are clunky to use, and require the player to "get used to" them." @olanti-p, BN #3602, 2023-11-09. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/3602">https://github.com/cataclysmbn/Cataclysm-BN/issues/3602</a></p></blockquote>
+<blockquote><p>"The construction UI has not been updated since ages, yet the crafting UI has gotten a lot of features which the construction UI would benefit from." @NetSysFire, CDDA #70909, 2024-01-14. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/70909">https://github.com/CleverRaven/Cataclysm-DDA/issues/70909</a></p></blockquote>
+<blockquote><p>"There are so many inventory-like interfaces" Gadgetpatch, Discourse 23753, 2020-05-25 (read via JSON). <a href="https://discourse.cataclysmdda.org/t/general-quality-of-life-ui-improvement-discussion/23753">https://discourse.cataclysmdda.org/t/general-quality-of-life-ui-improvement-discussion/23753</a></p></blockquote>
+<p>Design consequence: one inventory screen instead of six inventory-like screens; one contextual interaction verb instead of a verb per key; the "situational menu" the reviewer asks for is the interaction prompt.</p>
+<h3 id="2-keybindings">2. Keybindings</h3>
+<blockquote><p>"Its a great game that is unfortunately ruined by an ancient and awkward control scheme that is in desperate need of an overhaul." Steam review, negative, 2025-01-25. <a href="https://steamcommunity.com/profiles/76561198040659710/recommended/2330750/">https://steamcommunity.com/profiles/76561198040659710/recommended/2330750/</a></p></blockquote>
+<blockquote><p>"the lack of consistent keys (ie press B to back out of menu or 2 or whatever) is very frustrating." Steam review, negative, 2023-12-20. <a href="https://steamcommunity.com/profiles/76561198011358609/recommended/2330750/">https://steamcommunity.com/profiles/76561198011358609/recommended/2330750/</a></p></blockquote>
+<blockquote><p>"This renders the menu unusable, as in teh carat will not move when the newly bound key is pressed." @JBloodthorn, CDDA #45927 (changing movement keys breaks menu navigation), 2020-12-09. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/45927">https://github.com/CleverRaven/Cataclysm-DDA/issues/45927</a></p></blockquote>
+<blockquote><p>"#86193 added batch size increase and batch size decrease bindings, setting their defaults to to <code>+</code> and <code>-</code>, but prioritize and deprioritize already had those as their default keys" @esotericist, CDDA #86331, 2026-04-07. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/86331">https://github.com/CleverRaven/Cataclysm-DDA/issues/86331</a></p></blockquote>
+<blockquote><p>"The complexity of the giant amount of screens each with its own keybinds is another barrier, that is not fun to master." @thedyze, BN #5442, 2024-09-27. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/5442">https://github.com/cataclysmbn/Cataclysm-BN/issues/5442</a></p></blockquote>
+<p>Codebase fact (verified): <code>data/raw/keybindings/keybindings.json</code> holds <strong>585 actions in 61 contexts</strong> with 674 keyboard, 28 gamepad and 16 mouse bindings; the default-mode context alone has 132 actions. Per-screen contexts with their own keys are the structural cause.</p>
+<h3 id="3-upstream-imgui-migration-defects-cdda-only-bn-has-no-imgui">3. Upstream ImGui migration defects (CDDA only; BN has no ImGui)</h3>
+<blockquote><p>"Brain immediately complains that the fonts look.. blurry? They definitely look off and not as crisp as the menu just before." @NetSysFire, CDDA #73120, 2024-04-19. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/73120">https://github.com/CleverRaven/Cataclysm-DDA/issues/73120</a></p></blockquote>
+<blockquote><p>"imGUI still has several major problems in the curses build that makes menus difficult to use." @SandwichPie, CDDA #82161, 2025-07-31. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/82161">https://github.com/CleverRaven/Cataclysm-DDA/issues/82161</a></p></blockquote>
+<blockquote><p>"Currently, the <code>input_context</code> turns all mouse clicks into the SELECT action, no matter where the user actually clicked." @db48x, CDDA #75288, 2024-07-28. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/75288">https://github.com/CleverRaven/Cataclysm-DDA/issues/75288</a></p></blockquote>
+<blockquote><p>"On Windows with display scaling set to 200%, mouse clicks on the ImGui-rendered main menu land on the wrong entry." @YellowBee123, CDDA #88651, 2026-09-13. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/88651">https://github.com/CleverRaven/Cataclysm-DDA/issues/88651</a></p></blockquote>
+<blockquote><p>"Uh... I just started playing experimental version of cdda and I don't like new "graphical" ui of some windows." ... "Like, escape menu is now not ascii-like and I can't find setting to disable it." @AnimeAss, Discourse 29530, 2024-11-22; reply @Profugo_Barbatus: "Nope, the imgui migration is not optional." <a href="https://discourse.cataclysmdda.org/t/changing-the-menu-interface/29530">https://discourse.cataclysmdda.org/t/changing-the-menu-interface/29530</a></p></blockquote>
+<p>The "looks like a dev tool" phrase from the brief was <strong>not found</strong> verbatim anywhere. Praise was thin: one reviewer comment, "Overall the UI works really well" (@db48x on PR #73134, 2024-05-03). Lesson: a migration that ships half-done, with a second text renderer and two mouse models, generates a long tail of bugs and a "can I turn it off" reaction. Whatever BN builds must own one text path and one mouse model, and must not expose a half-migrated state for years.</p>
+<h3 id="4-text-overflow-and-layout">4. Text overflow and layout</h3>
+<blockquote><p>"I cannot read parts of quest descriptions, because they trail off the right edge of the quest menu." @anoobindisguise, CDDA #84564, 2026-01-09. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/84564">https://github.com/CleverRaven/Cataclysm-DDA/issues/84564</a></p></blockquote>
+<blockquote><p>"It stretches the name box so far that the information about the spell on the right is illegible." @Keltas, CDDA #77116, 2024-10-18. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/77116">https://github.com/CleverRaven/Cataclysm-DDA/issues/77116</a></p></blockquote>
+<blockquote><p>"Scenario and Profession don't fit on the screen" @bullkang, BN #10427, 2026-09-29. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/10427">https://github.com/cataclysmbn/Cataclysm-BN/issues/10427</a></p></blockquote>
+<blockquote><p>"making the whole menu practically unreadable." @midgardormr, BN #10675, 2026-10-21. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/10675">https://github.com/cataclysmbn/Cataclysm-BN/issues/10675</a></p></blockquote>
+<p>Codebase fact (verified): every screen is laid out in fixed character cells on an 80x24-minimum grid; font size changes require a restart (<code>FONT_SIZE</code>, <code>MAP_FONT_SIZE</code>, <code>OVERMAP_FONT_SIZE</code> in <code>src/options.cpp:2313-2320</code>). There is no wrapping layout engine.</p>
+<h3 id="5-inventory-mental-model">5. Inventory mental model</h3>
+<blockquote><p>"it's all in one, long, painful line on the left side." @PoeSalesman, Discourse 12592, 2016-09-27. <a href="https://discourse.cataclysmdda.org/t/12592">https://discourse.cataclysmdda.org/t/12592</a></p></blockquote>
+<blockquote><p>"a ton of people have been confused by this but i have no idea how." @KorGgenT (developer), Discourse 24456, 2020-08-15. <a href="https://discourse.cataclysmdda.org/t/24456">https://discourse.cataclysmdda.org/t/24456</a></p></blockquote>
+<blockquote><p>"This gives a really awkward structure where how to equip an NPC is in two completely separate menus" @Daenyth, BN #3525, 2023-10-30. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/3525">https://github.com/cataclysmbn/Cataclysm-BN/issues/3525</a></p></blockquote>
+<blockquote><p>"Right now, Unloading stuff can be a pain." @Kaylakaze, BN #2308, 2023-01-26. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/2308">https://github.com/cataclysmbn/Cataclysm-BN/issues/2308</a></p></blockquote>
+<h3 id="6-mouse">6. Mouse</h3>
+<blockquote><p>"There is no full mouse support. Partial mouse support is present, but for many cases it's impossible to interact with the UI using mouse." @olanti-p, BN #3602. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/3602">https://github.com/cataclysmbn/Cataclysm-BN/issues/3602</a></p></blockquote>
+<p>Codebase fact (verified): <code>src/ui.cpp</code> (uilist), <code>inventory_ui.cpp</code>, <code>crafting_gui.cpp</code>, <code>advanced_inv.cpp</code>, <code>newcharacter.cpp</code> and <code>main_menu.cpp</code> contain <strong>zero</strong> mouse or coordinate handling; a left click in a uilist activates the highlighted row without hit-testing the pointer. Only look-around, targeting and <code>query_popup</code> register <code>COORDINATE</code>.</p>
+<h3 id="7-filter-sort-search">7. Filter, sort, search</h3>
+<blockquote><p>"However, if the item is placed inside a container (for example, apple juice inside a bottle), it cannot be found." @jeremy7986, BN #7280, 2025-09-24. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/7280">https://github.com/cataclysmbn/Cataclysm-BN/issues/7280</a></p></blockquote>
+<blockquote><p>"Everyone I've seen use these options (myself and two or three YouTubers) gets confused." @jbytheway, CDDA #26311 (crafting search prefixes like <code>c:</code>), 2018-10-18. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/26311">https://github.com/CleverRaven/Cataclysm-DDA/issues/26311</a></p></blockquote>
+<h3 id="8-discoverability">8. Discoverability</h3>
+<blockquote><p>"so that newbies don't have to remember that '(' is disassemble (for example)." @HeatherSoron, CDDA #1368 (asking for an action menu), 2013-06-04. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/1368">https://github.com/CleverRaven/Cataclysm-DDA/issues/1368</a></p></blockquote>
+<blockquote><p>"This multi-purpose nature frequently leads to a frustrating "double-menu" (nested menu) issue." @cosing, BN #9805 (examine also picks up), 2026-07-05. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/9805">https://github.com/cataclysmbn/Cataclysm-BN/issues/9805</a></p></blockquote>
+<blockquote><p>"if I read a book, but don't want to read until I gain a skill level, I have to press either 4 keys for each time I read the book" @spacenookie, CDDA #28611, 2019-03-10. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/28611">https://github.com/CleverRaven/Cataclysm-DDA/issues/28611</a></p></blockquote>
+<h3 id="9-and-10-state-resets-slowness">9 and 10. State resets, slowness</h3>
+<blockquote><p>"opening the construction menu will always move one tab counterclockwise from where it was before." @sato2077, BN #8299, 2026-03-10. <a href="https://github.com/cataclysmbn/Cataclysm-BN/issues/8299">https://github.com/cataclysmbn/Cataclysm-BN/issues/8299</a></p></blockquote>
+<blockquote><p>"Opening the construction menu in an area with a lot of items takes a while to open, seemingly longer the more items there are" @thaelina, CDDA #88904, 2026-10-04. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/88904">https://github.com/CleverRaven/Cataclysm-DDA/issues/88904</a></p></blockquote>
+<h3 id="sidebar-prior-art-from-the-cdda-fork-research-github-issue-27367-and-pr-71109">Sidebar (prior art from the CDDA fork research, GitHub issue #27367 and PR #71109)</h3>
+<blockquote><p>"Nearly everything on the current sidebar is important in nearly all situations" unnamed commenter, CDDA #27367. <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/27367">https://github.com/CleverRaven/Cataclysm-DDA/issues/27367</a></p></blockquote>
+<blockquote><p>"Sidebar take too much space ... The overall feeling is messy" nsklaus, CDDA #27367.</p></blockquote>
+<blockquote><p>"if it's so dense you can't understand it, it's too dense" kevingranade, CDDA #27367.</p></blockquote>
+<blockquote><p>"Please allow this to be an option" CoroNaut, CDDA #27367 (on hiding information by context).</p></blockquote>
+<p>These four quotes bracket the sidebar problem: players want all the state, find the sidebar messy, and distrust anything that hides state without a switch. The user's instruction for this fork (remove the sidebar in 3D mode) is consistent with the first three if, and only if, every removed item is reachable as text on demand (F4 report, character sheet) and the "show always" switch exists for the vitals strip.</p>
+<h2 id="comparable-game-pain-points-that-transfer">Comparable-game pain points that transfer</h2>
+<table><thead><tr><th>Pain</th><th>Game, source</th><th>Transfer to BN</th></tr></thead><tbody><tr><td>Hidden survival state in a contextual HUD</td><td>The Long Dark, Steam 2016-2023 (V): "let the Hud Open plz or put a On/Off switch...that informations are SO important in a survival game." (ZzozZ, 2017)</td><td>Contextual badges need an "always show" option.</td></tr><tr><td>Status icons unreadable at a glance</td><td>Project Zomboid B42, Steam Dec 2024 (V): "These moodlets are basically unreadable at first glance and you have to constantly double check what they mean." (Alabeo)</td><td>Icons carry a word; no icon-only state.</td></tr><tr><td>Icons that do not scale with the UI</td><td>Project Zomboid (V): "The old ones could not be scaled well with UI apparently." (Silamon, player account)</td><td>Vector/SDF glyphs or a per-scale icon set; test at 200 %.</td></tr><tr><td>Sorting hidden behind a button, filters unreliable</td><td>BG3 (V: Gfinity 2025; S: Steam)</td><td>Sort/filter in the header, one press.</td></tr><tr><td>Slow tooltips slow the whole screen</td><td>BG3 (V: Gfinity 2025)</td><td>Info pane updates synchronously with focus.</td></tr><tr><td>Equal items reshuffle when sorted</td><td>Fallout 76 bug post (V)</td><td>Secondary sort key.</td></tr><tr><td>Radial slots that reorder themselves</td><td>BG3 (S)</td><td>Slots are explicit bindings.</td></tr><tr><td>Controller: no hotbar, clunky</td><td>Project Zomboid (V: "with a controller it's extremely clunky and you also get no hot bar", 2022)</td><td>Hotbar and radials are controller-first.</td></tr><tr><td>Items hidden behind unlocks with no explanation</td><td>Valheim, Subnautica, Green Hell (V/S)</td><td>Show the unlock condition in the list.</td></tr><tr><td>Build tab too cluttered</td><td>Valheim (V: "The building tab is too cluttered. Split into Masonry and Carpentry tabs")</td><td>Construction categories plus search and a can-build filter.</td></tr><tr><td>Blueprint menu closes after each placement</td><td>Subnautica 2018 (V), fixed in Subnautica 2</td><td>Build menu stays open.</td></tr><tr><td>No controller remap in-game</td><td>Valheim (S)</td><td>Remap everything in-game.</td></tr><tr><td>Tutorial popups vanish</td><td>BG3 (S)</td><td>Hints stay until dismissed (already how guided onboarding works).</td></tr><tr><td>No way to see why mood changed</td><td>RimWorld 2017 (V), CDDA Discourse 2019 (V: "I like to know why my toon is happy/sad.")</td><td>Morale reasons list stays, inside the character screen.</td></tr></tbody></table>
+<h2 id="positive-signals-what-not-to-break">Positive signals (what not to break)</h2>
+<ul>
+<li>CDDA advanced inventory called "actually incredibly intuitive to use" by one 2025 Steam reviewer (not attributed to any UI framework). The two-pane move model has fans; the new inventory keeps a two-pane move mode.
+</li>
+<li>The ZenFS thick sidebar was praised ("I've been using it all day on my ultra wide monitor and it's lovely", PR #71109). Some players want more on screen, not less. The classic build keeps its sidebar untouched; 3D mode offers the "always show vitals" switch and the character screen.
+</li>
+<li>Dwarf Fortress Steam kept its density and fixed navigation (scrollbars, tabs) and was called "a large step up" (PCGamesN 2020, V). Density is not the enemy; unnavigable density is.
+</li></ul>
+<h2 id="what-the-research-could-not-establish">What the research could not establish</h2>
+<ul>
+<li>Any Reddit thread on any topic in the brief.
+</li>
+<li>BN-specific Steam reviews (BN is not on Steam as far as the agents found).
+</li>
+<li>Player complaints about CDDA character creation (only developer audit issues exist).
+</li>
+<li>Player complaints about CDDA's item info text walls (none found).
+</li>
+<li>Whether CDDA's ImGui menus are slow (no attributed report).
+</li>
+<li>Any accessibility review of CDDA or BN by Can I Play That or similar (none found).
+</li></ul>
+</main>
+</body>
+</html>

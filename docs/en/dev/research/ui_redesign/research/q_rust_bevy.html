@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Q: Rust engines and frameworks as a frontend for a large C++ game</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="q-rust-engines-and-frameworks-as-a-frontend-for-a-large-c-game">Q: Rust engines and frameworks as a frontend for a large C++ game</h1>
+<p>Scope: Bevy (with bevy_a11y/AccessKit), egui, other Rust UI/game frameworks, C++ interop (cxx, autocxx, bindgen), and wgpu as a renderer for shaders currently built for SDL_GPU.</p>
+<p>Method and limits:</p>
+<ul>
+<li>GitHub facts were read with <code>gh api</code> from the source repositories (default branches as of 2026-10-21). Commit/tag/source-file claims cite the file or API path.
+</li>
+<li>The WebSearch budget for this session was exhausted partway through, so no web search results were used. Claims that rest only on a WebFetch of a project page are marked as such.
+</li>
+<li>Labels: <strong>VERIFIED</strong> = checked in the cited source in this session. <strong>NOT VERIFIED</strong> = stated from general knowledge, inference, or not checked; treat as unconfirmed.
+</li></ul>
+<p>Source base URLs used below: <code>gh:</code> means <code>https://github.com/&lt;repo&gt;/...</code>.</p>
+<hr>
+<h2 id="1-bevy">1. Bevy</h2>
+<h3 id="1-1-version-and-release-cadence">1.1 Version and release cadence</h3>
+<table><thead><tr><th>Release</th><th>Date (GitHub release tag)</th><th>Source</th></tr></thead><tbody><tr><td>0.14.0</td><td>2024-07-13</td><td>gh:bevyengine/bevy/releases (VERIFIED). bevy.org news lists "July 04, 2024" (VERIFIED conflict, see note).</td></tr><tr><td>0.15.0</td><td>2024-11-29</td><td>gh:bevyengine/bevy/releases (VERIFIED)</td></tr><tr><td>0.16.0</td><td>2025-04-24</td><td>gh:bevyengine/bevy/releases (VERIFIED)</td></tr><tr><td>0.17.0</td><td>2025-09-30</td><td>gh:bevyengine/bevy/releases (VERIFIED)</td></tr><tr><td>0.18.0</td><td>2026-01-13</td><td>gh:bevyengine/bevy/releases (VERIFIED)</td></tr><tr><td>0.19.0</td><td>2026-06-18</td><td>gh:bevyengine/bevy/releases (VERIFIED). bevy.org news lists June 19, 2026 (VERIFIED conflict).</td></tr><tr><td>0.19.1</td><td>2026-08-13</td><td>gh:bevyengine/bevy/releases (VERIFIED)</td></tr><tr><td>0.20.0</td><td>2026-10-08</td><td>gh:bevyengine/bevy/releases (VERIFIED); bevy.org/news lists October 08, 2026 (VERIFIED)</td></tr></tbody></table>
+<ul>
+<li>Gaps between minor releases from 0.14 to 0.20 are roughly 3.5 to 5.2 months, mean about 4.5 months (computed from the dates above; VERIFIED arithmetic).
+</li>
+<li>Versions are 0.x. Breaking changes between minor versions are the norm under pre-1.0 semver. Migration-guide content per release: NOT VERIFIED (the expected <code>release-content/</code> directory was not found at the repo root).
+</li>
+<li>Note: the default branch Cargo.toml reads <code>0.20.0-dev</code> (<code>gh:bevyengine/bevy/contents/Cargo.toml</code>, VERIFIED), so the default branch is at or past the 0.20 tag, not a frozen release.
+</li></ul>
+<h3 id="1-2-bevy-a11y-and-accesskit-what-is-exposed">1.2 bevy_a11y and AccessKit: what is exposed</h3>
+<p>Source: <code>gh:bevyengine/bevy/tree/main/crates/bevy_a11y/src/lib.rs</code> (VERIFIED).</p>
+<ul>
+<li><code>bevy_a11y</code> depends on <code>accesskit = &quot;0.25&quot;</code> (<code>crates/bevy_a11y/Cargo.toml</code>, VERIFIED).
+</li>
+<li>Public types: <code>AccessibilityPlugin</code>, <code>AccessibilityNode</code> (a component wrapping an <code>accesskit::Node</code>), <code>AccessibilityRequested</code>, <code>ManageAccessibilityUpdates</code>, <code>ActionRequest</code> (wrapping <code>accesskit::ActionRequest</code>), <code>AccessibilitySystems</code> (VERIFIED).
+</li>
+<li>Doc comment states the crate "does not actually power accessibility features"; it coordinates; binary authors add <code>AccessibilityPlugin</code> (VERIFIED, lib.rs lines 18-30).
+</li></ul>
+<p>Node roles actually set by bevy_ui: <code>gh:bevyengine/bevy/tree/main/crates/bevy_ui/src/accessibility.rs</code> (VERIFIED):</p>
+<ul>
+<li><code>button_changed</code> sets <code>Role::Button</code>.
+</li>
+<li><code>image_changed</code> sets <code>Role::Image</code>.
+</li>
+<li><code>label_changed</code> sets <code>Role::Label</code>.
+</li>
+<li>Label text is attached via a component with on-insert/on-remove hooks (<code>on_label_inserted</code>, <code>on_label_removed</code>) (VERIFIED).
+</li>
+<li>So: buttons, images, and labels are exposed. Text inputs, sliders, checkboxes, tabs, menus, scrollbars, and lists are NOT VERIFIED as exposed by bevy_ui; <code>bevy_ui_widgets</code> (crates/bevy_ui_widgets/src: button, checkbox, dialog, menu, slider, tabs, text_input, tree, scrollarea, etc.) depends on <code>bevy_a11y</code> and <code>accesskit = &quot;0.25&quot;</code> (VERIFIED dependency), but the per-widget role mapping was not read (NOT VERIFIED).
+</li>
+<li>Text: <code>bevy_text</code> uses <code>parley 0.11.0</code> and <code>swash 0.2.6</code> (<code>crates/bevy_text/Cargo.toml</code>, VERIFIED). Whether its text is exposed to AccessKit beyond the Label role: NOT VERIFIED.
+</li></ul>
+<h3 id="1-3-platforms">1.3 Platforms</h3>
+<ul>
+<li>The winit adapter is <code>accesskit_winit</code> 0.34 (<code>crates/bevy_winit/Cargo.toml</code>, VERIFIED). <code>bevy_winit/src/accessibility.rs</code> implements <code>AccessKitPlugin</code> and an action handler (VERIFIED).
+</li>
+<li>The AccessKit repo contains adapters: <code>adapters/</code> contains android, atspi-common, ios, macos, unix, windows, winit (VERIFIED: <code>gh:AccessKit/accesskit/tree/main/adapters</code>).
+</li>
+<li>Bevy's own root <code>Cargo.toml</code> (<code>gh:bevyengine/bevy/blob/main/Cargo.toml</code>, around lines 631-632, VERIFIED) has this comment on the <code>accesskit_unix</code> feature: "Enable AccessKit on Unix backends (currently only works with experimental screen readers and forks.)". So <strong>Linux AT-SPI is opt-in, and Bevy's own comment says it only works with experimental screen readers and forks.</strong> This is the most important platform finding.
+</li>
+<li>Windows and macOS are the primary supported paths (VERIFIED by the existence of the adapters and the macOS issue below; default-on status in shipped builds: NOT VERIFIED).
+</li>
+<li>Web (wasm): NOT VERIFIED. No web adapter directory in AccessKit (VERIFIED), and the AccessKit site lists Windows, macOS, Unix adapters, winit, C and Python bindings, and does not mention web or Android/iOS maturity (VERIFIED by WebFetch of <a href="https://accesskit.dev/,">https://accesskit.dev/,</a> which is a summary of a page, not a source file).
+</li></ul>
+<h3 id="1-4-known-gaps-and-issues-bevy-issues-verified-by-gh-api-on-bevyengine-bevy">1.4 Known gaps and issues (bevy issues, verified by <code>gh api</code> on bevyengine/bevy)</h3>
+<ul>
+<li>#25213 "Rethinking bevy_a11y from the ground up", open, created 2026-07-28. Argues that <code>accesskit::Node</code> is used as a persistent data structure instead of a wire format, which hurts composition (VERIFIED, body read). <a href="https://github.com/bevyengine/bevy/issues/25213">https://github.com/bevyengine/bevy/issues/25213</a>
+</li>
+<li>#25644 "bevy_a11y does not work correctly on macos with voiceover", created 2026-09-02, closed as completed 2026-09-11. Reported on Bevy 0.19.1: the tree "only updates very infrequently", VoiceOver reports "not responding" and updates only every few seconds, including official bevy_ui examples (VERIFIED, body read; the fix is not verified). <a href="https://github.com/bevyengine/bevy/issues/25644">https://github.com/bevyengine/bevy/issues/25644</a>
+</li>
+<li>#20515 "AccessKit is slow and buggy when Bevy is in continuous update mode", open, 2025-08-11. Reports VoiceOver laggy on macOS 15.5 with Bevy 0.17 in continuous mode; switching to winit <code>desktop_app</code> update mode removed the problem (VERIFIED, body read). <a href="https://github.com/bevyengine/bevy/issues/20515">https://github.com/bevyengine/bevy/issues/20515</a>
+</li>
+<li>#16312 "Feature-gate accessibility in bevy_ui", open, 2024-11-09 (VERIFIED). #7862 "Accessibility by default", open, 2023-03-01 (VERIFIED). Together these say accessibility is not on by default.
+</li>
+<li>#2724 "Add configurable colorblind modes as a standard feature", open, 2021-08-25 (VERIFIED). No colour-blind or high-contrast mode in <code>bevy_a11y/src/lib.rs</code> (VERIFIED by reading the file).
+</li>
+<li>#21260 "Add gamepad support for feathers / headless widgets", open, 2025-09-28 (VERIFIED title and state).
+</li>
+<li>#21207 "Add support to bevy_ui for units relative to font sizes", open, 2025-09-25 (VERIFIED title and state). Relevant to text scaling; actual text-scale setting: NOT VERIFIED.
+</li>
+<li>#25111 "InteractionDisabled and accessibility", open, 2026-07-21 (VERIFIED title).
+</li>
+<li>#25074 "Add support for accessibility 'object nav'", open, 2026-07-20 (VERIFIED title).
+</li>
+<li>#17644 "Design of bevy_a11y is BSN-unfriendly", closed (VERIFIED). #20524 "AccessibleName component", closed (VERIFIED).
+</li>
+<li>Count: search for <code>label:I-Accessibility</code> returned at least one label, and <code>gh search</code> shows the accessibility topic is active but unfinished. No <code>A-Accessibility</code> label exists on the repo (VERIFIED: the label list contains <code>I-Accessibility</code> only).
+</li></ul>
+<h3 id="1-5-ui-maturity-focus-and-navigation">1.5 UI maturity, focus and navigation</h3>
+<ul>
+<li><code>bevy_input_focus</code> exists with <code>tab_navigation.rs</code>, <code>directional_navigation.rs</code>, <code>navigator.rs</code>, <code>pointer_focus.rs</code>, <code>autofocus.rs</code>, <code>gained_and_lost.rs</code> (VERIFIED, <code>crates/bevy_input_focus/src</code>).
+</li>
+<li>The directional navigation module's doc comment says virtual cursors are a common way to navigate with a gamepad or arrow keys (VERIFIED, <code>directional_navigation.rs</code> line 8). Gamepad input is reached through <code>bevy_input/gamepad</code> via the crate's <code>gamepad</code> feature (VERIFIED, <code>crates/bevy_input_focus/Cargo.toml</code>). Whether a gamepad is wired into the directional navigator by default: NOT VERIFIED.
+</li>
+<li><code>bevy_ui</code> depends on <code>bevy_input_focus</code>, <code>bevy_a11y</code>, <code>bevy_text</code> (VERIFIED, <code>crates/bevy_ui/Cargo.toml</code>). There is an <code>auto_directional_navigation.rs</code> module in <code>bevy_ui/src</code> (VERIFIED).
+</li>
+<li><code>bevy_ui_widgets</code> exists (see 1.2) with a set of headless widgets (VERIFIED file list).
+</li>
+<li>Text input: <code>bevy_text/src/text_edit.rs</code>, <code>editing.rs</code>, <code>cursor.rs</code> exist (VERIFIED file list). Issue #23014 "Text Input" closed 2026-02-17 (VERIFIED).
+</li>
+<li>Scaling: <code>bevy_ui</code> has no <code>text_scale</code> setting found in this session (NOT VERIFIED either way; the file list was read but not grepped for the feature).
+</li></ul>
+<h3 id="1-6-input-remapping-and-gamepad">1.6 Input remapping and gamepad</h3>
+<ul>
+<li>Gamepad: <code>bevy_gilrs</code> depends on <code>gilrs = &quot;0.11.0&quot;</code> (<code>crates/bevy_gilrs/Cargo.toml</code>, VERIFIED). <code>bevy_input/src/gamepad.rs</code> exists (VERIFIED file list).
+</li>
+<li>Input remapping: <code>leafwing-input-manager</code> is a separate crate, licence Apache-2.0 (VERIFIED via <code>gh:Leafwing-Studios/leafwing-input-manager</code>), tags up to <code>v0.22</code> (VERIFIED tag exists; its release date: NOT VERIFIED). Compatibility with Bevy 0.20 specifically: NOT VERIFIED.
+</li></ul>
+<h3 id="1-7-licence">1.7 Licence</h3>
+<ul>
+<li>Bevy root contains <code>LICENSE-APACHE</code> and <code>LICENSE-MIT</code> (VERIFIED, root listing). Dual Apache-2.0 OR MIT (VERIFIED via file names; the GitHub API reports <code>Apache-2.0</code> as the primary SPDX id, VERIFIED).
+</li></ul>
+<h3 id="1-8-shipped-games-on-steam-steam-deck">1.8 Shipped games on Steam / Steam Deck</h3>
+<ul>
+<li>Not verified. The bevy.org assets page was fetched (WebFetch; first 100,000 of 148,383 characters read) and listed no Steam-shipped games in the visible portion; the games section was cut off (VERIFIED as a partial read). Steam Deck support in any shipped Bevy game: NOT VERIFIED. Web search could not be used.
+</li>
+<li><code>bevy-steamworks</code> exists as a plugin (VERIFIED via bevy.org assets page, WebFetch).
+</li></ul>
+<hr>
+<h2 id="2-egui-and-accesskit">2. egui and AccessKit</h2>
+<h3 id="2-1-versions">2.1 Versions</h3>
+<ul>
+<li>egui 0.37.0 released 2026-10-15; 0.36.2 on 2026-09-08; 0.36.0 on 2026-08-05 (VERIFIED: <code>gh:emilk/egui/releases</code>).
+</li></ul>
+<h3 id="2-2-integration-status">2.2 Integration status</h3>
+<ul>
+<li><code>crates/egui/Cargo.toml</code> has a direct dependency <code>accesskit.workspace = true</code> (VERIFIED, line 99) and serde feature gating (VERIFIED).
+</li>
+<li><code>crates/egui-winit/Cargo.toml</code>: <code>accesskit = [&quot;dep:accesskit_winit&quot;]</code> is an opt-in feature; the <code>default</code> feature list is <code>clipboard, links, wayland, winit/default, x11</code> and does not include <code>accesskit</code> (VERIFIED, lines 27-30).
+</li>
+<li><code>crates/eframe/Cargo.toml</code>: the <code>default</code> feature list includes <code>&quot;accesskit&quot;</code> (VERIFIED, lines 20-32), so eframe enables it by default. The eframe <code>accesskit</code> feature maps to <code>egui-winit/accesskit</code> (VERIFIED, line 42).
+</li>
+<li>So: with eframe defaults, AccessKit is on. With raw egui-winit, you must enable it.
+</li>
+<li>Documented platform behaviour, screen reader support depth, and per-widget coverage: NOT VERIFIED beyond the issue list below (docs.rs fetch returned no feature detail).
+</li></ul>
+<h3 id="2-3-open-issues-in-emilk-egui-verified-by-gh-search-state-and-titles">2.3 Open issues in emilk/egui (VERIFIED by gh search, state and titles)</h3>
+<ul>
+<li>#8671 "eframe (native): an occluded or minimized window never answers AccessKit: action requests and the initial tree request wait until the window is shown", open. Relevant to a game that minimises.
+</li>
+<li>#8700 "egui_extras Table: expose table, row and cell roles to AccessKit", open.
+</li>
+<li>#8733 "A scroll target inside a ScrollArea that cannot scroll on that axis never reaches the enclosing ScrollArea", open.
+</li>
+<li>#8674 "Modifiers::shift_only ignores ctrl, so on macOS Ctrl+Shift+Tab moves focus like Shift+Tab", open.
+</li>
+<li>#3647 "accesskit panics when giving invalid Id to Response::labelled_by", open. Panic risk.
+</li>
+<li>#2647 "accessibility: expose live regions", open.
+</li>
+<li>#2831 "Keyboard Shortcuts To Open Menus", open.
+</li>
+<li>#8699 "TextEdit ignores AccessKit SetValue, so UI Automation can't set its text", closed.
+</li>
+<li>#8474 "Add WidgetType::Tab", closed.
+</li></ul>
+<h3 id="2-4-limitations-for-a-game-hud-analysis">2.4 Limitations for a game HUD (analysis)</h3>
+<ul>
+<li>The immediate-mode model rebuilds widgets every frame; an AccessKit tree for a game HUD would have to be derived per frame. Whether egui's AccessKit tree is updated only on change: NOT VERIFIED.
+</li>
+<li>Game HUDs usually need custom drawing, which egui supports through painter calls, but accessibility labels for custom-drawn shapes depend on the developer supplying them: NOT VERIFIED per API.
+</li>
+<li>Licence: egui repo SPDX is Apache-2.0 (VERIFIED via <code>gh api repos/emilk/egui</code>).
+</li></ul>
+<hr>
+<h2 id="3-other-rust-frameworks">3. Other Rust frameworks</h2>
+<table><thead><tr><th>Project</th><th>Licence (VERIFIED)</th><th>Accessibility status (VERIFIED unless stated)</th><th>Notes</th></tr></thead><tbody><tr><td>Slint</td><td>Repo SPDX <code>NOASSERTION</code>; <code>LICENSES/</code> has <code>GPL-3.0-only.txt</code> and <code>LicenseRef-Slint-Royalty-free-2.0.md</code></td><td><code>internal/backends/winit/Cargo.toml</code> has an <code>accessibility</code> feature using <code>accesskit 0.25</code> and <code>accesskit_winit 0.34</code> (VERIFIED). Open issue #3867 says the accessibility feature has a large performance impact on big ListViews.</td><td>Latest release v1.18.1, 2026-09-21 (VERIFIED). Royalty-free licence (VERIFIED text, LicenseRef-Slint-Royalty-free-2.0.md): usable for desktop/mobile/web Applications, royalty-free; attribution required: display the <code>AboutSlint</code> widget in an About dialog reachable from the top-level menu (or the splash screen), and display the Slint attribution badge on a public webpage where binaries are downloaded. The licence does not permit distributing the Software alone. For a closed-source game, the attribution condition is a product decision.</td></tr><tr><td>Xilem / Masonry</td><td>Apache-2.0 (VERIFIED)</td><td>Masonry depends on <code>accesskit</code>, <code>accesskit_consumer</code>, <code>accesskit_winit</code> (VERIFIED, <code>masonry/Cargo.toml</code>). Open issue #924 "Automated testing of accessibility"; #1003 "Noting widget relationships" open. Closed #1733 "Accessibility not working on Linux".</td><td>Alpha/maturity status: NOT VERIFIED.</td></tr><tr><td>Iced</td><td>Not checked</td><td>No AccessKit integration found in issue list. #552 "Implement accessibility support" open; #489 "In native UI, cannot focus most widgets, control them via keyboard, or tab between widgets" open (VERIFIED titles).</td><td>Treat iced as having no shipped accessibility. Repo licence: NOT VERIFIED.</td></tr><tr><td>Fyrox</td><td>MIT (VERIFIED)</td><td><code>fyrox-ui/Cargo.toml</code> contains no <code>accesskit</code> dependency (VERIFIED by grep). Issue search for "accessibility" returned only an unrelated closed issue (VERIFIED).</td><td>No accessibility support found.</td></tr><tr><td>macroquad</td><td>Apache-2.0 (VERIFIED)</td><td><code>src/</code> has no accessibility module; file list has <code>ui.rs</code>, <code>text.rs</code>, <code>input.rs</code> only (VERIFIED).</td><td>No accessibility support.</td></tr><tr><td>winit AccessKit adapter</td><td>winit root <code>Cargo.toml</code> has zero <code>accesskit</code> references (VERIFIED)</td><td>AccessKit's own winit adapter is <code>accesskit_winit</code> in the AccessKit repo (<code>adapters/winit</code>, VERIFIED). AccessKit site: "If you are using the winit ... library for Rust, you should use the AccessKit winit adapter" (VERIFIED via WebFetch of accesskit.dev).</td><td>Bevy and egui use <code>accesskit_winit</code>.</td></tr></tbody></table>
+<p>Note on AccessKit consumers: the AccessKit site names Bevy, egui, Freya, Slint, Xilem as integrating AccessKit (VERIFIED via WebFetch of accesskit.dev, summarised page).</p>
+<hr>
+<h2 id="4-c-interop">4. C++ interop</h2>
+<h3 id="4-1-cxx">4.1 cxx</h3>
+<ul>
+<li>Licence: Apache-2.0 (VERIFIED). Latest release 1.0.205, 2026-10-11 (VERIFIED).
+</li>
+<li>Exceptions: <code>Result&lt;T&gt;</code> in a bridge maps C++ exceptions to Rust <code>Result</code>. An exception thrown from an <code>extern &quot;C++&quot;</code> function <strong>not</strong> declared to return <code>Result</code> calls <code>std::terminate</code>. A panic in any <code>extern &quot;Rust&quot;</code> function aborts the process (VERIFIED: <code>gh:dtolnay/cxx/blob/master/book/src/binding/result.md</code>). Consequence for a large C++ game: every bridged function that can throw must be declared <code>Result</code> or wrapped in a noexcept shim.
+</li>
+<li><code>std::string</code>: exposed to Rust as <code>CxxString</code>; Rust cannot obtain a <code>CxxString</code> by value (VERIFIED: <code>book/src/binding/cxxstring.md</code>).
+</li>
+<li><code>std::vector</code>, <code>std::map</code>, <code>std::optional</code>, and other STL types: only partially verified. The <code>vector.md</code> page read returned empty content; full support matrix: NOT VERIFIED.
+</li>
+<li>Blocking input loops and callbacks into Rust from C++ (the game's main loop calling Rust): NOT VERIFIED beyond the general bridge model.
+</li>
+<li>Lua (sol2) interop through cxx: NOT VERIFIED (not checked).
+</li></ul>
+<h3 id="4-2-autocxx">4.2 autocxx</h3>
+<ul>
+<li>Repository <code>google/autocxx</code> has <code>archived: true</code> (VERIFIED via gh API). Last release v0.30.0, 2025-03-03 (VERIFIED). Last commit on default branch 2026-09-15 (VERIFIED). Treat as unmaintained for planning purposes; the archive status is the decisive fact.
+</li></ul>
+<h3 id="4-3-bindgen">4.3 bindgen</h3>
+<ul>
+<li>Latest release v0.73.2, 2026-10-05 (VERIFIED: <code>gh:rust-lang/rust-bindgen/releases</code>). Suited to C APIs; for a C++ codebase it generates opaque bindings for classes and needs a C shim for most of the game's code (general knowledge; NOT VERIFIED in this session).
+</li></ul>
+<h3 id="4-4-threading-build-ci-distribution">4.4 Threading, build, CI, distribution</h3>
+<ul>
+<li>Bevy's task pool and threading model: NOT VERIFIED in this session.
+</li>
+<li>cargo + CMake build integration: NOT VERIFIED (not read). The repo's AGENTS.md specifies a CMake preset and <code>cataclysm-bn-tiles</code> target (VERIFIED from <code>/home/richard/Projects/Cataclysm-BN-3D/AGENTS.md</code>); any Rust layer would need cargo driven from CMake or the reverse.
+</li>
+<li>GitHub-hosted runner Rust availability and cost: NOT VERIFIED. AGENTS.md states "No CI on this fork: GitHub Actions does not run here" (VERIFIED from AGENTS.md), so CI cost is not a current constraint.
+</li>
+<li>Binary distribution for Linux/macOS/Windows: NOT VERIFIED beyond Bevy's own template claim: <code>bevy_game_template</code> / official template advertises Windows, Linux, macOS and wasm release workflows (VERIFIED via bevy.org assets page WebFetch, summarised).
+</li></ul>
+<hr>
+<h2 id="5-rendering-wgpu-and-sdl-gpu-shader-reuse">5. Rendering: wgpu and SDL_GPU shader reuse</h2>
+<h3 id="5-1-wgpu-versions-and-shader-paths">5.1 wgpu versions and shader paths</h3>
+<ul>
+<li>Latest release v30.0.1, 2026-08-22 (VERIFIED: <code>gh:gfx-rs/wgpu/releases</code>). Bevy 0.20 depends on <code>wgpu-types = &quot;30&quot;</code> (VERIFIED, <code>crates/bevy_winit/Cargo.toml</code>).
+</li>
+<li>naga front-ends: <code>naga/src/front/</code> contains <code>spv</code>, <code>wgsl</code>, <code>glsl</code> (VERIFIED). naga features: <code>spv-in</code>, <code>spv-out</code>, <code>wgsl-in</code>, <code>wgsl-out</code>, <code>glsl-in</code>, <code>glsl-out</code> (VERIFIED, <code>naga/Cargo.toml</code> lines 24-62).
+</li>
+<li>So naga can ingest SPIR-V into its IR, and wgpu uses naga for WGSL input. Whether wgpu's standard <code>create_shader_module</code> path accepts SPIR-V directly: NOT VERIFIED in this session.
+</li>
+<li>wgpu <code>Features::PASSTHROUGH_SHADERS</code> (bit 52) with <code>Device::create_shader_module_passthrough</code> (VERIFIED: <code>wgpu-types/src/features.rs</code> ~line 1060). This is the path for submitting backend-native shaders without naga translation. Which backends accept it and what SPIR-V subsets pass: NOT VERIFIED. Consider the passthrough path experimental until checked.
+</li></ul>
+<h3 id="5-2-sdl-gpu-shaders-via-sdl-shadercross">5.2 SDL_GPU shaders via SDL_shadercross</h3>
+<ul>
+<li>SDL_shadercross licence: Zlib (VERIFIED: <code>gh:libsdl-org/SDL_shadercross</code>).
+</li>
+<li>README (<code>README.txt</code>, VERIFIED): "It takes SPIRV or HLSL as the source and outputs DXBC, DXIL, SPIRV, MSL, or HLSL." It depends on SPIRV-Cross for SPIR-V translation and on DXC for DXIL. <strong>It does not list WGSL or any direct WGSL output.</strong>
+</li>
+<li>Reuse path (analysis, based on the above):
+<ol>
+<li>HLSL -&gt; SPIR-V with shadercross (or DXC), as the current SDL_GPU pipeline already does.
+</li>
+<li>SPIR-V -&gt; naga IR -&gt; WGSL, or SPIR-V passthrough, for wgpu.
+</li>
+<li>Coverage of naga's SPIR-V front-end for the game's actual shaders: NOT VERIFIED. Requires a test with the real shaders.
+</li></ol>
+</li>
+<li>AGENTS.md notes HLSL changes require shadercross recompilation and that the precompiled fallback does not rebuild changed sources (VERIFIED from AGENTS.md). A wgpu path would need its own shader build step.
+</li>
+<li>Uniform/layout compatibility (std140 vs SDL_GPU): NOT VERIFIED.
+</li></ul>
+<h3 id="5-3-voxel-meshing-from-c-produced-buffers">5.3 Voxel meshing from C++-produced buffers</h3>
+<ul>
+<li>Feasibility of handing C++-produced vertex/index buffers to wgpu via FFI: NOT VERIFIED in this session. Analysis: buffer ownership and lifetime across the cxx boundary, and copy cost per frame, need a prototype. AGENTS.md notes that camera mouse events must not render within <code>SDL_PollEvent</code> draining and that geometry fingerprints cannot detect GPU command accumulation (VERIFIED from AGENTS.md); any new renderer front-end must respect this.
+</li></ul>
+<hr>
+<h2 id="summary-table">Summary table</h2>
+<table><thead><tr><th>Topic</th><th>Finding</th><th>Status</th></tr></thead><tbody><tr><td>Bevy version</td><td>0.20.0 released 2026-10-08</td><td>VERIFIED</td></tr><tr><td>Bevy cadence</td><td>minor releases every ~3.5-5 months since 0.14</td><td>VERIFIED</td></tr><tr><td>Bevy a11y roles</td><td>Button, Image, Label only in bevy_ui</td><td>VERIFIED</td></tr><tr><td>Bevy a11y Linux</td><td>AT-SPI opt-in, "only works with experimental screen readers and forks"</td><td>VERIFIED (Bevy root Cargo.toml comment)</td></tr><tr><td>Bevy macOS VoiceOver</td><td>Reported lag and infrequent tree updates (#20515, #25644 closed)</td><td>VERIFIED (issues)</td></tr><tr><td>Bevy colour-blind mode</td><td>Not present; issue #2724 open</td><td>VERIFIED</td></tr><tr><td>Bevy focus/gamepad nav</td><td>bevy_input_focus has directional and tab nav; gamepad feature gated</td><td>VERIFIED (structure); default wiring NOT VERIFIED</td></tr><tr><td>Bevy licence</td><td>Apache-2.0 OR MIT</td><td>VERIFIED</td></tr><tr><td>Bevy shipped Steam Deck games</td><td>Not found</td><td>NOT VERIFIED</td></tr><tr><td>egui version</td><td>0.37.0 on 2026-10-15</td><td>VERIFIED</td></tr><tr><td>egui a11y default</td><td>ON in eframe defaults; OFF in egui-winit defaults</td><td>VERIFIED</td></tr><tr><td>egui open a11y issues</td><td>occluded window does not answer AccessKit (#8671)</td><td>VERIFIED</td></tr><tr><td>Slint licence</td><td>Royalty-free with AboutSlint + badge conditions; GPL-3.0 alternative</td><td>VERIFIED</td></tr><tr><td>Xilem/Masonry</td><td>AccessKit dependency present; Apache-2.0</td><td>VERIFIED</td></tr><tr><td>Iced</td><td>No accessibility; #552 open</td><td>VERIFIED</td></tr><tr><td>Fyrox / macroquad</td><td>No AccessKit</td><td>VERIFIED</td></tr><tr><td>cxx exceptions</td><td>Uncaught exception -&gt; std::terminate</td><td>VERIFIED</td></tr><tr><td>autocxx</td><td>Archived</td><td>VERIFIED</td></tr><tr><td>bindgen</td><td>v0.73.2 2026-10-05</td><td>VERIFIED</td></tr><tr><td>wgpu</td><td>v30.0.1 2026-08-22; naga spv-in; PASSTHROUGH_SHADERS</td><td>VERIFIED</td></tr><tr><td>SDL_shadercross output</td><td>DXBC, DXIL, SPIRV, MSL, HLSL; no WGSL</td><td>VERIFIED</td></tr><tr><td>naga SPIR-V coverage for game shaders</td><td>Not tested</td><td>NOT VERIFIED</td></tr></tbody></table>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li>Bevy shipped Steam or Steam Deck games (web search budget exhausted; bevy.org assets page only partly read).
+</li>
+<li>Bevy migration-guide contents and breaking-change counts per release.
+</li>
+<li>Bevy per-widget a11y role coverage in <code>bevy_ui_widgets</code>; text scaling setting; default wiring of gamepad navigation.
+</li>
+<li>Bevy on web (wasm) accessibility.
+</li>
+<li>AccessKit behaviour on Android and iOS beyond the existence of adapters.
+</li>
+<li>egui AccessKit update model and custom-drawn widget labelling.
+</li>
+<li>Slint, Xilem, Iced maturity statements beyond the cited issues; Iced repo licence.
+</li>
+<li>cxx std container support matrix; cxx build integration with CMake; Lua (sol2) interop.
+</li>
+<li>Threading model across the Bevy/C++ boundary; cargo-from-CMake build recipe.
+</li>
+<li>Runner cost for Rust on GitHub-hosted runners.
+</li>
+<li>wgpu acceptance of SPIR-V via the standard path; passthrough backend coverage; naga SPIR-V coverage for the game's shaders.
+</li>
+<li>Voxel mesh buffer handover cost across FFI.
+</li></ul>
+</main>
+</body>
+</html>

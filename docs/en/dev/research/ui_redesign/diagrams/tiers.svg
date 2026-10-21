@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-labelledby="t-tiers">
+<title id="t-tiers">Information tiers: a small always-visible set, a larger set shown only when abnormal, and everything available on demand as text. Each item of state lives in one tier and always has a text fallback.</title>
+<defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker></defs>
+<g font-size="13">
+  <rect x="20" y="30" width="280" height="200" rx="8" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="160" y="58" text-anchor="middle" class="d-text" font-weight="600">Tier 1: always visible</text>
+  <text x="160" y="76" text-anchor="middle" class="d-text-3">HUD Full</text>
+  <g class="d-text-2">
+    <text x="40" y="104">Vitals strip (body, stamina, move mode)</text>
+    <text x="40" y="124">Safe-mode state</text>
+    <text x="40" y="144">Compass tape, minimap (if on)</text>
+    <text x="40" y="164">Hotbar, interaction prompt</text>
+    <text x="40" y="184">Message ticker (3 lines)</text>
+    <text x="40" y="204">Mission target on the compass</text>
+  </g>
+
+  <rect x="340" y="30" width="280" height="200" rx="8" class="d-box d-stroke-s2" stroke-width="2"/>
+  <text x="480" y="58" text-anchor="middle" class="d-text" font-weight="600">Tier 2: shown when abnormal</text>
+  <text x="480" y="76" text-anchor="middle" class="d-text-3">HUD Full and Minimal</text>
+  <g class="d-text-2">
+    <text x="360" y="104">Needs badges with trend</text>
+    <text x="360" y="124">Status-effect and stat badges</text>
+    <text x="360" y="144">Morale, power, mana rows</text>
+    <text x="360" y="164">Vehicle cluster while driving</text>
+    <text x="360" y="184">Edge arrows, hit direction</text>
+    <text x="360" y="204">"Entering: place", pinned recipe</text>
+  </g>
+
+  <rect x="660" y="30" width="280" height="200" rx="8" class="d-box d-stroke-s3" stroke-width="2"/>
+  <text x="800" y="58" text-anchor="middle" class="d-text" font-weight="600">Tier 3: on demand, as text</text>
+  <text x="800" y="76" text-anchor="middle" class="d-text-3">Character screen, F4 report, Journal</text>
+  <g class="d-text-2">
+    <text x="680" y="104">Exact numbers for every HUD item</text>
+    <text x="680" y="124">HP per limb, armour, encumbrance</text>
+    <text x="680" y="144">Speed breakdown, temperature per part</text>
+    <text x="680" y="164">Morale reasons, effects with durations</text>
+    <text x="680" y="184">Weather, time, date, place</text>
+    <text x="680" y="204">Full message log</text>
+  </g>
+
+  <path d="M160,232 V258 H790 V232" class="d-line" marker-end="url(#ah2)"/>
+  <path d="M480,232 V258" class="d-line"/>
+  <text x="480" y="282" text-anchor="middle" class="d-text-3">every tier 1 and 2 item is also here, as a sentence: the rule "the world shows, the text tells"</text>
+</g>
+</svg>

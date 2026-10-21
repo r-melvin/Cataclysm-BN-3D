@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K. Onboarding, tutorial and discoverability in complex-systems games</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="k-onboarding-tutorial-and-discoverability-in-complex-systems-games">K. Onboarding, tutorial and discoverability in complex-systems games</h1>
+<p>Research pass for the UI redesign. Scope: how comparable games teach players their systems and surface controls, plus classic roguelike help and action-menu approaches.</p>
+<h2 id="verification-key">Verification key</h2>
+<ul>
+<li><strong>FETCHED</strong>: page was fetched and the quote was confirmed in the fetched text. The quote is verbatim.
+</li>
+<li><strong>SNIPPET</strong>: quote appears only in a search-result summary. Not confirmed against the page. Treat as paraphrase unless re-checked.
+</li>
+<li><strong>UNVERIFIED</strong>: memory or a claim with no source found in this pass. Do not cite as fact.
+</li></ul>
+<p>Several primary pages returned HTTP 403 or 404 or had no body text (Twinfinite and ProGameGuides DF reviews, Minecraft feedback post, Factorio wiki, PC Gamer Stellaris). Those are marked as such below.</p>
+<h2 id="per-game-notes">Per-game notes</h2>
+<h3 id="dwarf-fortress-steam-itch-release-dec-2022">Dwarf Fortress (Steam/itch release, Dec 2022)</h3>
+<p>Primary sources are the Kitfox press release and the Kitfox devlog.</p>
+<ul>
+<li>FETCHED, Kitfox press release, 2022-11-01: "Learn the basics with in-game tutorials." and "These new additions make this version of Dwarf Fortress the most approachable it has ever been." Also "new user interface and navigable menus." Source: <a href="https://gamespress.com/THE-LEGENDARY-DWARF-FORTRESS-GETS-A-WHOLE-NEW-LOOK-ON-DECEMBER-6">https://gamespress.com/THE-LEGENDARY-DWARF-FORTRESS-GETS-A-WHOLE-NEW-LOOK-ON-DECEMBER-6</a>
+</li>
+<li>FETCHED, Kitfox press release (same page), Capt. Tanya X. Short: "I was always someone who tried to enjoy Dwarf Fortress but found it difficult to wade into before, even with mods," Source: same URL.
+</li>
+<li>FETCHED, Kitfox devlog "Dwarf Fortress is out now", 2022-12-06: "a new helpful tutorial to onboard unfamiliar players" and "new user interface and navigable menus". Source: <a href="https://kitfoxgames.itch.io/dwarf-fortress/devlog/460421/dwarf-fortress-is-out-now">https://kitfoxgames.itch.io/dwarf-fortress/devlog/460421/dwarf-fortress-is-out-now</a>
+</li>
+<li>FETCHED, same devlog, on mouse: "This future support includes mouse functionality and other improvements seen in the Steam &amp; Itch release." Mouse support was therefore listed as future work in that post, not part of the launch scope. Read this carefully: it says mouse support was planned, not that it shipped at launch.
+</li>
+<li>SNIPPET, ProGameGuides "Should you skip the tutorial" page: the tutorial starts with a suggested first-fort location and has a camera tutorial, and the game has "over 350 tooltips". Page itself returned 403 on fetch; the claim comes from a search summary. Source: <a href="https://progameguides.com/dwarf-fortress/should-you-skip-the-tutorial-in-dwarf-fortress-on-steam/">https://progameguides.com/dwarf-fortress/should-you-skip-the-tutorial-in-dwarf-fortress-on-steam/</a>
+</li>
+<li>Bay 12 / Tarn Adams statements about onboarding: <strong>Could not verify.</strong> No Bay 12 statement found in this pass.
+</li></ul>
+<h3 id="rimworld-learning-helper">RimWorld (Learning helper)</h3>
+<p>FETCHED from the fan wiki (page last edited 16 March 2026, version 1.1.2654 noted in history). Not an official Ludeon source.</p>
+<ul>
+<li>"Learning helper sits in the top right of the screen."
+</li>
+<li>"Lessons are shown as needed by circumstance, or on a slow timer." and "It can be expanded and searched for any lesson."
+</li>
+<li>"Lessons are automatically marked as learned when the player does the necessary interaction." Lessons can also be marked learned manually.
+</li>
+<li>Source: <a href="https://rimworldwiki.com/wiki/Learning_helper">https://rimworldwiki.com/wiki/Learning_helper</a>
+</li></ul>
+<p>Context-hint design rationale from Ludeon or Tynan Sylvester: <strong>Could not verify.</strong> A quote attributed to Sylvester about "look stuff up" was searched for and not found in any source, so it is not used.</p>
+<h3 id="factorio-tips-and-tricks">Factorio (Tips and tricks)</h3>
+<ul>
+<li>The "tips and tricks window with GIFs" mechanic described in the brief was <strong>not verified</strong>. The Factorio wiki fetch returned 404, and search results did not confirm a pop-up tips window with GIFs. Treat it as UNVERIFIED memory.
+</li>
+<li>SNIPPET, forum thread "Add missing Tips and Tricks" (forums.factorio.com/viewtopic.php?p=696880): lists tips the tips page reportedly lacks, such as Alt-right-click to pin objects, inserter filters, and chart tags. Not fetched.
+</li>
+<li>Community debate (SNIPPET, Steam forum): one side says new players should avoid tutorials and others' blueprints to keep discovery. Not fetched.
+</li></ul>
+<h3 id="caves-of-qud-1-0-tutorial-steam-deck">Caves of Qud (1.0 tutorial, Steam Deck)</h3>
+<ul>
+<li>FETCHED, GamingOnLinux, 2024-10-31, by Liam Squires-Hand: "I've gone through and tested the tutorial, and it really is a nice introduction to the game." and "Since it's a huge roguelike though, it does only scratch the surface of what the game is about and what you can do." Source: <a href="https://www.gamingonlinux.com/2024/10/epic-roguelike-caves-of-qud-now-has-a-proper-tutorial/page=1">https://www.gamingonlinux.com/2024/10/epic-roguelike-caves-of-qud-now-has-a-proper-tutorial/page=1</a>
+</li>
+<li>SNIPPET (GamingOnLinux 1.0 launch article, 2024-12): Steam Deck Verified, native Linux. The 1.0 launch was set for 5 December 2024, $29.99. Source: <a href="https://www.gamingonlinux.com/2024/12/epic-science-fantasy-roguelike-caves-of-qud-10-is-out-now-and-its-a-wild-ride/page=1">https://www.gamingonlinux.com/2024/12/epic-science-fantasy-roguelike-caves-of-qud-10-is-out-now-and-its-a-wild-ride/page=1</a>
+</li>
+<li><strong>Could not verify</strong>: the tutorial's key display, Steam Deck input mapping, and any hands-on Deck UI review.
+</li></ul>
+<h3 id="stellaris-paradox-tooltips-nested-terms">Stellaris / Paradox (tooltips, nested terms)</h3>
+<ul>
+<li>SNIPPET (PC Gamer "Why I love Stellaris' slick interface"): tooltips praised; mouse over for explanations; some tooltips point to the next thing to hover. PC Gamer page fetch returned truncated content without the relevant text, so this is unverified. Source: <a href="https://www.pcgamer.com/uk/why-i-love-stellaris-slick-interface">https://www.pcgamer.com/uk/why-i-love-stellaris-slick-interface</a>
+</li>
+<li>SNIPPET (Reddit): Stellaris tooltips are not the nested style of CK3, so a tooltip often needs knowledge of its terms. Anecdotal, not Paradox.
+</li>
+<li><strong>Could not verify</strong>: any Paradox statement on nested tooltips or an encyclopedia.
+</li></ul>
+<h3 id="baldur-s-gate-3-contextual-hints">Baldur's Gate 3 (contextual hints)</h3>
+<p>Steam fetch returned no discussion text (page shell only). Everything below is SNIPPET from search summaries and paraphrased.</p>
+<ul>
+<li>Steam thread (Aug 2023, SNIPPET): tutorial pop-ups reportedly disappear within a few seconds, sometimes before a cutscene. Basic actions and bonus actions reportedly not explained. URL: <a href="https://steamcommunity.com/app/1086940/discussions/0/3808408328760533890">https://steamcommunity.com/app/1086940/discussions/0/3808408328760533890</a>
+</li>
+<li>Larian (SNIPPET, secondhand German article): Act 1 is effectively a long tutorial with systems revealed gradually. A line from the lead writer about needing "a tutorial for every class in D&amp;D" is <strong>UNVERIFIED</strong> (secondhand).
+</li>
+<li>SNIPPET (Steam, combat log): roll details only discoverable by hovering. URL not confirmed in snippet.
+</li></ul>
+<h3 id="project-zomboid-no-tutorial-complaints">Project Zomboid (no tutorial complaints)</h3>
+<p>All SNIPPET from GOG and IndieDB user reviews. Not fetched.</p>
+<ul>
+<li>2022 GOG review: the tutorial covers only combat, leaving out crafting and basic systems like making bandages from clothing.
+</li>
+<li>IndieDB review: "the GUI has an unacceptably high learning curve for newbies".
+</li>
+<li>Community reply: "it does get a lot easier as you learn".
+</li>
+<li>Sources: <a href="https://www.gog.com/en/game/project_zomboid">https://www.gog.com/en/game/project_zomboid</a> (reviews listing), <a href="https://www.indiedb.com/members/psylem/reviews">https://www.indiedb.com/members/psylem/reviews</a>
+</li>
+<li>Current tutorial state: <strong>Could not verify</strong>.
+</li></ul>
+<h3 id="minecraft-recipe-book-tutorial-hints">Minecraft (recipe book, tutorial hints)</h3>
+<ul>
+<li>SNIPPET (Minecraft Wiki / Sportskeeda): recipes unlock by use; the recipe book opens from the knowledge-book icon in the inventory or crafting table; the recipe book was added in 1.12 (2017). Not fetched from Mojang.
+</li>
+<li>The Mojang feedback post "A way for new players to learn mechanics" exists (search result) but the fetch returned 403, so its content is <strong>unverified</strong>. URL: <a href="https://feedback.minecraft.net/hc/en-us/community/posts/45868795510797-A-way-for-new-players-to-learn-mechanics">https://feedback.minecraft.net/hc/en-us/community/posts/45868795510797-A-way-for-new-players-to-learn-mechanics</a>
+</li></ul>
+<h3 id="valheim-hugin-raven-tips">Valheim (Hugin raven tips)</h3>
+<ul>
+<li>FETCHED, InvenGlobal guide, 2021-02-26: "Hugin acts as your guide in Valheim and will make frequent appearances as you achieve new milestones." and "you can find them by pressing [Tab] then clicking the raven icon called Valheim Compendium". Source: <a href="https://www.invenglobal.com/articles/13389/valheim-guide-beginners-tips-tricks-basics">https://www.invenglobal.com/articles/13389/valheim-guide-beginners-tips-tricks-basics</a>
+</li>
+<li>SNIPPET (same guide): Hugin stops appearing after a while, so much of the game is left to the player.
+</li></ul>
+<h3 id="subnautica-pda-and-tips">Subnautica (PDA and tips)</h3>
+<ul>
+<li>FETCHED, Unknown Worlds forum, February 2017, user Annihilat0r: "I completely missed these little stones that you can mine and I was ready to quit playing and do something else." and "There is no information about base building in the game." The author's main suggestion: "Make the scanner available from the beginning." Source: <a href="https://forums.unknownworlds.com/discussion/comment/2338933">https://forums.unknownworlds.com/discussion/comment/2338933</a>
+</li>
+<li>The PDA voice-tip system itself was <strong>not verified</strong> in this pass.
+</li></ul>
+<h3 id="vintage-story-handbook">Vintage Story (handbook)</h3>
+<ul>
+<li>SNIPPET (vintagestory.at forum, post 19129 "feedback from a beginner" and others): a poster said the handbook is "simultaneously missing vital information and feels like a massive info dump" and asked for a guide "that teaches through pictures". Fetch not attempted. Exact URL for that line is not confirmed; candidate: <a href="https://www.vintagestory.at/forums/topic/19129-feedback-from-a-beginner/">https://www.vintagestory.at/forums/topic/19129-feedback-from-a-beginner/</a>
+</li>
+<li>SNIPPET (developer-side forum post): the in-game handbook is maintained by the dev team; the wiki is community-maintained.
+</li></ul>
+<h3 id="noita-no-tutorial-contrast">Noita (no tutorial, contrast)</h3>
+<ul>
+<li>SNIPPET: a reviewer noted the game "never warned them" that a wand's second attack fires a bomb that damages terrain. Community thread: "there is quite a lack of tutorial which is ok but I don't even know what skills or wands I should be looking for". Candidate URL for the review: <a href="https://blogs.tuni.fi/playlab/game-reviews/noita-an-unforgiving-roguelite-full-of-surprises/">https://blogs.tuni.fi/playlab/game-reviews/noita-an-unforgiving-roguelite-full-of-surprises/</a> (quote attribution not confirmed).
+</li>
+<li>Steam thread: <a href="https://steamcommunity.com/app/881100/discussions/0/592885652759055026">https://steamcommunity.com/app/881100/discussions/0/592885652759055026</a>
+</li></ul>
+<h3 id="deep-rock-galactic-how-it-teaches">Deep Rock Galactic (how it teaches)</h3>
+<ul>
+<li>SNIPPET (community wiki, How to Play Guide): the first launch drops you into a short, skippable training mission focused on the Gunner class, revisitable from the Miner's Manual under Getting Started &gt; Basics. A required 10-mission campaign ("Conquer Hoxxes IV") gates regions. Source: <a href="https://deeprockgalactic.wiki.gg/wiki/How_to_Play_Guide_for_Deep_Rock_Galactic">https://deeprockgalactic.wiki.gg/wiki/How_to_Play_Guide_for_Deep_Rock_Galactic</a>
+</li>
+<li>Ghost Ship review and onboarding critique: <strong>Could not verify</strong>.
+</li></ul>
+<h3 id="elden-ring-minimal">Elden Ring (minimal)</h3>
+<ul>
+<li><strong>Could not verify.</strong> Not searched in this pass.
+</li></ul>
+<h3 id="roguelike-help-and-key-discoverability">Roguelike help and key discoverability</h3>
+<ul>
+<li>SNIPPET (DCSS manual, mirror at mitjafelicijan.com; man page at mankier): the '?' key opens the help menu and lists commands; '?Q' shows an FAQ; the tutorial "explains the interface in five easy lessons". Source: <a href="https://www.mankier.com/6/crawl">https://www.mankier.com/6/crawl</a> . Note the manual copy is a third-party mirror, so the current in-game text needs checking against the official repo.
+</li>
+<li>Brogue: <strong>Could not verify</strong> the sidebar design or key display. The community wiki (<a href="https://brogue.wiki/wiki/Commands">https://brogue.wiki/wiki/Commands</a>) confirms command lists but not sidebar behaviour.
+</li>
+<li>NetHack and the classic action-menu approach: <strong>Could not verify</strong> in this pass.
+</li>
+<li>Hades codex / Book of Shadows: SNIPPET (Vandal guide, Hades 2): "the Book of Shadows serves precisely this purpose" (newer players may want a reference). Source: <a href="https://vandal.elespanol.com/en/hades-2/hades-2-how-to-unlock-the-book-of-shadows-and-what-it-does.html.">https://vandal.elespanol.com/en/hades-2/hades-2-how-to-unlock-the-book-of-shadows-and-what-it-does.html.</a> Supergiant's own rationale: <strong>Could not verify</strong>.
+</li>
+<li>Command palette / search-for-action in games: <strong>Could not verify</strong> (not researched in this pass).
+</li></ul>
+<h2 id="player-quotes-on-bouncing-off-because-of-ui-or-missing-guidance">Player quotes on bouncing off because of UI or missing guidance</h2>
+<p>Verified (FETCHED):</p>
+<ol>
+<li>Subnautica forum, Feb 2017: "I completely missed these little stones that you can mine and I was ready to quit playing and do something else." <a href="https://forums.unknownworlds.com/discussion/comment/2338933">https://forums.unknownworlds.com/discussion/comment/2338933</a>
+</li>
+<li>Dwarf Fortress, Capt. Tanya X. Short (Kitfox press release, 2022-11-01): "I was always someone who tried to enjoy Dwarf Fortress but found it difficult to wade into before, even with mods," <a href="https://gamespress.com/THE-LEGENDARY-DWARF-FORTRESS-GETS-A-WHOLE-NEW-LOOK-ON-DECEMBER-6">https://gamespress.com/THE-LEGENDARY-DWARF-FORTRESS-GETS-A-WHOLE-NEW-LOOK-ON-DECEMBER-6</a>
+</li></ol>
+<p>Snippet-only (not fetched, treat as paraphrase):</p>
+<ol>
+<li value="3">Project Zomboid, IndieDB reviewer: "the GUI has an unacceptably high learning curve for newbies". <a href="https://www.indiedb.com/members/psylem/reviews">https://www.indiedb.com/members/psylem/reviews</a>
+</li>
+<li>Project Zomboid, Steam: new players "quit or request refunds after a bad start" (paraphrase, first-week difficulty).
+</li>
+<li>Noita, Steam: "there is quite a lack of tutorial which is ok but I don't even know what skills or wands I should be looking for".
+</li>
+<li>Vintage Story forum: handbook is "simultaneously missing vital information and feels like a massive info dump".
+</li>
+<li>BG3, Steam: tutorial pop-ups "disappear within 3 to 5 seconds".
+</li>
+<li>RimWorld, review snippet: newcomers "spending the first 5 to 10 hours mostly reading popup bubbles and menu trial-error." (Source not confirmed.)
+</li></ol>
+<h2 id="extracted-rules-with-sources">Extracted rules (with sources)</h2>
+<ol>
+<li><strong>Help text must be visible at the moment it matters.</strong> Dwarf Fortress's onboarding was an explicit goal of the Steam release, with "a new helpful tutorial to onboard unfamiliar players" (Kitfox devlog). Players reported that tutorial pop-ups vanish too fast (BG3, snippet). Hints need enough dwell time and must be re-readable.
+</li>
+<li><strong>Teach by doing, then show the system once.</strong> Subnautica players quit when a required action (mining stones) was never surfaced; Valheim's Hugin gives tips only at milestones and then goes quiet, leaving much unexplained. Tips should appear when the player encounters the mechanic, not only at a fixed early point.
+</li>
+<li><strong>Keep a lookup reference after the hint.</strong> RimWorld's Learning helper can be "expanded and searched for any lesson" (wiki); Valheim keeps Hugin's tips in the Compendium behind Tab; DCSS uses '?' as the always-available help key. Hints without a re-open path were the Valheim and BG3 complaint.
+</li>
+<li><strong>Show controls contextually, not in a manual.</strong> RimWorld lessons are "shown as needed by circumstance"; Caves of Qud's tutorial is praised as "a nice introduction" but only "scratches the surface" (GamingOnLinux). A short tutorial covering a small subset is accepted by players; a tutorial that omits whole systems is criticised (Project Zomboid, BG3).
+</li>
+<li><strong>Mark lessons learned automatically.</strong> RimWorld marks a lesson learned when the action is performed, and allows manual marking. This avoids repeat nagging.
+</li>
+<li><strong>Make tooltips the main explanation layer, but know their limits.</strong> Stellaris praise for tooltips is paired with complaints that nested terms need prior knowledge (snippet only).
+</li>
+<li><strong>Skippable tutorial with a re-entry point.</strong> Deep Rock Galactic's training mission is skippable and revisitable from the Miner's Manual (wiki snippet). Dwarf Fortress's tutorial is offered at start but reviewers still advise doing it.
+</li>
+<li><strong>Give the player the discovery path, but not the blocker.</strong> Noita's no-hand-holding design is praised by critics and disliked by newcomers (snippet). For a complex game, avoid making a required system invisible.
+</li></ol>
+<h2 id="patterns-worth-adopting-for-a-cataclysm-bn-3d-ui-redesign">Patterns worth adopting (for a Cataclysm-BN-3D UI redesign)</h2>
+<ul>
+<li>A searchable in-game lesson or help index, reachable from the same key as the main menu (DCSS '?', RimWorld Learning helper). Lessons should be re-openable.
+</li>
+<li>Just-in-time hints tied to real events, auto-marked learned, with a manual dismiss. Avoid timed-only popups; keep them until dismissed or until the action is done.
+</li>
+<li>A skippable first-run tutorial that covers the core loop and points to the help index, not a full system dump (DF, Deep Rock).
+</li>
+<li>Keep controls visible on screen where they are used (a bottom key hint line) rather than only in a manual, but do not add clutter. Note that this is a design inference; no source in this pass verified a specific key-bar implementation for Brogue or Qud.
+</li>
+<li>Surface any feature the player must use early (Subnautica scanner) rather than gating it behind exploration.
+</li></ul>
+<h2 id="could-not-verify-summary">Could not verify (summary)</h2>
+<ul>
+<li>Bay 12 / Tarn Adams statements on the tutorial or mouse support. Only the Kitfox statements were found.
+</li>
+<li>Factorio "tips and tricks" window with GIFs. Not confirmed to exist.
+</li>
+<li>Stellaris encyclopedia and nested-tooltip design statements from Paradox.
+</li>
+<li>Brogue sidebar keys, NetHack action menus, command palette and search-for-action patterns in games.
+</li>
+<li>Elden Ring onboarding. Not searched.
+</li>
+<li>Current Minecraft tutorial hints and the Mojang feedback post (403).
+</li>
+<li>Hades codex design rationale from Supergiant.
+</li>
+<li>Full BG3 Steam quotes and Larian's "tutorial for every class" line (secondhand, unverified).
+</li>
+<li>Dwarf Fortress Steam player reviews on the tutorial (Twinfinite and ProGameGuides returned 403).
+</li>
+<li>Ghost Ship or other specific Deep Rock onboarding critique.
+</li>
+<li>RimWorld "look stuff up" essay attributed to Tynan Sylvester (not found; excluded).
+</li></ul>
+<h2 id="notes-on-source-quality">Notes on source quality</h2>
+<ul>
+<li>Most user quotes come from Steam, GOG and forum pages surfaced by search; many were not fetched and are marked SNIPPET.
+</li>
+<li>Wiki sources (RimWorld wiki, Deep Rock wiki) are fan-maintained, not official.
+</li>
+<li>The DCSS manual copy is a third-party mirror.
+</li></ul>
+</main>
+</body>
+</html>

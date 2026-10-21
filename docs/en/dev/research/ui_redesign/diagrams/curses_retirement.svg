@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-labelledby="t-cr">
+<title id="t-cr">Curses retirement in three phases: the terminal and console backends, build option, presets and CI go first; the cell canvas and the per-screen drawing code go with each migrated screen; the remaining canvas and guards go at the end.</title>
+<defs><marker id="ah5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker></defs>
+<g font-size="13">
+  <!-- timeline -->
+  <path d="M30,40 H930" class="d-line" marker-end="url(#ah5)"/>
+  <g class="d-text-3"><text x="40" y="30">after M0</text><text x="400" y="30" text-anchor="middle">M3 to M10 (screen by screen)</text><text x="880" y="30" text-anchor="end">M11</text></g>
+
+  <rect x="20" y="60" width="280" height="220" rx="8" class="d-box d-stroke-s8" stroke-width="2"/>
+  <text x="160" y="84" text-anchor="middle" class="d-text" font-weight="600">Phase 1: delete the builds (1 week)</text>
+  <g class="d-text-2">
+    <text x="36" y="110">ncurses_def.cpp/.h (554 LOC)</text>
+    <text x="36" y="130">wincurse.cpp (796 LOC)</text>
+    <text x="36" y="150">CURSES option, find_package, macOS ncursesw</text>
+    <text x="36" y="170">5 presets, 4 CI jobs, cata_test (curses)</text>
+    <text x="36" y="190">building guides, ui_overhaul.md, README</text>
+  </g>
+  <text x="36" y="222" class="d-text-3">Keeps: cursesport.cpp (cell canvas) and</text>
+  <text x="36" y="236" class="d-text-3">TILES guards in files the fork has not changed</text>
+  <text x="36" y="262" class="d-text-3">Verify: configure without CURSES; both binaries build</text>
+
+  <rect x="340" y="60" width="280" height="220" rx="8" class="d-box d-stroke-s2" stroke-width="2"/>
+  <text x="480" y="84" text-anchor="middle" class="d-text" font-weight="600">Phase 2: with each screen (no extra cost)</text>
+  <g class="d-text-2">
+    <text x="356" y="110">932 catacurses:: references in 82 files</text>
+    <text x="356" y="130">230 TILES guards in 66 files</text>
+    <text x="356" y="150">(newcharacter 33, game 32, animation 28, ...)</text>
+    <text x="356" y="170">each migrated screen deletes its cell drawing</text>
+    <text x="356" y="190">and its #else branches</text>
+  </g>
+  <text x="356" y="222" class="d-text-3">Risk: upstream merge friction in every touched file;</text>
+  <text x="356" y="236" class="d-text-3">delete guards only where the fork already diverges</text>
+  <text x="356" y="262" class="d-text-3">Open question: do upstream merges continue?</text>
+
+  <rect x="660" y="60" width="280" height="220" rx="8" class="d-box d-stroke-s3" stroke-width="2"/>
+  <text x="800" y="84" text-anchor="middle" class="d-text" font-weight="600">Phase 3: delete the canvas (2 weeks)</text>
+  <g class="d-text-2">
+    <text x="676" y="110">cursesport.cpp/.h, cursesdef.h (790 LOC)</text>
+    <text x="676" y="130">remaining TILES guards</text>
+    <text x="676" y="150">TERMINAL_X/Y, font-grid options</text>
+    <text x="676" y="170">bitmap-font path if unused</text>
+    <text x="676" y="190">ncurses mentions in packaging</text>
+  </g>
+  <text x="676" y="222" class="d-text-3">Precondition: last legacy screen ported or dropped</text>
+  <text x="676" y="236" class="d-text-3">(debug, Lua console, terminals, minigames, Defense)</text>
+  <text x="676" y="262" class="d-text-3">Verify: rg "catacurses::|cursesport|defined(TILES)" empty</text>
+</g>
+</svg>

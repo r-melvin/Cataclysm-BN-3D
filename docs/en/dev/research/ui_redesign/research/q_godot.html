@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Q: Godot 4.x as a frontend for an existing large C++ game</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="q-godot-4-x-as-a-frontend-for-an-existing-large-c-game">Q: Godot 4.x as a frontend for an existing large C++ game</h1>
+<p>Research date: 2026-10-21. Tags: <strong>VERIFIED</strong> = confirmed from a fetched official source (docs, release page, class reference XML, source, or GitHub API). <strong>NOT VERIFIED</strong> = claim could not be confirmed in this session; not to be relied on.</p>
+<p>Tool limits hit during this session: the WebSearch budget was exhausted (no further searches run, not worked around), and the GitHub REST API hit its rate limit partway through. Some items below are therefore NOT VERIFIED for reasons of access, not because they are false.</p>
+<h2 id="1-screen-reader-support">1. Screen reader support</h2>
+<ul>
+<li><strong>AccessKit integration version: 4.5.</strong> The 4.5 release page says: "Thanks to AccessKit, we added screen reader support to Control nodes" and "we also added screen reader bindings in order to customize the behavior of any type of Node." VERIFIED. <a href="https://godotengine.org/releases/4.5/">https://godotengine.org/releases/4.5/</a>
+</li>
+<li><strong>4.5 release date:</strong> GitHub tag <code>4.5-stable</code> published 2025-09-15. VERIFIED. <a href="https://github.com/godotengine/godot/releases/tag/4.5-stable">https://github.com/godotengine/godot/releases/tag/4.5-stable</a>
+</li>
+<li><strong>Experimental status:</strong> The 4.5 page says: "As this feature is quite new, please note that its integration is still in its experimental phase." VERIFIED. <a href="https://godotengine.org/releases/4.5/">https://godotengine.org/releases/4.5/</a>
+</li>
+<li><strong>Editor coverage:</strong> "screen reader support for the Godot Editor itself is not complete yet ... it is only implemented for the Project Manager, standard UI nodes, and the inspector." VERIFIED. <a href="https://godotengine.org/releases/4.5/">https://godotengine.org/releases/4.5/</a>
+</li>
+<li><strong>Platforms (AccessibilityServer):</strong> "[AccessibilityServer] is implemented on Android, Linux, macOS, and Windows." VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/AccessibilityServer.xml">https://github.com/godotengine/godot/blob/master/doc/classes/AccessibilityServer.xml</a>
+</li>
+<li><strong>Platforms (DisplayServer feature flag):</strong> <code>FEATURE_ACCESSIBILITY_SCREEN_READER</code> is "Linux (X11/Wayland), macOS, Windows." VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/DisplayServer.xml">https://github.com/godotengine/godot/blob/master/doc/classes/DisplayServer.xml</a>
+</li>
+<li><strong>Windows UIA / macOS / Linux AT-SPI naming:</strong> The docs name AccessKit as the library and give NVDA (Windows), VoiceOver (macOS) and Orca (Linux) as test readers. They do not name UIA or AT-SPI as such. The underlying OS API names are NOT VERIFIED from the docs. <a href="https://raw.githubusercontent.com/godotengine/godot-docs/master/tutorials/ui/creating_applications.rst">https://raw.githubusercontent.com/godotengine/godot-docs/master/tutorials/ui/creating_applications.rst</a>
+</li>
+<li><strong>iOS / web / visionOS:</strong> Not listed as supported in the sources above. A visionOS AccessKit PR is open: <a href="https://github.com/godotengine/godot/pull/124253">https://github.com/godotengine/godot/pull/124253</a> (state: open, verified via GitHub API). Support on iOS and web is NOT VERIFIED either way.
+</li>
+<li><strong>Runtime detection:</strong> "Godot automatically enables screen reader support if a screen reader is detected as running." Setting <code>accessibility/general/accessibility_support</code> can force it on or off. VERIFIED. <a href="https://raw.githubusercontent.com/godotengine/godot-docs/master/tutorials/ui/creating_applications.rst">https://raw.githubusercontent.com/godotengine/godot-docs/master/tutorials/ui/creating_applications.rst</a>
+</li>
+<li><strong>Dummy display driver:</strong> the dummy driver disables screen reader support. VERIFIED (ProjectSettings.xml text). <a href="https://github.com/godotengine/godot/blob/master/doc/classes/ProjectSettings.xml">https://github.com/godotengine/godot/blob/master/doc/classes/ProjectSettings.xml</a>
+</li>
+<li><strong>Control properties:</strong> <code>accessibility_name</code>, <code>accessibility_description</code>, <code>accessibility_live</code>, <code>accessibility_labeled_by_nodes</code>, <code>accessibility_described_by_nodes</code>, <code>accessibility_controls_nodes</code>, <code>accessibility_flow_to_nodes</code> all exist. VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/Control.xml">https://github.com/godotengine/godot/blob/master/doc/classes/Control.xml</a>
+</li>
+<li><strong>Custom Control hooks:</strong> <code>_accessibility_get_contextual_info</code> (virtual, returns keyboard shortcut and contextual help text) and <code>_get_accessibility_container_name</code> (virtual, returns a description of a child's position in a custom container) exist in Control.xml. VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/Control.xml">https://github.com/godotengine/godot/blob/master/doc/classes/Control.xml</a>
+</li>
+<li>**<code>_accessibility_update</code>:** NOT VERIFIED. Not found in Control.xml. The per-element API is <code>AccessibilityServer</code> (<code>accessibility_create_element</code>, <code>accessibility_update_set_*</code>, etc.). The <code>DisplayServer.accessibility_*</code> equivalents are marked deprecated in favour of <code>AccessibilityServer</code>. VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/DisplayServer.xml">https://github.com/godotengine/godot/blob/master/doc/classes/DisplayServer.xml</a>
+</li>
+<li><strong>Build:</strong> AccessKit is dynamically linked by default on Linux; static linking via <code>accesskit_sdk_path</code>. VERIFIED. <a href="https://raw.githubusercontent.com/godotengine/godot-docs/master/engine_details/development/compiling/compiling_for_linuxbsd.rst">https://raw.githubusercontent.com/godotengine/godot-docs/master/engine_details/development/compiling/compiling_for_linuxbsd.rst</a>
+</li>
+<li><strong>Editor vs runtime:</strong> The editor is partial (see above). The runtime is documented as covering Control nodes. Runtime behaviour per platform is NOT VERIFIED beyond these statements.
+</li>
+<li><strong>Open issues (GitHub API, state checked 2026-10-21):</strong>
+<ul>
+<li>#121388 Editor crash due to AccessKit "TreeUpdate includes duplicate child" (open). <a href="https://github.com/godotengine/godot/issues/121388">https://github.com/godotengine/godot/issues/121388</a>
+</li>
+<li>#120999 Engine crash when typing into editor fields while a screen reader is running (open). <a href="https://github.com/godotengine/godot/issues/120999">https://github.com/godotengine/godot/issues/120999</a>
+</li>
+<li>#111028 Edit Sun and Environment Settings button crashes, AccessKit segfault (open). <a href="https://github.com/godotengine/godot/issues/111028">https://github.com/godotengine/godot/issues/111028</a>
+</li>
+<li>#123623 Accessibility position wrong with <code>top_level</code> or non-Control parents (open). <a href="https://github.com/godotengine/godot/issues/123623">https://github.com/godotengine/godot/issues/123623</a>
+</li>
+<li>#117252 Editor UI cluttered from screen reader POV (open). <a href="https://github.com/godotengine/godot/issues/117252">https://github.com/godotengine/godot/issues/117252</a>
+</li>
+<li>#117593 Context menus do not respond to application key / Shift-F10 (open). <a href="https://github.com/godotengine/godot/issues/117593">https://github.com/godotengine/godot/issues/117593</a>
+</li>
+<li>#110458 PR: avoid unnecessary accessibility calls when AccessKit is not supported (open). <a href="https://github.com/godotengine/godot/pull/110458">https://github.com/godotengine/godot/pull/110458</a>
+</li>
+<li>#124739 PR: do not use subclassing AccessKit adapters (open, created 2026-10-21). <a href="https://github.com/godotengine/godot/pull/124739">https://github.com/godotengine/godot/pull/124739</a>
+</li></ul>
+</li></ul>
+<p>Status and titles are VERIFIED. Root causes beyond the titles are NOT VERIFIED.</p>
+<h2 id="2-input">2. Input</h2>
+<ul>
+<li><strong>Runtime remapping:</strong> <code>InputMap</code> exposes <code>action_add_event</code>, <code>action_erase_event</code>, <code>action_erase_events</code>, <code>action_get_events</code>, <code>action_has_event</code>, <code>action_set_deadzone</code>, <code>add_action</code>, <code>erase_action</code>, <code>load_from_project_settings</code>, <code>get_actions</code>, <code>get_action_description</code>. The methods exist (VERIFIED). That they are the standard runtime rebinding path is inferred from the method set; a rebinding how-to was not fetched (NOT VERIFIED). <a href="https://github.com/godotengine/godot/blob/master/doc/classes/InputMap.xml">https://github.com/godotengine/godot/blob/master/doc/classes/InputMap.xml</a>
+</li>
+<li><strong>Gamepad database:</strong> Godot uses SDL's game controller database. <code>Input.get_joy_name</code> "uses the SDL game controller database" and <code>Input.add_joy_mapping</code> takes "SDL format" mappings. VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/Input.xml">https://github.com/godotengine/godot/blob/master/doc/classes/Input.xml</a>
+</li>
+<li><strong>Glyph API:</strong> No glyph/button-icon API was found in <code>Input.xml</code>. A proposal to "Use glyphs for keyboard shortcuts" (#13630) is closed; its content and outcome were not read. Built-in glyph API: NOT VERIFIED. <a href="https://github.com/godotengine/godot-proposals/issues/13630">https://github.com/godotengine/godot-proposals/issues/13630</a>
+</li>
+<li><strong>Hold / toggle actions:</strong> No hold or toggle method was seen in the <code>InputMap</code> method list. A full absence check was not completed. NOT VERIFIED.
+</li>
+<li><strong>Steam Input / Steam Deck:</strong> NOT VERIFIED (WebSearch budget exhausted).
+</li></ul>
+<h2 id="3-text-scaling-ui-scale-fonts-colour-blind">3. Text scaling, UI scale, fonts, colour-blind</h2>
+<ul>
+<li><strong>Window content scale:</strong> <code>Window.content_scale_factor</code> (default 1.0), <code>content_scale_mode</code>, <code>content_scale_size</code>, <code>content_scale_stretch</code>. The docs say a window of 2560x1440 with <code>content_scale_size</code> 1280x720 scales 2D elements by 2.0. VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/Window.xml">https://github.com/godotengine/godot/blob/master/doc/classes/Window.xml</a>
+</li>
+<li><strong>Hi-DPI:</strong> Godot "currently only supports reading the screen scale factor from the OS settings on macOS, Android, and Linux" (Wayland for Linux). "On Linux (X11) and Windows, you will need to provide a manual scaling option for the user." VERIFIED. <a href="https://raw.githubusercontent.com/godotengine/godot-docs/master/tutorials/ui/creating_applications.rst">https://raw.githubusercontent.com/godotengine/godot-docs/master/tutorials/ui/creating_applications.rst</a>
+</li>
+<li><strong>Theme default font size:</strong> NOT VERIFIED (not read).
+</li>
+<li><strong>Fallback fonts:</strong> <code>Font.fallbacks</code> is an array of fallback <code>Font</code> objects used when a glyph is missing. VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/Font.xml">https://github.com/godotengine/godot/blob/master/doc/classes/Font.xml</a>
+</li>
+<li><strong>Oversampling:</strong> Draw methods take an <code>oversampling</code> argument; if zero or less, "viewport oversampling settings are used". <code>font_get_global_oversampling</code> is deprecated in favour of Viewport oversampling. VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/TextServer.xml">https://github.com/godotengine/godot/blob/master/doc/classes/TextServer.xml</a>
+</li>
+<li><strong>Oversampling changes in 4.5:</strong> NOT VERIFIED (the 4.5 release page was read, but its oversampling text was not confirmed).
+</li>
+<li><strong>CJK rendering and locale fallback:</strong> NOT VERIFIED.
+</li>
+<li><strong>Colour-blind support:</strong> A proposal to "simulate common forms of color vision deficiency" in the editor (#473) is open. VERIFIED. <a href="https://github.com/godotengine/godot-proposals/issues/473.">https://github.com/godotengine/godot-proposals/issues/473.</a> A built-in runtime colour-blind filter: NOT VERIFIED (code search rate-limited).
+</li></ul>
+<h2 id="4-gdextension-godot-cpp">4. GDExtension / godot-cpp</h2>
+<ul>
+<li><strong>Licence:</strong> godot-cpp is MIT (GitHub licence API). VERIFIED. <a href="https://github.com/godotengine/godot-cpp">https://github.com/godotengine/godot-cpp</a>
+</li>
+<li><strong>Versioning:</strong> "Starting with version 10.x, godot-cpp is versioned independently from Godot." v10 can target Godot 4.3 or later via <code>api_version</code>. VERIFIED. <a href="https://github.com/godotengine/godot-cpp/blob/master/README.md">https://github.com/godotengine/godot-cpp/blob/master/README.md</a>
+</li>
+<li><strong>ABI / API compatibility:</strong> "GDExtensions targeting an earlier version of Godot should work in later minor versions, but not vice-versa." Example: targeting 4.3 works on 4.4, not the reverse. VERIFIED. (same README)
+</li>
+<li>**<code>compatibility_minimum</code>:** Appears only in a sample <code>.gdextension</code> file as <code>&quot;4.1&quot;</code>. Its rules are NOT VERIFIED (GDExtension example page returned 404).
+</li>
+<li><strong>Build system:</strong> SCons is documented (<code>scons api_version=4.3</code>, <code>custom_api_file=</code>). CMakeLists.txt exists in the godot-cpp repo root (VERIFIED via GitHub contents listing), but the README does not document CMake usage. NOT VERIFIED for CMake how-to. <a href="https://github.com/godotengine/godot-cpp">https://github.com/godotengine/godot-cpp</a>
+</li>
+<li><strong>Linking one large C++23 codebase as one extension:</strong> NOT VERIFIED. No source fetched on this point. Standard-library and toolchain constraints on the extension binary are NOT VERIFIED.
+</li>
+<li><strong>Startup cost:</strong> NOT VERIFIED.
+</li>
+<li><strong>Threading rules (VERIFIED from the thread-safe APIs page):</strong>
+<ul>
+<li>"Interacting with the active scene tree is not thread-safe."
+</li>
+<li>To call functions or set properties from a thread, "you may use call_deferred or set_deferred."
+</li>
+<li>"Most Global Scope singletons are thread-safe by default."
+</li>
+<li>Rendering and physics servers: "thread-safe operation must be enabled in the project settings first."
+</li>
+<li>"You should avoid calling functions involving direct interaction with the GPU on other threads."
+</li>
+<li>Source: <a href="https://docs.godotengine.org/en/stable/tutorials/performance/thread_safe_apis.html">https://docs.godotengine.org/en/stable/tutorials/performance/thread_safe_apis.html</a>
+</li></ul>
+</li>
+<li><strong>Blocking input loops inside the game logic:</strong> the threading rules above say to use mutexes and <code>call_deferred</code>. A recommended pattern for a blocking loop running beside the engine was NOT VERIFIED.
+</li>
+<li><strong>Public large-C++ case studies:</strong> NOT VERIFIED (WebSearch budget exhausted).
+</li>
+<li><strong>libgodot / embedding Godot in a C++ app:</strong> The proposal is godotengine/godot-proposals#6267, "Add a build-time option to compile Godot as a shared library (for use in other languages)". State: open. Opened 2023-02-11. Its comments mention a similar Unreal-embedding solution by Migeran. VERIFIED. <a href="https://github.com/godotengine/godot-proposals/issues/6267.">https://github.com/godotengine/godot-proposals/issues/6267.</a> It does not, on its own, provide an embedding API. Current status of an official embedding API: NOT VERIFIED.
+</li></ul>
+<h2 id="5-platforms-and-distribution">5. Platforms and distribution</h2>
+<ul>
+<li><strong>Export templates per OS, Steam Deck Verified, binary size:</strong> NOT VERIFIED.
+</li>
+<li><strong>Renderers (Vulkan / D3D12 / Metal / OpenGL):</strong> NOT VERIFIED from fetched source.
+</li>
+<li><strong>Headless / dummy test runs:</strong>
+<ul>
+<li><code>--text-driver Dummy</code> exists as a command-line option that disables text rendering. VERIFIED. <a href="https://github.com/godotengine/godot/blob/master/doc/classes/ProjectSettings.xml">https://github.com/godotengine/godot/blob/master/doc/classes/ProjectSettings.xml</a>
+</li>
+<li><code>--rendering-driver dummy</code>: NOT VERIFIED.
+</li></ul>
+</li>
+<li><strong>CI builds:</strong> NOT VERIFIED.
+</li></ul>
+<h2 id="6-licence-and-trademark">6. Licence and trademark</h2>
+<ul>
+<li><strong>Godot engine:</strong> MIT (GitHub licence API). VERIFIED. <a href="https://github.com/godotengine/godot">https://github.com/godotengine/godot</a>
+</li>
+<li><strong>Third-party components:</strong> NOT VERIFIED (COPYRIGHT.txt not fetched).
+</li>
+<li><strong>Trademark use:</strong> NOT VERIFIED.
+</li></ul>
+<h2 id="7-godot-3d-capabilities-for-a-voxel-renderer">7. Godot 3D capabilities for a voxel renderer</h2>
+<ul>
+<li><strong>Classes exist:</strong> <code>MultiMesh</code>, <code>ProceduralSkyMaterial</code>, <code>Sprite3D</code>, <code>GPUParticles3D</code>, <code>RenderingServer</code>. VERIFIED (class XML files exist). <a href="https://github.com/godotengine/godot/tree/master/doc/classes">https://github.com/godotengine/godot/tree/master/doc/classes</a>
+</li>
+<li><strong>Capabilities and performance notes for each:</strong> NOT VERIFIED (class brief/description text was not read).
+</li>
+<li><strong>ArrayMesh built per frame from C++:</strong> NOT VERIFIED.
+</li>
+<li><strong>Threading constraint for rendering:</strong> rendering nodes are not thread-safe by default, and GPU calls should stay off other threads. VERIFIED. <a href="https://docs.godotengine.org/en/stable/tutorials/performance/thread_safe_apis.html">https://docs.godotengine.org/en/stable/tutorials/performance/thread_safe_apis.html</a>
+</li></ul>
+<h2 id="summary-table">Summary table</h2>
+<table><thead><tr><th>#</th><th>Topic</th><th>Key result</th><th>Tag</th></tr></thead><tbody><tr><td>1</td><td>AccessKit version</td><td>4.5 (release 2025-09-15), experimental</td><td>VERIFIED</td></tr><tr><td>1</td><td>Platforms</td><td>Android, Linux, macOS, Windows</td><td>VERIFIED</td></tr><tr><td>1</td><td>Editor coverage</td><td>Project Manager, standard UI, inspector only</td><td>VERIFIED</td></tr><tr><td>1</td><td>Custom control hooks</td><td><code>_accessibility_get_contextual_info</code>, <code>_get_accessibility_container_name</code>; <code>_accessibility_update</code> not found</td><td>VERIFIED / NOT VERIFIED</td></tr><tr><td>1</td><td>Open bugs</td><td>6 listed with URLs</td><td>VERIFIED (status)</td></tr><tr><td>2</td><td>InputMap runtime methods</td><td>exist</td><td>VERIFIED</td></tr><tr><td>2</td><td>Gamepad DB</td><td>SDL mappings</td><td>VERIFIED</td></tr><tr><td>2</td><td>Glyph API, hold/toggle, Steam Input</td><td>not found / not checked</td><td>NOT VERIFIED</td></tr><tr><td>3</td><td>Window content scale</td><td>properties exist</td><td>VERIFIED</td></tr><tr><td>3</td><td>Hi-DPI</td><td>OS scale only on macOS, Android, Linux(Wayland)</td><td>VERIFIED</td></tr><tr><td>3</td><td>Oversampling</td><td>per-draw and viewport settings</td><td>VERIFIED</td></tr><tr><td>3</td><td>Colour-blind built-in</td><td>proposal #473 open, no built-in found</td><td>NOT VERIFIED</td></tr><tr><td>4</td><td>godot-cpp licence</td><td>MIT</td><td>VERIFIED</td></tr><tr><td>4</td><td>Compatibility</td><td>earlier target works on later minor</td><td>VERIFIED</td></tr><tr><td>4</td><td>Threading</td><td>scene tree not thread-safe; use call_deferred</td><td>VERIFIED</td></tr><tr><td>4</td><td>libgodot</td><td>proposal #6267 open</td><td>VERIFIED</td></tr><tr><td>4</td><td>Large C++ via GDExtension, startup cost</td><td>not checked</td><td>NOT VERIFIED</td></tr><tr><td>5</td><td>Templates, Steam Deck, renderers, dummy renderer</td><td>not checked</td><td>NOT VERIFIED</td></tr><tr><td>6</td><td>Engine licence</td><td>MIT</td><td>VERIFIED</td></tr><tr><td>7</td><td>3D classes exist</td><td>exist; features not read</td><td>VERIFIED / NOT VERIFIED</td></tr></tbody></table>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li>Whether <code>_accessibility_update</code> exists (not in Control.xml).
+</li>
+<li>Per-platform runtime behaviour of AccessKit (UIA, AT-SPI), and whether iOS or web are supported.
+</li>
+<li>Release notes on whether 4.5 changed oversampling, and CJK / locale fallback behaviour.
+</li>
+<li>Glyph API, hold/toggle actions, Steam Input and Steam Deck verification.
+</li>
+<li>Built-in colour-blind filter.
+</li>
+<li>godot-cpp <code>compatibility_minimum</code> rules, CMake usage, startup cost, linking a large C++23 codebase.
+</li>
+<li>Public case studies of large C++ codebases embedded via GDExtension.
+</li>
+<li>Libgodot embedding API status beyond proposal #6267.
+</li>
+<li>Export template sizes, renderer list, <code>--rendering-driver dummy</code>, CI guidance.
+</li>
+<li>Third-party licences and trademark rules.
+</li>
+<li>Performance of ArrayMesh per frame, and the capabilities of MultiMesh, ProceduralSkyMaterial, Sprite3D and GPUParticles3D.
+</li>
+<li>Blocking input loops inside game logic.
+</li></ul>
+</main>
+</body>
+</html>

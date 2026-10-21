@@ -1,0 +1,913 @@
+# Prior-art review: CDDA fork `doc/UI_RESEARCH.md` (for Bright Nights UI redesign)
+
+**Source:** `r-melvin/Cataclysm-DDA-3D`, `doc/UI_RESEARCH.md`, branch `feature/ui-overhaul`, fetched 2026-10-21 via `gh api` (657 lines). The verbatim original is appended at the end of this file. Line numbers below (`L…`) refer to that original.
+
+**Document date and status:** the document's own research note is dated 2026-10-17 (L91); the status block at the top (L3-57) describes later implementation work. The two are not the same vintage (see Part 2, conflicts).
+
+---
+
+## 1. Structured summary
+
+### 1.1 Status block (L3-83)
+
+- **Scope:** top-ten 3D-renderer items (3.6) are under way; everything requires `RENDERER_3D`; no game rules changed (L5-6).
+- **Accessibility principle (L8-11):** in-world presentation (sky, weather, wind, markers, status icons, hit direction) may replace sidebar text as the default 3D presentation, but every such piece of state stays available as text: the status-report action, state-change log messages, and the classic sidebar presets.
+- **Simplicity principle (L13-15):** one clear signal per piece of state; two option groups (`R3D_WEATHER`, `R3D_HUD`); anything the world shows leaves the 3D sidebar preset.
+- **Implementation table (L17-28), items 1-10:**
+  1. Weather in 3D: rain/snow particles from tileset sprites, wind drift, fog from sight penalty, cloud-darkened sky, lightning flash (done, `R3D_WEATHER`).
+  2. Restored 2D overlays: scrolling combat text, heard-sound footstep marks, zone placement (done, `R3D_HUD`).
+  3. Sun and moon discs with real direction and phase (done, `R3D_WEATHER`).
+  4. Edge arrows: red hostiles, yellow sounds, one per direction, dimmed on other levels (done, `R3D_HUD`).
+  5. Compass tape: N/E/S/W, sun/moon icons, wind chevron, mission target, travel destination, four nearest notes. Threats deliberately excluded (done, `R3D_HUD`).
+  6. "3D" sidebar preset (`data/json/ui/sidebar-r3d.json`) plus status-report action F4 writing one text paragraph to the log (done).
+  7. Status badges: abnormal needs/conditions as coloured boxed words, driven by widget clauses listed in `r3d_status_row` (done, `R3D_HUD`).
+  8. Hit direction: red edge glow on the attacker's side, fading over a second; attacker inferred as nearest visible hostile (done, `R3D_HUD`).
+  9. "Entering: <place>" for 3.5 s; auto-travel route as ground ribbon (done, `R3D_HUD`).
+  10. Horizon landmarks: not built (cut).
+- **Cut list with rationale (L30-48):** horizon landmarks; hostile ticks on the compass and a hostile list; sky dial/clock; a long list of sidebar items removed from the 3D preset (stats, speed, moves, focus, mood, lighting, moon, weather, wind, temperature, sound, creature compass, weapon, vehicle, armour, body-part lists, mana); separate options per feature; weather log message for every change (only type changes and wind-speed bands, and only when sky is visible).
+- **Notes (L50-57):** dithered particles because the 3D pass has no blending; particles fall only on visible outdoor tiles; never-seen ground drawn as dark floor.
+
+### 1.2 Menus track (L59-83)
+
+- **Survey (L61-74):** most menus are already ImGui (`uilist`, `query_popup`, `input_popup`, help, keybindings, crafting, character creation, inventory compare, item info, dialogue, missions, faction, medical, scores, martial arts, overmap sidebar, debug console, editmap; grep given at L68). Curses-emulated screens: main menu, options, inventory selector, advanced inventory, worldfactory/mod manager, vehicle interaction, construction, diary, message log, sidebar panels. Curses boxes use `draw_border()` in `output.cpp` with fixed `BORDER_COLOR` light grey (L73-74).
+- **Styling mechanism (L75-78):** ImGui style picker (`ui_style_picker.cpp`) copies a JSON file from `data/raw/imgui_styles/` (or `config/custom_styles/`) to `config/imgui_style.json`; `cataimgui::init_colors()` loads it. Until now it held colours only (no padding, spacing, rounding, border widths) and nothing for curses.
+- **Cheap options (L79-83):** (1) add size keys to the style file (restyles all ImGui menus); (2) add a curses border/title colour (restyles all `draw_border()` boxes); (3) draw key hints through `cataimgui::TextKeybinding`. Rewriting curses screens in ImGui is explicitly out of scope (L82-83).
+
+### 1.3 Research note: method and source limits (L87-99)
+
+- Written 2026-10-17 for the 3D renderer and first-person branches.
+- GitHub (CleverRaven/Cataclysm-DDA) read directly. Discourse, Reddit, Steam, PC Gamer, GamingOnLinux, TouchArcade and YouTube "could not be opened"; those claims rely on search-engine summaries. L97-98 say to treat them as "a page says", not checked quotes.
+
+### 1.4 Summary (L103-128)
+
+- CDDA players complain about layout, wasted space, hard-to-find settings, and state that cannot be seen (attacks from another z-level, turrets beyond earshot, weather overhead). Redesigns that hid information drew pushback (#27367). Recommendation: **add, don't remove**; the sidebar stays, and 3D takes over only what it shows better than text (L105-111).
+- The 3D view currently shows less than the 2D tiles view because `r3d::draw` skips `tilecontext->draw` (weather animation, SCT, zones, footsteps). Restoring these is "the cheapest win" (L112-116).
+- Borrowed patterns: sky as clock; wind in particles/foliage; compass tape with markers; contextual status icons; sound as directional marks; screen-edge damage (L117-123).
+- Borrowed failures: markers that turn exploration into following an arrow; removing the map entirely; music that reveals unseen enemies; diegetic devices slower to read than a number (L124-128).
+
+### 1.5 Part 1: CDDA's UI as its players discuss it (L132-316)
+
+- **1.1 Sidebar today (L134-162):** 720 JSON widget objects in `data/json/ui/*.json`, `src/widget.cpp` (2,039 lines), `src/panels.cpp` (887 lines). Shipped layouts listed at L139-141. Default custom layout contents at L143-149. Diegetic gating already exists: `time_text`, `env_temp_text` (needs thermometer), `sundial_text` (L154-157). "Look at the sky" action from #27947 (L158-162).
+- **1.2 Timeline table (L166-177):** 2019 sidebar overhaul debate (#27367, #27439); 2019 layouts and pixel minimap (#28152); 2019 sky view (#27947); 2019 look-around rework (#27743); 2022 JSON custom sidebar (#51438); 2022 old sidebars converted (#58113); 2022 structured sidebar (mlange-42); 2023 spacebar (#63502); 2024 ZenFS thick sidebar (#71109); 2024 ImGui framework and migrations (#65709, #73134, #73456, #78557, #78465).
+- **1.3 Ten recurring pain points (L183-261):**
+  1. Layout and wasted space rather than raw quantity (L187-197). Panel redesigns criticised for showing less and squeezing the log (#27439). A Discourse report of the minimap being pushed off-screen is from a search summary.
+  2. The UI is not taught; settings hard to find (L198-204).
+  3. Hidden state: attacks from other z-levels; turrets firing from beyond audible range (L206-213). The #42845 fix was to rules, not an indicator (L209-210).
+  4. Interruptions and safe mode: sounds from other z-levels interrupt actions; players want "ignore all interruptions except for damage" (L215-222; #34621, #28672, #10637).
+  5. Message log noise and combat squeezed out of the log (L223-226).
+  6. Weather, time, light, wind, temperature only as text (L227-237).
+  7. Overmap vs local map; finding places (L238-245).
+  8. Auto-travel friction and look-mode rework (L246-249; #73062, #27743).
+  9. Menus within menus: inventory, crafting, construction (L250-257). Crafting "intimidated" some players (search summary). Justification for ImGui migration: repeated navigation code per UI (#65709).
+  10. Accessibility as a hard constraint: screen-reader users; anything moved into the world must remain text (L258-261).
+- **1.4 Prior art in the ecosystem (L263-296):** widget system with clauses, graphs and multi-line widgets (`doc/WIDGETS.md`); structured sidebar; ZenFS thick sidebar; pixel minimap; tilesets including isometric sets (Ultica_iso, IsoMSX+, HitButton_iso) and overmap tilesets (L277-282); earlier 3D attempts (L283-289: "3D visualizer" forum thread, MagicaVoxel tileset plan, both search summaries; claim that this fork's r3d is the only playable 3D view, hedged as "as far as these searches found"); Bright Nights description (L290-296: no `data/json/ui/`, C++ panels, "a simpler UI" from an RPGHQ search summary, 0.8.0 small UI notes from RogueBasin).
+- **1.5 Stated player wants (L298-314):** keep everything visible; mode presets (exploration vs combat); enemy-direction markers at map edge instead of compass (Anrock, paraphrase); icons/pie charts/paper doll (NotFuji, paraphrase; body graph shipped); visible cause for every interruption; weather forecast with wind/temperature; UI tutorial (#57571); auto-travel path previews (#73062).
+
+### 1.6 Part 2: how 3D games communicate state (L318-409)
+
+- **2.1 Vocabulary (L320-328):** Fagerholt and Lorentzon, *Beyond the HUD* (Chalmers 2009): non-diegetic, diegetic, spatial, meta. Thesis PDF link at L327.
+- **2.2 Sky, time, weather, wind (L330-344):** tables for Minecraft, Valheim, The Long Dark, Ghost of Tsushima, Breath of the Wild, Project Zomboid, Daggerfall Unity (L332-340). Lesson (L342-344): sky is good at "roughly what time", bad at "how long until dark"; wind is readable only when things move with it; world weather persuades but every game keeps a text or icon fallback.
+- **2.3 Points of interest (L346-362):** Skyrim/Oblivion compass; Daggerfall Unity quest compass and automap; Outward (no minimap, "useless map" praised and disliked); Kingdom Come hardcore (no markers on compass); Dread Delusion; Far Cry 2 (needed a HUD fallback); Grimrock; Ultima Underworld (player-typed map notes); Tsushima. Lesson (L360-362): compass tape is the accepted middle ground; CDDA's overmap notes match the Ultima Underworld model.
+- **2.4 Character state (L364-381):** Project Zomboid moodles (contextual icons with severity; art-style clash complaints); Valheim status icons; DayZ colour/heartbeat/blur; BotW stamina wheel and temperature gauge; Metro Exodus watch; Cruelty Squad; Doom-likes face; The Long Dark meters on demand. Lesson (L377-380): contextual icons plus 2-3 strong meta effects for critical states; art style must match.
+- **2.5 Threats (L382-396):** MGS V awareness icons; Fortnite "Visualize sound effects"; Minecraft accessibility mods (direction arcs, damage direction); Skyrim combat music leaking unseen enemies; BotW noise meter; Metro watch light. Lesson (L393-396): direction-of-threat arcs are standard and an accessibility feature; music or effects driven by hidden state leak information; in CDDA only show what `you.sees()` or the sound system already tells the player.
+- **2.6 Failure modes (L398-409):** marker-following replaces looking; removing navigation aids loses players; diegetic devices slower than numbers; state leaks through presentation; restyled icons clash with art; wind-as-guide fails on steep terrain; too many screen effects, and motion effects cause nausea (head-bob already banned, `R3D_FIRST_PERSON.md` C1).
+
+### 1.7 Part 3: synthesis for this project (L413-581)
+
+- **3.1 What the renderer has and lacks (L415-444):** Has: per-vertex light, remembered tiles sepia, first-person sky colour lerp, orbit cutaway, first-person compass strip, hostile and sound ticks, edge alert, crosshair label, sound posts, "Looking" level indicator, heading-up minimap, `r3d::hud_texts()`. Lacks: 2D overlays skipped in 3D; weather; sun/moon; any HUD in orbit; POI pointers; anything beyond the bubble; damage direction and floating numbers; vehicles in first person.
+- **3.2 Principles (L446-459):** (1) redundant, never sole; (2) only what the character perceives, same sources as text; (3) contextual HUD, permanent sidebar; (4) world carries ambient, HUD carries actionable numbers; (5) same cue in orbit and first person.
+- **3.3 Mapping table (L461-499):** about 30 information items mapped to Keep / Glyph / World / Drop. Keep is "yes" for nearly all items, including weather, wind, moon and time (L484-487), which conflicts with the status cut list (see Part 2).
+- **3.4 Orbit recommendations (L501-514):** parity with 2D first; sky as clear colour in orbit; weather particles and fog; off-screen hostile arrows; floor ring for own noise; footstep posts; POI ribbon.
+- **3.5 First-person recommendations (L516-532):** compass strip as the one direction place (wind arrow, mission target, destination, notes, up/down marks on hostile ticks); sun/moon/stars/cloud; weather; hit direction; contextual moodle row from widget clauses; floating damage text; horizon landmarks (later); off-by-default option for effects, on-by-default for information (L531-532).
+- **3.6 Ten changes ordered by value/effort (L534-554):** same ten as the status table, with effort estimates (S/M/L) and code areas (`src/r3d.cpp`, `src/r3d_hud.cpp`, `src/sdltiles.cpp`, `src/widget.cpp`, `src/panels.cpp`, `src/overmapbuffer.h`, `src/event.h`). Later: breath vapour, posture, turret laser line, held-item sprite, "Look at the sky" as a rendered weather map.
+- **Open questions (L558-581):** (1) world vs text, and the "switch the sidebar off" option; (2) effects on or off by default; (3) markers or landmarks for finding places; (4) weather strength (readability vs honesty); (5) visual sound vs positional audio; (6) which sidebar players use as base; (7) orbit vs first-person priority; (8) tileset; (9) player opinion not yet read.
+
+### 1.8 Sources (L585-657)
+
+- Read directly: CDDA issues and PRs (L589-613), the UI-labelled search (L614-615), community repos (L616-618), this repo's files (L619-623), and first-person branch files (L622-623).
+- Search-summary only (L625-640): Discourse threads, Steam tutorial guide, TouchArcade and GamingOnLinux, RogueBasin, RPGHQ, plus the Fagerholt thesis (L641).
+- Games (L642-645): stated as "search-engine summaries only" bucket, though the Part 2 tables present them in specific detail.
+- Kenshi (L646-648), Caves of Qud (L649-651), Dwarf Fortress Adventure mode (L652-654). Gaps stated at L656-657.
+
+---
+
+## 2. Critical review
+
+### 2.1 Claims without a usable source, or with a weak one
+
+- **Part 2 tables are secondary-sourced but read as checked.** L93-98 say non-GitHub pages could not be opened and only search summaries were used. The Part 2 tables (L332-396) then state specific mechanics and quotes (Valheim wind arrow under the minimap, Fortnite arcs "default on for all players", Skyrim combat music, Dread Delusion, PC Gamer and VOICE quotes) with no per-row marker. L642-645 do place the games in the "search only" bucket, so the reader has to go to the end to learn this.
+- **Quotes from pages the note says it could not open.** PC Gamer (L336, L352), Game Informer (L356), Ultima Codex (L357), VOICE and Bit-Tech (L373), Nexus (L389). L95-99 say such claims should be treated as "a page says"; the quotes are presented in the same format as checked quotes.
+- **Unsourced factual claims:**
+  - L232-233: "a numeric temperature was one of two things a thick-sidebar user missed". No quote, and the cited PR is not quoted.
+  - L258: "Blind players play CDDA through screen readers". The only source is a PR quote (L259); there is no link to a user or to the accessibility issue.
+  - L136-138: widget and line counts (720, 2,039, 887). These are repo facts that this review could not verify.
+  - L209-210: #42845 "the fix was to the rules, no indicator was added". Not verified in the document.
+  - L291-296: Bright Nights facts, including "no `data/json/ui/` folder" and "BN does not seem to be on Steam". The folder claim is consistent with this repo (`data/json/ui/` is absent here), but the source is a GitHub browse link that was not quoted.
+  - L646-647: Kenshi "dated but useful" is in quotation marks but has no link to the quoted text.
+- **Interpretive claims stated as findings:** "The trend is clear" (L179); "Putting those back is the cheapest win" (L116); "This fork's r3d is ... the only playable 3D view" (L287-289, hedged but unverified).
+- **Mixed quote and paraphrase:** L300 quotes only "Please allow this to be an option" (CoroNaut). The rest of that bullet is paraphrase. L304-305 (Anrock), L305-306 (NotFuji) and are paraphrase with names attached.
+- **Quoted PR text is not a user quote:** L256-257 ("navigation between elements ... repeated in every UI") is from the #65709 PR text. L161-162 ("see sky/weather overhead ...") is from the #27947 PR, not a player.
+- **Curses rain bug:** L236-237 is from a Discourse search summary.
+
+### 2.2 Internal conflicts
+
+1. **Preset content: drop or keep?** The cut list (L40-44) removes weather, wind, moon, temperature and lighting from the 3D preset. The mapping table (L484-487) marks weather, wind, moon and time as Keep = "yes" with the note "keep as sidebar/HUD text (unchanged)". The 3.6 #6 change (L545) says the preset "moves weather/wind/moon/time into one compact line". Three different instructions for the same items.
+2. **Redundancy vs removal.** Principle 1 (L448-449) says in-world cues must duplicate text. The cut list removes items from the 3D preset that only the world and the F4 report carry. The status block accepts this (L8-11), but the research note does not explain how the F4 report is reachable from the overlay itself.
+3. **"Keep everything visible" vs contextual HUD.** Player want (L300) and Principle 3 (L454-455: overlay shows things only when abnormal) pull in opposite directions. The moodle model (L480: "moodle only when not normal") hides normal state the users asked to keep visible. The research does not discuss this.
+4. **Threat ticks on the compass.** Research recommends up/down marks on hostile ticks (L519, L544) and treats hostile ticks as existing in first person (L425, L490). The status block cut "Hostile ticks on the compass" (L35-36) and states threats are "deliberately not on it" (L23). The status block is later, so this is probably a reversal the research note was not updated for. The document does not say so.
+5. **Perception rule vs items that are not perceived.** Principle 2 (L451-453) says cues come only from what the character perceives. But:
+   - Turret "laser line / red dot on the avatar when targeted" (L496) and the attacker drawn above (L495) are cues about state the player may not perceive.
+   - Mission target (L494, L518) comes from quest data, not perception.
+   - The document's own marker-following warning (L400, Skyrim) is not applied to the mission target.
+6. **Effects budget.** L379-380 says to keep screen effects to "2-3 states". The mapping table adds pain pulse, sleepiness vignette, frost corners, wetness sheen, desaturation, breath puffs (L470, L479-482), and L531 says "keep all of it off by option". The budget and the list disagree.
+7. **Open questions still open, but treated as decided.** Question 4 (weather strength, L569-570) and question 3 (markers or landmarks, L566-568) are unresolved, yet 3.4 (L509) recommends fog by default and 3.6 #5 (L544) recommends mission target carets. The status block then implements both.
+8. **Hit-direction duration.** L523 says "lasting one redraw cycle". The status block (L26) says "fading over a second". Not a contradiction in intent, but the research cites a spec the implementation no longer follows.
+9. **Accessibility rule vs visual-only moodles.** L260-261 says anything moved into the world must stay text. Moodle icons (L480-482, L525) have no stated text alternative. The status block's answer is the F4 report (L11, L24), which is a separate action, not a tie to the icon.
+
+### 2.3 What the document missed (against the review list)
+
+| Item | Coverage in the document |
+|---|---|
+| Fully remappable inputs, including gamepad | Absent. Only "gamepad-driven" Caves of Qud mentioned as a source (L649-651). |
+| Colour-blind modes with non-colour redundancy | Absent. Several cues rely on colour alone: red vs yellow edge arrows (L22), red hostile ticks and yellow sound ticks (L425), red hit glow (L26), coloured status badges (L25). Shape/icon redundancy is partly present in the compass (L23) but not designed as a rule. |
+| Screen reader / self-voicing | Constraint only (L258-261, L448-449). No design for reading the 3D overlay text (`r3d::hud_texts()`), no TTS, no spoken edge arrows. |
+| Text scaling | Not designed. Only "structured for larger fonts" from a Discourse summary (L273) and a square overmap font request (L240-241). The 3D overlay and badges have no scaling plan. |
+| Reduced motion / flash | Partial. Motion sickness and head-bob ban (L408-409, L564). Flash effects (lightning L19, hit flash L547, red glow L26) have no reduced-flash setting or photosensitivity note. "Off by option" (L531) is stated without a list. |
+| Audio cues as text | Partial. Sound becomes visual marks (L491) and log entries (L491), but no subtitle-style text for heard sounds and no plan for deaf or hard-of-hearing players beyond visual arcs (L571-572). |
+| Hold vs toggle | Absent. Only a HUD toggle precedent (BotW, L338). No design for R3D_HUD/R3D_WEATHER being toggled vs held. |
+| One-handed play | Absent. |
+| Radial menus | Absent. |
+| Hotbars | Absent. |
+| Crafting grids | Absent. Crafting is named as intimidating (L250-252) and as an ImGui menu (L65), with no design. |
+| Drag and drop | Absent. |
+| Item comparison tooltips | Named only as an ImGui migration (L65, L177). No design. |
+| Journal / quest log | Partial. Mission target on the compass (L23, L518). No journal or quest log design. Dread Delusion's journal is mentioned in passing (L354). |
+| Minimap | Present (L149, L194, L275, L427, L545). Heading-up rotation is in the first-person branch. No design beyond "keep". |
+| Damage direction | Present (L26, L523, L547; Minecraft mods L388). |
+| Controller-first navigation | Absent. |
+
+Also missed, not on the review list: localisation of new overlay text (new strings in `r3d::hud_texts()` and the status report need translation, and the document does not mention it); performance cost of particles and per-frame overlay work on low-end hardware; and a settings-discoverability plan for the new `R3D_WEATHER`/`R3D_HUD` options, even though the document cites discoverability as pain point 2 (L198-204).
+
+### 2.4 Assessment
+
+- The strongest parts are the sourced pain points (Part 1.3) and the pattern-lesson summaries (Part 2 lessons at L342-344, L360-362, L377-380, L393-396). They are useful as design reasons even where the individual citations are weak.
+- The weakest parts are the game-by-game tables (Part 2) and the Bright Nights claims. Neither was checked to the depth the prose suggests.
+- The document is strongest on "add, don't remove" for the sidebar, and weakest on input, accessibility and text scaling, where most of the review list lies.
+
+---
+
+## 3. Specific sourced user quotes
+
+Copied verbatim from the original. "Quoted in doc" means the text is inside quotation marks in the original. Attribution is as the original gives it. Items marked **(PR/issue text)** or **(critic)** are not player quotes and should not be presented as such.
+
+**Player and community quotes (usable, with links)**
+
+1. "Nearly everything on the current sidebar is important in nearly all situations" — unnamed commenter in https://github.com/CleverRaven/Cataclysm-DDA/issues/27367 (L109-110, L110 cites the link)
+2. "Sidebar take too much space ... The overall feeling is messy" — nsklaus, https://github.com/CleverRaven/Cataclysm-DDA/issues/27367 (L187; ellipsis is in the original)
+3. "the main problem is the limited vertical space" — rumly111, https://github.com/CleverRaven/Cataclysm-DDA/issues/27367 (L188)
+4. "if it's so dense you can't understand it, it's too dense" — kevingranade, https://github.com/CleverRaven/Cataclysm-DDA/issues/27367 (L189-190)
+5. "displays a great deal more information in a smaller space, and requires no management" — Solusphere, https://github.com/CleverRaven/Cataclysm-DDA/issues/27367 (L190-191)
+6. "Toggle Panel Admin" — paulenka-aleh, https://github.com/CleverRaven/Cataclysm-DDA/pull/28152 (L198-200; the doc says "is not something a player 'could guess'")
+7. "Neither Tutorial nor Play Now! ... explains UI to the player" — silencecoder, https://github.com/CleverRaven/Cataclysm-DDA/issues/57571 (L200-201)
+8. "There should be indicators that enemies are attacking/being attacked from another Z level" — ThaniCF, https://github.com/CleverRaven/Cataclysm-DDA/issues/42845 (L208-209)
+9. "A rat farted five meters down. Curl up in fetal position and cry? Y/N" — https://github.com/CleverRaven/Cataclysm-DDA/issues/34621 (L215-216; no named author in doc)
+10. "Moving over this repeated message is slow" — https://github.com/CleverRaven/Cataclysm-DDA/issues/28215 (L223-224; issue title, no named author)
+11. "Weather prediction/forecast?" — https://github.com/CleverRaven/Cataclysm-DDA/issues/2633 (L229-230; issue title)
+12. "Standing near burning fire doesn't makes player warm" — https://github.com/CleverRaven/Cataclysm-DDA/issues/8300 (L231-232; issue title, grammar as in original)
+13. "Context-sensitive build menu makes it difficult to know what to scavenge for" — https://github.com/CleverRaven/Cataclysm-DDA/issues/4635 (L253-254; issue title)
+14. "Please allow this to be an option" — CoroNaut, https://github.com/CleverRaven/Cataclysm-DDA/issues/27367 (L300-301)
+15. "I've been using it all day on my ultra wide monitor and it's lovely" — ZenFS thick-sidebar user, https://github.com/CleverRaven/Cataclysm-DDA/pull/71109 (L271-272)
+16. "None of the other default sidebars provide the player with as much information" — https://github.com/CleverRaven/Cataclysm-DDA/pull/71109 (L176, timeline table)
+17. "Fifteen hours into Hardcore and I'm ready to get my map markers on the compass back" — Kingdom Come forum, https://forum.kingdomcomerpg.com/t/fifteen-hours-into-hardcore-and-im-ready-to-get-my-map-markers-on-the-compass-back/58956 (L353). Listed under the games bucket that the note itself says was search-summary only (L642-645), so verify before reuse.
+18. "not everyone plays with a HUD" — DayZ Steam discussion, https://steamcommunity.com/app/221100/discussions/0/591761634944382129 (L370). Doc quotes it as a player note, from a search summary.
+19. "often the first sign that you have been targeted by an unseen enemy ... conferring an unfair advantage" — Nexus mod page https://www.nexusmods.com/skyrim/mods/20926 (L389). Quote from a mod description or comment; the doc does not say which.
+20. "a simpler UI" — RPGHQ thread https://rpghq.org/forums/viewtopic.php?t=165 (L292-293; search summary).
+
+**Quotes from pages the note could not open (search summaries; verify before use)**
+
+21. "Visualize sound effects" — Fortnite option name (L387; a product label, not a player quote)
+
+**Developer quote**
+
+22. "make the whole world move" — Ghost of Tsushima, creative director, via Android Central / GDC 2021 links (L337; search-summary bucket per L642-645)
+
+**PR or issue text (not player quotes)**
+
+23. "navigation between elements and mouse-based selections involve code which currently needs to be repeated in every UI" — https://github.com/CleverRaven/Cataclysm-DDA/pull/65709 (L255-256; PR motivation)
+24. "it's important this part of accessibility doesn't regress" — Zireael07, https://github.com/CleverRaven/Cataclysm-DDA/pull/65709 (L258-259). Named user, but in the PR thread, not a request for a design.
+25. "see sky/weather overhead for trying to predict weather changes" — https://github.com/CleverRaven/Cataclysm-DDA/pull/27947 (L161-162; PR description)
+26. "fire from farther away than their 'Hostile detected!' sound can be heard" — https://github.com/CleverRaven/Cataclysm-DDA/issues/35378 (L210-211; no named author)
+
+**Critic and press quotes (not players; use with care)**
+
+27. "presents a lot of gameplay-relevant information through audio cues" — PC Gamer (The Long Dark) (L336; search summary)
+28. "useless map is its best feature" — PC Gamer, Outward (L352)
+29. "At least there's an automap" — Game Informer, Grimrock (L356)
+30. "near-miraculous" — Ultima Codex, Ultima Underworld (L357)
+31. "very unintuitive UI that might be uncomfortable to use but it works" — VOICE, Cruelty Squad (L373)
+32. "dated but useful" — Kenshi critics (L647; no link to the quoted text)
+33. "barren at times" — RPGamer or CGM, Dread Delusion (L354)
+
+**Paraphrases the doc does not quote (do not reuse as quotes)**
+
+- Anrock: enemy directions at the map edge (L304-305)
+- NotFuji: icons, pie charts, paper doll (L306)
+- CoroNaut (L300): "Keep everything visible; let me choose; do not hide things by context" is unquoted paraphrase in the doc; the only quoted fragment is "Please allow this to be an option"
+- "a wind indicator the devs were not happy with" (L339)
+- Steam guide author: 20 minutes to boil water (L203-205)
+
+---
+
+## 4. Does the document transfer to Bright Nights
+
+**Short answer:** the 3D renderer material transfers; the ImGui and widget-JSON material does not. Bright Nights has the r3d renderer (`src/r3d_*.cpp` present in this repo), no ImGui (`grep -ril imgui src` returns nothing), and no `data/json/ui/` widget folder. The document's own Bright Nights section (L290-296) agrees with the folder check.
+
+**Does not transfer (CDDA-specific):**
+
+- The whole ImGui survey and styling mechanism (L61-83): `cataimgui::`, `ui_style_picker.cpp`, `data/raw/imgui_styles/`, `config/imgui_style.json`, `cataimgui::TextKeybinding`. Bright Nights has none of these.
+- Pain point 9 and the ImGui migration rationale (L250-257, L177): these explain why CDDA is moving menus to ImGui. BN is curses/SDL-curses and has no plan in the document to follow.
+- The JSON sidebar presets and widget clauses: `sidebar-r3d.json`, `r3d_status_row`, `doc/WIDGETS.md`, and the "add a sidebar as JSON" approach (L134-150, L265-267, L545, L525-526). BN's sidebar is C++ panels, so the "3D preset as data" idea needs a different implementation.
+- The CDDA tileset list (L277-282), the UltiCa-specific sprites, and the references to `weather_type.json` and `body_graph.json`. BN's data names may differ, and BN's tilesets need checking before any sprite is reused.
+- The CDDA-specific code references (`avatar::get_active_mission_target`, `Character::omt_path`, `overmapbuffer::get_all_notes`, `sounds::get_footstep_markers`, `event_type::character_takes_damage`). These need to be checked against BN's source before porting.
+- CDDA community sources and player threads (Discourse, Steam, #-numbered CDDA issues). The player evidence is about CDDA's sidebar, not BN's.
+
+**Transfers with changes:**
+
+- The 3D renderer design: weather particles, edge arrows, compass tape, status badges, hit direction, sun/moon, sound marks (Part 3, L446-554). These are renderer ideas. BN has `src/r3d_*` files (checked by listing only, not by reading), so the seams the document relies on (lighting, sky, `src/r3d_hud.*`) need checking against BN's code before planning.
+- The pain points in Part 1.3 (layout, discoverability, hidden state, interruptions, log noise, text-only weather). Most are generic to any dense survival sidebar. BN's own sidebar is described by the document as simpler (L290-296), so pains 1 and 9 may apply less. Confirm with BN players before relying on them.
+- The game pattern lessons (Part 2, lessons at L342-344, L360-362, L377-380, L393-396). These are generic design principles, not CDDA-specific.
+- The curses border-colour idea (L79-81) is the closest ImGui-independent point. BN may have an equivalent of `draw_border()`; this review did not check BN's `output.cpp`, so the idea is only plausible here.
+
+**Gap for BN:** the document does not discuss BN at all beyond the one section (L290-296). Its ten-item plan is written for CDDA's `data/json/ui/` widget system and ImGui menus, so it would need a fresh priority list for BN.
+
+---
+
+## 5. Verification notes
+
+- Document fetched successfully with `gh api` (657 lines, about 60 KB). No `raw.githubusercontent.com` fallback needed.
+- Repo checks in this review: `data/json/ui` absent in Cataclysm-BN-3D; `grep -ril imgui src` returns 0 files; `src/r3d_*` present.
+- Not verified: CDDA repo facts cited in the document (widget counts, function locations, branch code); quotes from pages the note itself says it could not open; Steam, Reddit and forum content.
+- Appendix below is the verbatim original, fetched on the same run.
+
+
+---
+
+## Appendix: original document (verbatim)
+
+# UI research: what the 3D view should show, and what stays text
+
+## Status (branch `feature/ui-overhaul`)
+
+Work on the top ten (3.6) is under way. Everything below needs `RENDERER_3D`; with the 3D
+renderer off nothing changes. No game rules were changed.
+
+**Accessibility principle.** In-world presentation (sky, weather particles, wind, markers,
+status icons, hit direction) may replace sidebar text as the default 3D presentation. Every such
+piece of state stays available as text on demand: the status report action, state-change
+messages in the log, and the classic sidebar presets, which stay selectable and unchanged.
+
+**Simplicity principle.** One clear signal per piece of state, few options (two groups:
+`R3D_WEATHER` for the world, `R3D_HUD` for marks drawn over it), and anything the world already
+shows leaves the 3D sidebar preset.
+
+| # | Item | State | Option | How to try |
+|---|---|---|---|---|
+| 1 | Weather in 3D: rain/snow particles from the tileset's `weather_rain_drop` / `weather_snowflake` (built-in fallback), drifting with the wind; distance fog from the weather's sight penalty; sky colour by time of day darkened by cloud, lightning flash | done | `R3D_WEATHER` | Play outdoors in rain or snow. For screenshots `CATA_R3D_WEATHER=<weather id>` and `CATA_R3D_TIME_SHIFT=<hours>` change only what the 3D view draws |
+| 2 | Overlays the 3D path skipped: scrolling combat text (rises from the target's head), heard-sound footstep marks, the zone being placed | done | `R3D_HUD` | Fight something; make noise near a monster out of sight; place a zone (Zones manager) |
+| 3 | Sun and moon: discs far out in the sky in their real direction (same calculation as the sidebar's sundial; moon opposite the sun as the sundial puts it, phase from `get_moon_phase`, drawn in eight phases); hidden by cloud and fog | done | `R3D_WEATHER` | Lower the camera (ctrl+PgDn) at dawn or dusk; or look at the compass tape, which always carries them |
+| 4 | Edge arrows: red for hostiles the player sees, yellow for sounds heard, outside the picture; one arrow per direction (nearest/most urgent wins), bigger when closer, dimmed when on another level | done | `R3D_HUD` | Turn the camera away from a visible zombie |
+| 5 | Compass tape at the top, centred on the camera's facing: N/E/S/W, sun and moon icons, a wind chevron where the wind comes from (local wind as in the sidebar), mission target (gold diamond), auto-travel destination (X), the four nearest overmap notes within 30 tiles (their own symbol and colour). Threats are deliberately not on it: the arrows carry them | done | `R3D_HUD` | Set a mission active, travel with the overmap, add a note nearby |
+| 6 | "3D" sidebar preset (`data/json/ui/sidebar-r3d.json`): HP bars by body part, stamina + safe mode, place + time; plus the **status report** action (F4, also in the action menu under Info) that writes one paragraph to the log: date and time (watch/sky gated as in the sidebar), weather, wind, moon at night, temperature (thermometer gated), place, needs that are not normal, hostiles in sight with distance and direction, sounds heard | done | (preset: sidebar menu) | Sidebar options → layout "3D"; press F4 |
+| 7 | Status badges: abnormal needs and conditions as coloured boxed words along the bottom left of the view, from the widgets listed in `r3d_status_row` (hunger, thirst, sleepiness, body temperature, pain, weariness); a widget whose text is empty or "fine"-coloured has no badge, so the thresholds stay in the widgets' clauses | done | `R3D_HUD` | Get hungry, cold or tired |
+| 8 | Hit direction: when `character_takes_damage` names the player, a red glow on the edge of the view on the attacker's side, fading over a second. The event does not say who hit, so the attacker is the nearest hostile the player sees; with none seen the glow runs all round the edge | done | `R3D_HUD` | Let a zombie hit you |
+| 9 | "Entering: <place>" under the compass for 3.5 s when the sidebar's place name changes (from `avatar_enters_omt`, so not on every forest tile); the auto-travel route drawn as a ribbon of the targeting line's sprite on the ground | done | `R3D_HUD` | Walk into a town; auto-travel from the overmap |
+| 10 | Horizon landmarks beyond the loaded area | not built | — | See "What was cut and why" |
+
+**What was cut and why** (veto any of these and it can come back):
+
+* *Horizon landmarks (top-ten item 10).* Large (new mesh source beyond the reality bubble, an
+  overmap tileset) for a cue the compass tape already gives: notes and the travel destination
+  point the way. Not built.
+* *Hostile ticks on the compass and a hostile list on the overlay.* One threat cue only: the edge
+  arrows. The sidebar compass widgets stay in the classic presets; the status report lists
+  hostiles with bearings.
+* *A sky dial / clock on the overlay.* The sky colour, the sun and moon in the world and on the
+  compass tape show the time of day; the exact time is in the 3D sidebar and the status report.
+* *From the 3D sidebar preset:* stats, speed and move counter, focus, mood, lighting, moon,
+  weather, wind, temperature, sound level, the creature compass and its legend, weapon/style,
+  vehicle lines, armour, body part status lists, mana. The world shows weather, wind, light and
+  threats; the badges show abnormal needs; the status report has the rest as text, and every
+  classic preset is still selectable.
+* *Separate options per feature.* Two switches instead of ten: `R3D_WEATHER` (world) and
+  `R3D_HUD` (marks over it).
+* *Weather log messages for every change.* Only weather type changes and wind changes across
+  speed bands (calm / breeze / wind / strong) are logged, and only when the sky is visible.
+
+Notes:
+
+* Particles are translucent sprites but the 3D pass has no blending: they are drawn dithered
+  (an ordered 4x4 pattern), which the 2x supersampled picture averages back into transparency.
+* They fall only over outdoor tiles the player sees now, as the flat view's animation does, and
+  move when the game redraws (every 125 ms with `ANIMATIONS` while it rains, as in 2D).
+* Never-seen ground is drawn as dark floor, so in orbit mode the sky colour shows only beyond the
+  loaded area (low camera pitch) and through gaps.
+
+### Menus track
+
+**Survey: how menus are drawn today.**
+
+* *ImGui (most menus already).* `uilist` (every pick-one list in the game: action menu, item
+  actions, world/character pickers, yes/no choices), `query_popup` and `input_popup` (all popups and
+  text prompts), help, keybindings, crafting, character creation, inventory compare, item info and
+  extended description, dialogue, mission, faction, medical, scores, martial arts, the overmap
+  sidebar, surroundings, study zones, the debug console and editmap
+  (`grep "public cataimgui::window" src`). They all share one `ImGuiStyle`, so a style change
+  reaches them all at once.
+* *Curses-emulated windows.* The main menu (`main_menu.cpp`), the options screen
+  (`options.cpp`), the inventory selector (`inventory_ui.cpp`), advanced inventory panes, world
+  creation and mod manager (`worldfactory.cpp`), vehicle interaction, construction, diary, the
+  message log and the sidebar panels. They draw ASCII-art boxes with `draw_border()`
+  (`output.cpp`, always `BORDER_COLOR` = light grey) and colour everything with curses colours.
+* *Styling mechanism.* `data/raw/imgui_styles/*.json` (and `config/custom_styles/`) are picked
+  from Main menu → Settings → ImGui Styles (`ui_style_picker.cpp`); the pick is copied to
+  `config/imgui_style.json` and `cataimgui::init_colors()` loads it. Until now it held **colours
+  only**: no spacing, rounding or borders, and nothing for the curses side.
+* *What is cheap.* (1) Teaching the style file sizes (padding, spacing, rounding, border widths)
+  restyles every ImGui menu at once. (2) Teaching it a curses border/title colour restyles every
+  `draw_border()` box without touching the screens. (3) Key hints all go through
+  `cataimgui::TextKeybinding`, so key caps can be drawn there once. Rewriting the curses screens
+  in ImGui is not cheap and is out of scope here.
+
+---
+
+## The research note
+
+Research note for the 3D renderer (`feature/r3d-renderer`, see `doc/R3D_STATUS.md`) and the
+first-person mode (`feature/r3d-first-person`, `doc/R3D_FIRST_PERSON.md` on that branch).
+Written 2026-10-17. No code was changed for this note.
+
+**How the sources were read.** GitHub pages of CleverRaven/Cataclysm-DDA were read directly (issue
+and PR threads). The CDDA Discourse forum, Reddit, Steam, PC Gamer, GamingOnLinux, TouchArcade and
+YouTube could not be opened from this session (DNS failures or blocked hosts), so for those the
+note relies on search-engine summaries of the pages and says so where it matters. Treat claims
+sourced that way as "a page says", not as checked quotes. Player opinion from Reddit and Steam
+reviews is therefore thinner than planned; see the open questions at the end. The repo itself
+(`data/json/ui/`, `doc/WIDGETS.md`, `src/`) was read directly.
+
+---
+
+## Summary
+
+* CDDA's players do not mostly complain that the sidebar has *too much*. They complain that it is
+  laid out badly, that space is wasted, that it is hard to find the setting that changes it, and
+  that some state cannot be seen at all (attacks from another z-level, turrets firing from beyond
+  earshot, weather overhead). Whenever a redesign tried to hide information, veterans pushed back
+  ("Nearly everything on the current sidebar is important in nearly all situations",
+  [#27367](https://github.com/CleverRaven/Cataclysm-DDA/issues/27367)). So: **add, don't remove**.
+  The sidebar stays. The 3D view takes over only what it can show better than text.
+* The 3D view currently shows *less* than the 2D tiles view: going through `r3d::draw` skips
+  `tilecontext->draw`, which is where the rain/snow animation (`draw_weather_frame`), scrolling
+  combat text (`draw_sct_frame`), zone overlays and, in orbit mode, the footstep markers are drawn
+  (`src/sdltiles.cpp`, the `drawn_3d` branch of `curses_drawwindow`). Putting those back is the
+  cheapest win.
+* What 3D games do well, and what we can borrow: sky and light *are* the clock (Minecraft,
+  Valheim, The Long Dark); wind made visible in particles and foliage is both weather and
+  direction (Ghost of Tsushima); a compass tape with markers on it is the standard answer to "which
+  way, and what is over there" (Skyrim, Daggerfall Unity, Valheim's wind arrow); status icons that
+  appear only when something is wrong (Project Zomboid moodles, BotW temperature gauge, Pro HUD);
+  sound turned into directional marks (Fortnite's "Visualize sound effects", Minecraft subtitle
+  mods); damage turning the screen edge red or desaturating it (DayZ).
+* What they do badly: markers that turn exploration into following an arrow (Skyrim criticism);
+  removing the map and markers entirely and leaving players lost (Outward and Kingdom Come
+  hardcore mode, mixed reception); combat music that gives away unseen enemies (Skyrim); diegetic
+  devices that are slower to read than a number (Far Cry 2 still had to fall back on a HUD for
+  ammo and health).
+
+---
+
+## Part 1: CDDA's UI, as discussed by its players
+
+### 1.1 What the sidebar holds today
+
+The sidebar is data: 720 `"type": "widget"` objects across `data/json/ui/*.json`, drawn by
+`src/widget.cpp` (2,039 lines) and laid out by `src/panels.cpp` (887 lines; the log, the
+overmap chunk and the minimap are still C++ draw functions there). Shipped layouts:
+`sidebar.json` (the "custom" layout), `sidebar-legacy-classic`, `-compact`, `-labels`,
+`-labels-narrow`, `-one-padding`, `sidebar-mobile`, `sidebar-thick`, `sidebar-thick-cleaner`,
+`spacebar/` and `structured/`.
+
+The default "custom" layout (`data/json/ui/sidebar.json`) lists: HP graphs and numbers per body
+part, stats, movement (move count, move mode, speed), stamina / activity / weariness, needs
+(hunger, thirst, rest, warmth), safe mode and sound, bionic power, radiation badge, a compass of
+visible creatures with a legend, wielded weapon and style, place / date / time, an overmap chunk
+and location, lighting / moon / wind / temperature, vehicle azimuth / cruise / fuel, vital numbers
+(pain, health, cardio), outer armour per body part, body part status (bleeding, bitten, broken),
+a body graph, mana, oxygen. The log, minimap and overmap are added to every custom layout
+([#51438](https://github.com/CleverRaven/Cataclysm-DDA/pull/51438)).
+
+Two details matter for "show it in the world":
+
+* Some sidebar values are already *diegetically gated*: `time_text` is "exact if clock is
+  available, approximate otherwise", `env_temp_text` shows only "if thermometer is available",
+  and `sundial_text` gives the position of the sun or moon (`doc/WIDGETS.md`, Variables). CDDA
+  already thinks of time and temperature as things the character has to perceive.
+* There is a "Look at the sky" action (`data/raw/keybindings.json`, id `sky`) from
+  [#27947](https://github.com/CleverRaven/Cataclysm-DDA/pull/27947) (2019): a weather map of the
+  sky within line of sight, so the player can "see sky/weather overhead for trying to predict
+  weather changes". In the thread, commenters immediately asked for temperature, wind and cloud
+  movement in the same view, a legend, and skill-gated forecasts.
+
+### 1.2 How the UI got here
+
+| Year | Change | Source |
+|---|---|---|
+| 2019 | "sidebar needs an overhaul": too much space, messy; long fight about panels vs density | [#27367](https://github.com/CleverRaven/Cataclysm-DDA/issues/27367), [#27439](https://github.com/CleverRaven/Cataclysm-DDA/pull/27439) (closed) |
+| 2019 | Multiple layouts (classic, compact, labels), rearrangeable panels, **pixel minimap** | [#28152](https://github.com/CleverRaven/Cataclysm-DDA/pull/28152) |
+| 2019 | Look at the sky / weather on the overmap | [#27947](https://github.com/CleverRaven/Cataclysm-DDA/pull/27947) |
+| 2019 | Look Around tab improvement (62 comments) | [#27743](https://github.com/CleverRaven/Cataclysm-DDA/pull/27743) |
+| 2022 | JSON "custom" sidebar, user-defined sidebars (widgets) | [#51438](https://github.com/CleverRaven/Cataclysm-DDA/pull/51438) |
+| 2022 | Old C++ sidebars converted to JSON | [#58113](https://github.com/CleverRaven/Cataclysm-DDA/pull/58113) |
+| 2022 | Structured sidebar mod merged into the game | [mlange-42/cdda-structured-sidebar](https://github.com/mlange-42/cdda-structured-sidebar) |
+| 2023 | Spacebar sidebar | [#63502](https://github.com/CleverRaven/Cataclysm-DDA/pull/63502) |
+| 2024 | ZenFS "thick" sidebar for wide screens ("None of the other default sidebars provide the player with as much information") | [#71109](https://github.com/CleverRaven/Cataclysm-DDA/pull/71109) |
+| 2024 | ImGui framework (520 comments), then menu-by-menu migration: missions, item info, compare | [#65709](https://github.com/CleverRaven/Cataclysm-DDA/pull/65709), [#73134](https://github.com/CleverRaven/Cataclysm-DDA/pull/73134), [#73456](https://github.com/CleverRaven/Cataclysm-DDA/pull/73456), [#78557](https://github.com/CleverRaven/Cataclysm-DDA/pull/78557), [#78465](https://github.com/CleverRaven/Cataclysm-DDA/issues/78465) |
+
+The trend is clear: CDDA answered "the sidebar is a mess" with **more choice, not less
+information**. Every new preset shows *more* (thick sidebar), or the same in better order
+(structured, spacebar).
+
+### 1.3 Recurring pain points
+
+Each item: what players say, evidence, and whether a 3D view can help.
+
+1. **Layout and wasted space, not raw quantity.** "Sidebar take too much space ... The overall
+   feeling is messy" (nsklaus); "the main problem is the limited vertical space" (rumly111); but
+   also "if it's so dense you can't understand it, it's too dense" (kevingranade) against "displays
+   a great deal more information in a smaller space, and requires no management" (Solusphere)
+   ([#27367](https://github.com/CleverRaven/Cataclysm-DDA/issues/27367)). Panel redesigns were
+   attacked for showing less and for squeezing the message log
+   ([#27439](https://github.com/CleverRaven/Cataclysm-DDA/pull/27439)). Discourse users reported the
+   newer sidebar pushing the minimap off the bottom of the screen (search summary of
+   [Ya'll messed up the interface](https://discourse.cataclysmdda.org/t/yall-messed-up-the-interface/19310)).
+   *3D:* the 3D view itself is a bigger picture of the same terrain window; it does not free
+   sidebar space unless a 3D-specific preset drops what the world now shows.
+2. **The UI is not taught, and its settings are hard to find.** "Toggle Panel Admin" is not
+   something a player "could guess" (paulenka-aleh in
+   [#28152](https://github.com/CleverRaven/Cataclysm-DDA/pull/28152)); "Neither Tutorial nor Play
+   Now! ... explains UI to the player" (silencecoder in
+   [#57571](https://github.com/CleverRaven/Cataclysm-DDA/issues/57571)); new players do not know
+   to read the log to find out why safe mode stopped them (same thread). A Steam guide author spent
+   20 minutes finding out how to boil water (search summary,
+   [Steam guide](https://steamcommunity.com/sharedfiles/filedetails/?id=2955072583)).
+3. **Hidden state: things happen that the screen does not show.** Attacks from another z-level
+   looked like zombies fighting each other; "There should be indicators that enemies are
+   attacking/being attacked from another Z level" (ThaniCF,
+   [#42845](https://github.com/CleverRaven/Cataclysm-DDA/issues/42845); the fix was to the rules,
+   no indicator was added). Turrets can "fire from farther away than their 'Hostile detected!'
+   sound can be heard"; proposals were to give them back the laser pointer, a red dot "over you"
+   before firing, loudspeaker warnings and "keep out" signs
+   ([#35378](https://github.com/CleverRaven/Cataclysm-DDA/issues/35378)). *3D:* this is exactly
+   what the world can show: a laser line, a red dot, a sign, an attacker drawn on the roof above.
+4. **Interruptions and safe mode.** "A rat farted five meters down. Curl up in fetal position and
+   cry? Y/N" ([#34621](https://github.com/CleverRaven/Cataclysm-DDA/issues/34621)): sounds from
+   other z-levels interrupt long actions; players want "ignore all interruptions except for
+   damage". See also "Extremely annoying (I)gnore"
+   ([#28672](https://github.com/CleverRaven/Cataclysm-DDA/issues/28672)) and "Feature request NO
+   WARNINGS" ([#10637](https://github.com/CleverRaven/Cataclysm-DDA/issues/10637)). *3D:* a
+   visible cause (a tick on the compass, a marker on the tile) makes an interruption feel fair even
+   when it still happens.
+5. **Message log noise.** "Moving over this repeated message is slow"
+   ([#28215](https://github.com/CleverRaven/Cataclysm-DDA/issues/28215)); the log is too small to
+   follow combat when panels shrink it ([#27439](https://github.com/CleverRaven/Cataclysm-DDA/pull/27439)).
+   *3D:* floating combat text and hit flashes move the combat half of the log into the world.
+6. **Weather, time, light, wind, temperature as text only.** The sky view PR exists because the
+   player could not see the weather coming
+   ([#27947](https://github.com/CleverRaven/Cataclysm-DDA/pull/27947)); "Weather
+   prediction/forecast?" ([#2633](https://github.com/CleverRaven/Cataclysm-DDA/issues/2633));
+   "Standing near burning fire doesn't makes player warm" (a perception problem as much as a rules
+   one, [#8300](https://github.com/CleverRaven/Cataclysm-DDA/issues/8300)); a numeric temperature
+   was one of two things a thick-sidebar user missed
+   ([#71109](https://github.com/CleverRaven/Cataclysm-DDA/pull/71109)). In 2D tiles the only
+   in-world weather is a rain/snow glyph animation (`tiles_animation` in
+   `data/json/weather_type.json`), and on curses it is buggy (search summary of a Discourse report
+   that the rain animation shifts the map).
+7. **Overmap vs local map, finding places.** The overmap is a separate full screen; the sidebar
+   shows a small chunk of it. Players ask for square overmap fonts because north-south distances
+   look wrong and want a symbol for unexplored tiles rather than a blank (search summary,
+   [Good font for overmap?](https://discourse.cataclysmdda.org/t/good-font-for-overmap/15215)). A
+   forum suggestion wants the minimap to hide what you cannot see at night or in forest
+   ([Overmaps, GPS, Maps, Sight](https://discourse.cataclysmdda.org/t/overmaps-gps-maps-sight-and-positioning/12940)).
+   *3D:* landmarks on the horizon and a compass tape carrying the destination and notes join the two
+   maps up.
+8. **Auto-travel and look mode friction.** Auto-drive prefers roads, slows to a crawl and spins;
+   the reporter asked for "path visualization overlays" and confirmation-based auto-move
+   ([#73062](https://github.com/CleverRaven/Cataclysm-DDA/issues/73062)). Look mode needed a
+   62-comment rework ([#27743](https://github.com/CleverRaven/Cataclysm-DDA/pull/27743)).
+9. **Menus in menus: inventory, crafting, construction.** Crafting "intimidated" some players for
+   many playthroughs (search summary of
+   [How hard was the learning curve](https://discourse.cataclysmdda.org/t/how-hard-was-the-learning-curve-for-you-guys/15698));
+   "Context-sensitive build menu makes it difficult to know what to scavenge for"
+   ([#4635](https://github.com/CleverRaven/Cataclysm-DDA/issues/4635)). The ImGui work exists
+   because "navigation between elements and mouse-based selections involve code which currently
+   needs to be repeated in every UI" ([#65709](https://github.com/CleverRaven/Cataclysm-DDA/pull/65709)).
+   *3D:* out of scope; these stay overlays (as the first-person design already decided, F4).
+10. **Accessibility is a hard constraint.** Blind players play CDDA through screen readers; "it's
+    important this part of accessibility doesn't regress" (Zireael07 in
+    [#65709](https://github.com/CleverRaven/Cataclysm-DDA/pull/65709)). Anything moved "into the
+    world" must remain available as text.
+
+### 1.4 Prior art inside the CDDA ecosystem
+
+* **Sidebar presets and widgets.** See 1.1 and 1.2. The widget system already has clauses and
+  conditions (colour and text by value ranges), graphs, and multi-line widgets (`doc/WIDGETS.md`),
+  so a "3D" preset can be written in JSON without C++.
+* **Structured sidebar** (mlange-42): separators, a compact environment/location block, a compact
+  body graph including eyes and mouth, a compact overmap + compass "Everything at a glance" for
+  travel and driving; merged into the game in 2022.
+* **ZenFS thick sidebar**: built for ultra-wide monitors ("I've been using it all day on my ultra
+  wide monitor and it's lovely", [#71109](https://github.com/CleverRaven/Cataclysm-DDA/pull/71109)).
+  Discourse users name spacebar as easiest to read and structured for larger fonts (search
+  summary, [What are your sidebar options?](https://discourse.cataclysmdda.org/t/what-are-your-sidebar-options/28203)).
+* **Pixel minimap** (2019, [#28152](https://github.com/CleverRaven/Cataclysm-DDA/pull/28152)),
+  which the first-person branch now rotates heading-up.
+* **Tilesets** ([I-am-Erk/CDDA-Tilesets](https://github.com/I-am-Erk/CDDA-Tilesets)): UltiCa
+  (default), Altica, MShockXotto+ (descended from MShock and Xotto), Chibi_Ultica, RetroDays and
+  descendants; **isometric**: Ultica_iso, IsoMSX+, HitButton_iso ("Change the game to an isometric
+  perspective"); **overmap tilesets**: Larwick_Overmap, ASCII_Overmap, SurveyorsMap, PenAndPaper.
+  Isometric sets are the in-ecosystem precedent for "the same sprites seen from another angle". The
+  overmap tilesets are ready-made art for horizon landmarks and POI icons.
+* **3D attempts.** A very old "3D visualizer" drew the map as boxes in an SDL/OpenGL window on a
+  fork's branch, not playable
+  ([Discourse, The Lab](https://discourse.cataclysmdda.org/t/3d-visualizer/2215)); a 2019 plan for a
+  MagicaVoxel tileset that would export to 3D, 2D and iso
+  ([3d tileset plans](https://discourse.cataclysmdda.org/t/3d-tileset-plans/18424)) with no sign it
+  was finished (both from search summaries). This fork's r3d is, as far as these searches found,
+  the only playable 3D view.
+* **Cataclysm: Bright Nights.** BN forked before the JSON widget system (its `data/json` has no
+  `ui/` folder: [cataclysmbn/Cataclysm-BN](https://github.com/cataclysmbn/Cataclysm-BN/tree/main/data/json)),
+  so its sidebar is still the older C++ panel set. It is described as having "a simpler UI" with
+  less micromanagement (search summary of an [RPGHQ thread](https://rpghq.org/forums/viewtopic.php?t=165))
+  and its 0.8.0 notes list small UI items (battery charge colours, armour totals, overmap search
+  history) ([RogueBasin](https://www.roguebasin.com/index.php/Cataclysm:_Bright_Nights)). No Steam
+  reviews of BN were found; BN does not seem to be on Steam.
+
+### 1.5 What players say they want
+
+* Keep everything visible; let me choose; do not hide things by context ("Please allow this to be
+  an option", CoroNaut, [#27367](https://github.com/CleverRaven/Cataclysm-DDA/issues/27367)).
+* Mode presets: exploration vs combat (KucharczykL, same thread); two switchable panel sets
+  (nexusmrsep).
+* **Enemy directions as markers at the edge of the map view instead of a sidebar compass**
+  (Anrock, same thread). This is what the first-person edge alert does; orbit mode lacks it.
+* Icons, pie charts and a paper doll instead of text (NotFuji, same thread); the body graph
+  (`body_graph.json`) is the shipped answer.
+* Visible cause for every interruption; warnings for long-range threats; z-level attack cues
+  ([#42845](https://github.com/CleverRaven/Cataclysm-DDA/issues/42845),
+  [#35378](https://github.com/CleverRaven/Cataclysm-DDA/issues/35378)).
+* See the weather coming, with wind and temperature in the same view
+  ([#27947](https://github.com/CleverRaven/Cataclysm-DDA/pull/27947)).
+* A UI tutorial ([#57571](https://github.com/CleverRaven/Cataclysm-DDA/issues/57571)).
+* Path previews for auto-travel ([#73062](https://github.com/CleverRaven/Cataclysm-DDA/issues/73062)).
+
+---
+
+## Part 2: how 3D games communicate state through the world
+
+### 2.1 A vocabulary
+
+Fagerholt and Lorentzon's thesis *Beyond the HUD* (Chalmers, 2009) sorts interface elements on
+two axes, whether the element exists in the fiction and whether it sits in the 3D space:
+**non-diegetic** (classic HUD: bars, text), **diegetic** (in the world and in the fiction: a watch,
+a map the character holds), **spatial** (in 3D space but not in the fiction: a marker over a door,
+an outline) and **meta** (in the fiction but not in space: blood on the screen, desaturation)
+([thesis PDF](https://publications.lib.chalmers.se/records/fulltext/111921.pdf)). Below, each
+technique is tagged with one of these.
+
+### 2.2 Sky, time of day, weather, wind
+
+| Game | Technique | Tag | Notes and criticism |
+|---|---|---|---|
+| Minecraft | Sun and moon cross the sky; the clock and compass are held items; exact time only in the F3 debug screen | diegetic | Players install clock mods or datapacks to see the time on the HUD ([Clockpass](https://www.modpackindex.com/mod/112209/clockpass), [VexClock](https://modrinth.com/mod/vexclock)): sky alone is not enough for planning |
+| Valheim | No clock; sky and light only. Wind shown as an arrow under the minimap and, when sailing, against the ship icon | diegetic + HUD | Players build sundials and ask for clock mods ([TheGamer](https://www.thegamer.com/valheim-sundial/), [Handy Clock](https://thunderstore.io/c/valheim/p/Creaton/HandyClock/)); players asked for the wind arrow on the full map too ([sailing guide](https://www.gamepressure.com/valheim/sailing/zce2ad)) |
+| The Long Dark | Minimal HUD; weather is the world (blizzards cut visibility, heard indoors); status on a key press | diegetic + on-demand HUD | "presents a lot of gameplay-relevant information through audio cues" ([PC Gamer](https://pcgamer.com/creating-a-killer-wilderness-in-the-long-dark/2), [wiki: Weather](https://thelongdark.fandom.com/wiki/Weather)) |
+| Ghost of Tsushima | Guiding wind: grass, leaves and cloth blow towards the objective; no compass, no minimap | diegetic | Began as "make the whole world move"; mixed reception, some wanted a marker option, unclear in mountains ([Android Central](https://www.androidcentral.com/ghost-tsushima-creative-director-interview), [GDC 2021](https://gdconf.com/news/see-how-ghost-tsushima’s-guiding-wind-came-life-gdc-2021), [GodisaGeek](https://godisageek.com/reviews/ghost-of-tsushima-review)) |
+| Breath of the Wild | Time, weather and temperature on the HUD; Pro HUD hides most of it | HUD, optional | The HUD toggle precedent ([Siliconera](https://www.siliconera.com/breath-wilds-pro-mode-disables-mini-map-temperature-meter-hud/), [Zelda Wiki](https://zeldawiki.wiki/wiki/Game_Screen)) |
+| Project Zomboid | Simulated fronts, morning fog, visible rain/snow, fog masked from enclosed rooms; a wind indicator the devs were not happy with | diegetic + HUD | ([PZ blog](https://projectzomboid.com/blog/?p=6892), [GamingOnLinux](https://gamingonlinux.com/2018/10/project-zomboid-has-a-massive-update-with-a-simulated-weather-and-climate-system)) |
+| Daggerfall Unity | Weather manager, sky, compass; procedural-sky mod popular | diegetic + HUD | ([DFTFU 1.2](https://www.dfworkshop.net/daggerfall-tools-for-unity-1-2/), [Nexus](https://www.nexusmods.com/daggerfallunity/mods/top?offset=-4)) |
+
+Lesson: sky colour and light are good at "roughly what time is it" and bad at "how long until
+dark"; wind is readable only when something moves with it; weather in the world is persuasive
+(players act on it) but every game above keeps a text or icon fallback.
+
+### 2.3 Points of interest and location
+
+| Game | Technique | Tag | Notes and criticism |
+|---|---|---|---|
+| Skyrim / Oblivion | Compass tape with quest markers and discovered-location icons | spatial/HUD | "point A to point B"; players compare it badly with Morrowind's written directions ([GameBanshee](https://gamebanshee.com/kwyc9), [Steam](https://steamcommunity.com/app/22320/discussions/0/630800445044080818)) |
+| Daggerfall Unity | Quest compass showing direction, name and distance to a target door; dungeon automap | spatial/HUD | Players still get lost in dungeons ([dfworkshop](https://www.dfworkshop.net/quest-buildings-and-pcat-condition/), [automap](https://forums.dfworkshop.net/viewtopic.php?p=1469)) |
+| Outward | Paper maps with no "you are here", no minimap; landmarks do the work | diegetic | Praised ("useless map is its best feature") and disliked by confused players ([PC Gamer](https://pcgamer.com/outwards-useless-map-is-its-best-feature), [Steam](https://steamcommunity.com/app/794260/discussions/0/1768133742963231846/?ctp=5)) |
+| Kingdom Come (hardcore) | Removes map markers from the compass | — | "Fifteen hours into Hardcore and I'm ready to get my map markers on the compass back" ([forum](https://forum.kingdomcomerpg.com/t/fifteen-hours-into-hardcore-and-im-ready-to-get-my-map-markers-on-the-compass-back/58956)) |
+| Dread Delusion | No full map, a buyable compass, directions in dialogue and journal | diegetic | Reviewers liked it; also "barren at times" ([RPGamer](https://rpgamer.com/review/dread-delusion-review/), [CGM](https://www.cgmagonline.com/review/dread-delusion-pc-review/)) |
+| Far Cry 2 | Character holds a paper map and GPS; zoom levels are sheets of paper | diegetic | Still needed a HUD for ammo and health ([Wikipedia](https://en.wikipedia.org/wiki/Far_Cry_2), [GDC 2010 slides](https://media.gdcvault.com/gdc2010/GNR/Alex%20Lifschitz_2010.pdf)) |
+| Grimrock | Automap on by default; "old-school mode" turns it off | HUD | "At least there's an automap" ([Game Informer](https://gameinformer.com/games/legend_of_grimrock/b/pc/archive/2012/04/04/review)) |
+| Ultima Underworld | Automap with player notes typed anywhere on it; compass in the panel | HUD | "near-miraculous" in 1992 ([Ultima Codex](https://gallery.ultimacodex.com/ultima-underworlds-auto-mapping-feature/), [refcard](https://mocagh.org/origin/uuw-refcard.pdf)) |
+| Ghost of Tsushima | Wind (above); birds and smoke columns lead to points of interest | diegetic | Same sources as above |
+
+Lesson: a compass tape is the accepted middle ground. Removing it is a niche taste; covering it
+in markers is the common complaint. CDDA's overmap notes are already player-written labels, the
+Ultima Underworld model.
+
+### 2.4 Character state
+
+| Game | Technique | Tag | Notes and criticism |
+|---|---|---|---|
+| Project Zomboid | Moodles: icons that appear only when a need or condition is active, stacked at the screen edge, with severity levels | HUD, contextual | Build 42 redraw criticised for style (clash with pixel art, "egg" injury icon, bleeding too understated); devs say it was for UI scaling ([Steam](https://steamcommunity.com/app/108600/discussions/0/595135660380156129), [pzfans](https://pzfans.com/moodle_madness_surviving_project_zomboids_status_secrets/)) |
+| Valheim | Status icons with timers (Wet, Cold, Freezing, Resting, Rested); weather causes them | HUD | ([wiki: Wet](https://valheim.fandom.com/wiki/Wet), [status effects](https://gamever.io/knowledge-base/every-status-effect-in-valheim-with-the-numbers-behind-each-one)) |
+| DayZ | Colour drains with blood loss, heartbeat, shaking, blur; shivering and teeth chattering for cold | meta + audio | Players note "not everyone plays with a HUD"; sources are old mod-era wikis ([wiki: Blood](https://dayz.wiki.gg/wiki/Mod:Blood), [Steam](https://steamcommunity.com/app/221100/discussions/0/591761634944382129)) |
+| Breath of the Wild | Stamina wheel beside the character, shown only when used; temperature gauge; noise meter | HUD near the action | ([Outer Haven](https://www.theouterhaven.net/2016/06/hands-on-with-the-legend-of-zelda-breath-of-the-wild)) |
+| Metro Exodus | Wrist watch: filter time, a light/stealth indicator; Geiger counter | diegetic | ([Analog Stick](https://www.analogstickgaming.com/xbox-one-reviews/2019/2/16/metro-exodus), [Digital Trends](https://qa2.www.digitaltrends.com/gaming/metro-exodus-beginners-guide-to-surviving)) |
+| Cruelty Squad | Health as a pulsing coloured blob, deliberately unpleasant | HUD as art | "very unintuitive UI that might be uncomfortable to use but it works" ([VOICE](https://www.voicemag.uk/review/9524/cruelty-squad-an-audio-visual-nightmare), [Bit-Tech](https://bit-tech.net/reviews/cruelty-squad-review/1)) |
+| Doom-likes (Doom, Hrot, Dusk) | Status bar with a face that bloodies with damage | HUD | ([ZDoom wiki](https://zdoom.org/wiki/Status_bar)); no Hrot or Dusk review could be read from this session |
+| The Long Dark | Meters hidden until asked for; long actions shown as a filling circle | on-demand HUD | ([PC Gamer review](https://pcgamer.com/the-long-dark-review)) |
+
+Lesson: the successful pattern is **contextual icons** (show only when abnormal, escalate by
+colour) plus **a small number of strong meta effects** for the critical states (bleeding out,
+freezing). Art style must match the game (the PZ complaint). Screen effects for everything turn the
+picture into soup and cost readability; keep them for 2-3 states.
+
+### 2.5 Threats
+
+| Game | Technique | Tag | Notes and criticism |
+|---|---|---|---|
+| Metal Gear Solid V | Per-enemy awareness: white (noticed something) and red (spotted), with direction | spatial | ([guide](https://james.gamerguides.com/metal-gear-solid-v-the-phantom-pain/guide/the-basics-6/gameplay-9/stealth-and-combat), [MGI](https://www.metalgearinformer.com/metal-gear-solid-vs-marking-system-is-not-comparable-to-splinter-cells-mark-execute-kojima-productions-says/)) |
+| Fortnite | "Visualize sound effects": coloured arcs around the reticle by direction and category (footsteps, gunfire, chests, vehicles) | HUD/spatial | Default on for all players; vertical direction is hard to read ([Can I Play That](https://caniplaythat.com/?p=14083), [GameSpot](https://www.gamespot.com/articles/how-to-use-visualize-audio-effects-in-fortnite/1100-6498314/)) |
+| Minecraft | Subtitles; mods add direction arcs, damage direction and creeper warnings around the crosshair | HUD | ([EchoSight](https://modrinth.com/mod/echosight), [Accessibility Alerts](https://www.curseforge.com/minecraft/mc-mods/accessibility-alerts), [Subtitles Visualizer](https://www.curseforge.com/minecraft/mc-mods/pepsied-subtitles-visualizer)) |
+| Skyrim | Combat music starts when an enemy targets you | audio | "often the first sign that you have been targeted by an unseen enemy ... conferring an unfair advantage" ([Nexus mod](https://www.nexusmods.com/skyrim/mods/20926)) |
+| Breath of the Wild | Noise meter shows how loud you are | HUD | (above) |
+| Metro | Watch light shows whether you can be seen | diegetic | (above) |
+
+Lesson: direction-of-threat arcs around the centre are now standard, and are an accessibility
+feature, not only a convenience. Music or effects driven by hidden state leak information the
+player should not have; in CDDA, only show what `you.sees()` or the sound system already tells the
+player.
+
+### 2.6 What goes wrong, in short
+
+* Marker-following replaces looking (Skyrim).
+* Removing navigation aids loses most players (Outward split, KCD hardcore, Grimrock old-school is
+  opt-in).
+* Diegetic devices that are slower than a number get worked around (Far Cry 2's HUD fallback,
+  Minecraft and Valheim clock mods).
+* State leaks through presentation (Skyrim music).
+* Restyled icons that clash with the art (PZ moodles).
+* Wind as the only guide fails on steep terrain (Tsushima review).
+* Too many screen effects; motion effects cause nausea (the first-person design already bans
+  head-bob, `R3D_FIRST_PERSON.md` C1).
+
+---
+
+## Part 3: synthesis for this project
+
+### 3.1 What the renderer has and lacks
+
+Has (from `doc/R3D_STATUS.md`, `R3D_FIRST_PERSON.md` and the code on both branches):
+
+* Per-vertex light from the visibility cache; remembered tiles sepia; unseen tiles black and, in
+  first person, depth-writing.
+* Sky colour by time of day, **first person only**: a lerp between a night and a day colour by
+  `sun_moon_light_at() / default_daylight_level()` (`src/r3d.cpp`, background pass). Orbit mode
+  clears to a fixed near-black.
+* Orbit cutaway of walls and roofs.
+* First person: compass strip with N/E/S/W, red hostile ticks, yellow sound ticks; edge alert when
+  an adjacent hostile is out of view; crosshair with a label naming the tile; sound markers as
+  posts on their tile; "Looking: N level(s) up/down"; heading-up pixel minimap (`src/r3d_hud.{h,cpp}`).
+* `r3d::hud_texts()` drawn in the game font by `sdltiles.cpp`.
+
+Lacks:
+
+* **Everything `tilecontext->draw` overlays in 2D**: weather animation (`draw_weather_frame`),
+  scrolling combat text (`draw_sct_frame`), zones (`draw_zones_frame`), and in orbit mode the
+  footstep markers (`draw_footsteps_frame`), because the `drawn_3d` branch skips that call.
+* Weather in 3D (particles, fog, cloud-darkened sky, lightning), wind.
+* Sun and moon in the sky; moon phase.
+* Any HUD in orbit mode (no compass, no off-screen threat pointers).
+* POI pointers: mission target (`avatar::get_active_mission_target`), auto-travel destination
+  (`game::destination_preview`, `Character::omt_path`), overmap notes
+  (`overmapbuffer::get_all_notes`). Not done in first person either (the auto-travel caret is listed
+  as not done).
+* Anything beyond the reality bubble (no horizon, no landmarks).
+* Damage direction, floating damage numbers.
+* Vehicles (first-person F5).
+
+### 3.2 Principles
+
+1. **Redundant, never sole.** Every in-world cue duplicates something the sidebar or log already
+   says (screen readers, [#65709](https://github.com/CleverRaven/Cataclysm-DDA/pull/65709)), and
+   veterans want the full sidebar ([#27367](https://github.com/CleverRaven/Cataclysm-DDA/issues/27367)).
+2. **Only what the character perceives.** Drive cues from the same sources as the text:
+   `you.sees()`, the sound markers, `get_weather()`, the clock/thermometer gating. No music or
+   effect from hidden state (Skyrim lesson).
+3. **Contextual HUD, permanent sidebar.** The overlay on the 3D picture shows a thing only when it
+   is abnormal or changing; the sidebar shows everything all the time.
+4. **The world carries the ambient, the HUD carries the actionable.** Time, weather, light, wind,
+   cold: world. Numbers you act on in a fight (HP per part, stamina, safe mode): HUD.
+5. **Same cue in orbit and first person** where possible, so a player switching with ctrl+F
+   keeps the same vocabulary.
+
+### 3.3 Mapping table
+
+Columns: **Keep** = keep as sidebar/HUD text (unchanged); **Glyph** = icon or bar on the 3D overlay;
+**World** = drawn in the scene; **Drop** = leave off the 3D overlay (still in the sidebar). Orbit and
+first person (FP) noted when they differ.
+
+| Information | CDDA source | Keep | Glyph (3D overlay) | World | Notes |
+|---|---|---|---|---|---|
+| Body part HP | `bp_hp`, `body_graph.json` | yes | small body silhouette, tinted part flashes when hit (FP and orbit) | orbit: red flash on the avatar sprite when hit; FP: red screen-edge flash from the hit's direction | Paper doll is what players asked for ([#27367](https://github.com/CleverRaven/Cataclysm-DDA/issues/27367)) |
+| Bleeding / broken / bitten | `bodypart_status.json` | yes | moodle icon while active | FP: slow desaturation while bleeding badly (DayZ) | One of 2-3 allowed meta effects |
+| Stamina | `stamina` | yes | bar near the crosshair (FP) or under the avatar (orbit) only when below full (BotW wheel) | — | Most-read number in a fight |
+| Mood / morale | `mood_text`, `morale_level` | yes | — | — | Drop from overlay |
+| Focus | `focus` | yes | — | — | Matters in crafting/reading only |
+| Speed | `speed` | yes | — | — | Drop |
+| Moves | `move`, `move_remainder` | yes | — | — | Drop |
+| Move mode | `move_mode_letter` | yes | — | avatar posture (crouch/prone sprite, orbit); FP: lower eye height when crouched/prone | Eye height is already an option in FP |
+| Safe mode | `safe_mode_text` | yes | shield glyph on the compass strip / orbit corner; when it stops you, pulse it and mark the cause on the compass | the cause highlighted in the scene | Answers "why did I stop?" ([#57571](https://github.com/CleverRaven/Cataclysm-DDA/issues/57571)) |
+| Weariness / activity | `weariness_text`, `activity_text` | yes | moodle at "Weary" or worse | — | |
+| Pain | `pain_text` | yes | moodle at "Distracting" or worse | optional faint pulse at "Intense"+ (option, off by default) | |
+| Hunger / thirst / sleepiness | `hunger.json`, `thirst.json`, `sleepiness.json` | yes | moodle only when not normal | sleepiness "Exhausted": slow vignette (option) | PZ moodle model |
+| Body temperature | `body_temp.json`, `bp_warmth` | yes | moodle (cold/hot) | breath vapour puffs from creatures and the avatar in cold air; FP: frost at the screen corners at "Freezing" | |
+| Wetness | `bp_wetness` | yes | moodle | wet sheen on the avatar (orbit) | |
+| Air temperature | `env_temp_text` (needs thermometer) | yes | — | snow cover, frost, heat shimmer by weather type | Keep the thermometer gating for the number |
+| Weather | `weather_text`, `weather_type.json` | yes | — | rain/snow/portal-storm particles, fog distance, sky darkened by cloud, lightning flash, ground darkened when wet | Biggest missing piece |
+| Wind | `wind_text`, `weather_manager::windspeed/winddirection` | yes | FP: wind arrow on the compass strip (Valheim) | particles drift with the wind; trees and grass lean | Tsushima: wind is readable only when things move |
+| Moon | `moon.json` | yes | — | FP: moon disc in the sky with its phase; nights brighter at full moon (light already does this) | |
+| Date / time | `date_text`, `time_text` | yes | — | sky colour (FP has it; add to orbit as clear colour); sun and moon position (`sundial_text` already computes it) | Sky tells "roughly", sidebar tells exact |
+| Place | `place_text`, `overmap_loc_text` | yes | toast "Entering: <place>" on `avatar_enters_omt` | signs, horizon landmarks | |
+| Lighting | `lighting_desc` | yes | — | the picture is the lighting | Drop from overlay |
+| Hostile compass | `compass_text`, `compass_legend_text` | yes | FP: compass strip (done); orbit: arrows at the window edge pointing at off-screen hostiles (Anrock's idea) | creatures themselves | |
+| Heard sounds | sound markers (`sounds::get_footstep_markers`) | log | compass ticks (FP done; add orbit) | posts on their tile (FP done; add orbit) | Fortnite/Minecraft accessibility model |
+| Own noise | `sound` var | yes | small noise meter (BotW) | ring on the floor around the avatar sized by noise (orbit) | |
+| Messages | log | yes | — | floating damage text and "miss" over the target (port `draw_sct_frame`) | Moves the combat half of the log into the world |
+| Overmap / destination | overmap, `omt_path`, missions, notes | yes | carets on the compass strip: mission target, travel destination, nearest notes | path ribbon on the ground for auto-travel; landmarks beyond the bubble | [#73062](https://github.com/CleverRaven/Cataclysm-DDA/issues/73062) path overlays |
+| Z-level threats | `you.sees()` across levels | log | compass tick with up/down mark | attacker drawn above/below (orbit shows it; FP needs the tilt) | [#42845](https://github.com/CleverRaven/Cataclysm-DDA/issues/42845) |
+| Turret / ranged warnings | monster special attacks | log | red tick | laser line / red dot on the avatar when targeted | [#35378](https://github.com/CleverRaven/Cataclysm-DDA/issues/35378) |
+| Vehicle azimuth / cruise / fuel | `veh_*_text` | yes | small dashboard when driving | the vehicle (first-person F5) | |
+| Radiation, power, mana, oxygen | badges and numbers | yes | moodle when abnormal (low oxygen, high rads) | — | |
+| Wielded item | `wielding_text` | yes | — | FP: optional held-item sprite at the bottom of the view (later) | |
+
+### 3.4 Orbit view: recommendations
+
+* **Restore parity with 2D first**: weather animation, SCT and footstep markers (they work in 2D
+  tiles today; in 3D they vanish).
+* **Sky as the clear colour in orbit too**, using the same lerp as first person. It is one line of
+  logic moved out of `if( fp )` and immediately shows time of day around the edges of the map.
+* **Weather particles** in the scene (camera-relative volume of billboards, falling, drifting with
+  the wind; snow slower), plus distance fog by weather (`weather_type` already has a sight
+  penalty) and a cloud-darkened sky. The tileset's `weather_rain_drop` / `weather_snowflake`
+  sprites can be the particle sprites, so every tileset works.
+* **Off-screen hostile arrows** at the edge of the terrain window, reusing the bearing maths in
+  `r3d_hud.cpp`.
+* **A floor ring for player noise** and footstep posts for heard sounds.
+* **POI ribbon** on the ground for auto-travel and look-mode paths (`destination_preview`).
+
+### 3.5 First person: recommendations
+
+* Keep the compass strip as the one place for direction: add **wind arrow**, **mission target**,
+  **travel destination**, **overmap notes within N tiles**, and up/down marks on hostile ticks.
+* **Sun and moon discs** in the sky (position from the same calculation as `sundial_text`; phase
+  from `get_moon_phase`), **stars** on clear nights, **cloud cover** darkening the gradient.
+* **Weather particles and fog** (shared with orbit).
+* **Hit direction**: a red arc at the screen edge towards the attacker, from `character_takes_damage`
+  on the event bus (`src/event.h`), lasting one redraw cycle; extends the existing edge alert.
+* **Contextual moodle row** under the compass strip (icons for needs, temperature, pain, bleeding,
+  safe mode), drawn from the same widget clauses as the sidebar so thresholds stay in one place.
+* **Floating damage text** over billboards.
+* **Horizon landmarks** (later): beyond the reality bubble, draw overmap tiles of known places as
+  flat impostors at their bearing, using an overmap tileset's sprites; smoke columns over known
+  fires; lit windows at night in seen towns.
+* Keep all of it off by option where it is an effect (vignettes, frost, pulses), on by default
+  where it is information (compass marks, weather).
+
+### 3.6 Ten changes worth doing first
+
+Ordered by value for effort. Effort: S = a day or two, M = about a week, L = several weeks.
+
+| # | Change | Why | Effort | Code area |
+|---|---|---|---|---|
+| 1 | **Weather in 3D**: rain/snow/portal-storm particles using the tileset's weather sprites, drifting with the wind; fog distance by weather; sky darkened by cloud | Biggest gap; the 3D view currently shows no weather at all, the 2D one does | M | `src/r3d.cpp`, `src/r3d_entities.cpp` (particle billboards), read-only from `src/weather.cpp` / `weather.h` (`get_weather()`, `windspeed`, `winddirection`, `weather_type::tiles_animation`) |
+| 2 | **Put back the 2D overlays the 3D path skips**: scrolling combat text, footstep markers in orbit, zone highlights | Parity; SCT moves combat out of the log | M | `src/sdltiles.cpp` (`drawn_3d` branch), `src/cata_tiles.cpp` (`draw_sct_frame`, `draw_footsteps_frame`), `src/r3d.cpp` (project tile to screen) |
+| 3 | **Sky in orbit, sun/moon/stars in first person** | Time of day at a glance in both modes; reuses existing maths | S (orbit) + M (discs) | `src/r3d.cpp` background pass; sun position as in `widget.cpp` `sundial_text`; `calendar.cpp` moon phase |
+| 4 | **Orbit HUD**: off-screen hostile and sound arrows at the window edge | Asked for in #27367; FP has it, orbit has nothing | S-M | `src/r3d_hud.{h,cpp}` (bearings exist), `src/r3d.cpp` hud texts |
+| 5 | **Compass strip carets**: wind arrow, mission target, auto-travel destination, overmap notes, up/down marks on threat ticks | Joins overmap and local map; z-level threats (#42845) | M | `src/r3d_hud.cpp`, `src/r3d.cpp`; data from `avatar::get_active_mission_target`, `Character::omt_path`, `overmapbuffer::get_all_notes` (`src/overmapbuffer.h`), `src/overmap_ui.cpp` for note symbols |
+| 6 | **A 3D sidebar preset** (`sidebar-r3d.json`): drops lighting, and moves weather/wind/moon/time into one compact line; keeps HP, stamina, needs, safe mode, log, minimap; frees rows for the log | Cheapest way to give the 3D view more room without hiding anything | S | `data/json/ui/` only: a new `"style": "sidebar"` widget reusing existing widgets; `src/panels.cpp` `initialize_default_panel_layouts` already adds a layout for every sidebar-style widget |
+| 7 | **Contextual moodle row** on the 3D overlay, driven by widget clauses (show only when the clause is not the "normal" one) | PZ / BotW pattern; status without reading the sidebar | M | `src/widget.cpp` (expose a "current clause severity" for a widget), `src/r3d_hud.cpp` / `src/r3d.cpp` (draw), new small JSON list of which widgets become moodles in `data/json/ui/` |
+| 8 | **Hit direction and damage flash** (edge arc in FP, sprite flash in orbit) | Direction of the attacker is the most-asked threat cue in 3D games | S-M | `src/r3d_hud.cpp`, subscribe to `event_type::character_takes_damage` (`src/event.h`, `src/event_bus.h`) |
+| 9 | **"Entering <place>" toast and travel ribbon**: on `avatar_enters_omt` show the place name over the view for a few seconds; draw `destination_preview` as a ground ribbon | Sense of place; auto-travel friction (#73062) | S | `src/r3d.cpp`, `src/game.h` (`destination_preview`), event bus |
+| 10 | **Horizon landmarks**: known overmap specials beyond the bubble drawn as distant impostors from an overmap tileset; smoke over known fires | Finding POIs; Outward/Tsushima lesson that landmarks navigate | L | `src/r3d_mesh.cpp` or a new `src/r3d_horizon.cpp`, `src/overmapbuffer.h` (seen/explored tiles), `src/overmap_ui.cpp` (symbols) |
+
+Also worth doing later: breath vapour and posture (S each, `src/r3d_entities.cpp`); laser line
+from targeting turrets (S once the targeting state is exposed); held-item sprite in first person
+(M); a "Look at the sky" view that renders the weather map as the actual sky overhead (M,
+`src/overmap_ui.cpp` + `src/r3d.cpp`).
+
+---
+
+## Open questions for the users
+
+1. **How much should go into the world vs stay text?** Is the goal "fewer glances at the sidebar"
+   or "a sidebar you can switch off"? The second needs much more (HP, needs, log), and goes against
+   the accessibility point.
+2. **Effects: yes or no?** Screen-edge frost, desaturation when bleeding, vignette when exhausted:
+   on by default, off by default, or not at all? (Motion sickness is already handled; these are
+   about readability and taste.)
+3. **Markers or landmarks?** Should the compass show the mission target and travel destination
+   (Skyrim/Daggerfall style), or should finding places stay a map-reading task (Outward style)? A
+   middle path is "only things you put there yourself": notes and the auto-travel destination.
+4. **Weather strength.** Should rain and fog actually make the 3D picture harder to read (honest to
+   the rules: weather already reduces sight), or stay light so the picture stays readable?
+5. **Sound.** CDDA has soundpacks but no positional audio. Is visual sound (markers, compass ticks,
+   noise ring) enough, or is positional audio wanted later?
+6. **Which sidebar do you play with now?** A 3D preset should start from the one you like. Do you
+   want a wider log in exchange for dropping lighting/moon/focus/moves from the sidebar?
+7. **Orbit vs first person priority.** Which mode do you expect to play in most? Several items help
+   both; items 4 and 8 differ.
+8. **Tileset.** Which tileset do you use? Weather particles and moodle icons should come from it
+   (or be drawn to match it, the PZ lesson about clashing art).
+9. **Player opinion we could not read.** Reddit, Steam reviews, the Discourse forum and YouTube
+   could not be opened from this session. If you have threads or videos you agree with, point at
+   them and this note can be extended.
+
+---
+
+## Sources
+
+Read directly (GitHub, repo):
+
+* CleverRaven/Cataclysm-DDA issues and PRs: [#2633](https://github.com/CleverRaven/Cataclysm-DDA/issues/2633),
+  [#4635](https://github.com/CleverRaven/Cataclysm-DDA/issues/4635),
+  [#8300](https://github.com/CleverRaven/Cataclysm-DDA/issues/8300),
+  [#10637](https://github.com/CleverRaven/Cataclysm-DDA/issues/10637),
+  [#27367](https://github.com/CleverRaven/Cataclysm-DDA/issues/27367),
+  [#27439](https://github.com/CleverRaven/Cataclysm-DDA/pull/27439),
+  [#27743](https://github.com/CleverRaven/Cataclysm-DDA/pull/27743),
+  [#27947](https://github.com/CleverRaven/Cataclysm-DDA/pull/27947),
+  [#28152](https://github.com/CleverRaven/Cataclysm-DDA/pull/28152),
+  [#28215](https://github.com/CleverRaven/Cataclysm-DDA/issues/28215),
+  [#28672](https://github.com/CleverRaven/Cataclysm-DDA/issues/28672),
+  [#34621](https://github.com/CleverRaven/Cataclysm-DDA/issues/34621),
+  [#35378](https://github.com/CleverRaven/Cataclysm-DDA/issues/35378),
+  [#42845](https://github.com/CleverRaven/Cataclysm-DDA/issues/42845),
+  [#51438](https://github.com/CleverRaven/Cataclysm-DDA/pull/51438),
+  [#57571](https://github.com/CleverRaven/Cataclysm-DDA/issues/57571),
+  [#58113](https://github.com/CleverRaven/Cataclysm-DDA/pull/58113),
+  [#63502](https://github.com/CleverRaven/Cataclysm-DDA/pull/63502),
+  [#65709](https://github.com/CleverRaven/Cataclysm-DDA/pull/65709),
+  [#71109](https://github.com/CleverRaven/Cataclysm-DDA/pull/71109),
+  [#73062](https://github.com/CleverRaven/Cataclysm-DDA/issues/73062),
+  [#73134](https://github.com/CleverRaven/Cataclysm-DDA/pull/73134),
+  [#73456](https://github.com/CleverRaven/Cataclysm-DDA/pull/73456),
+  [#78465](https://github.com/CleverRaven/Cataclysm-DDA/issues/78465),
+  [#78557](https://github.com/CleverRaven/Cataclysm-DDA/pull/78557);
+  UI-labelled list sorted by comments:
+  [search](https://github.com/CleverRaven/Cataclysm-DDA/issues?q=sidebar+label%3A%22Info+%2F+User+Interface%22+sort%3Acomments-desc).
+* [mlange-42/cdda-structured-sidebar](https://github.com/mlange-42/cdda-structured-sidebar);
+  [I-am-Erk/CDDA-Tilesets](https://github.com/I-am-Erk/CDDA-Tilesets);
+  [cataclysmbn/Cataclysm-BN data/json](https://github.com/cataclysmbn/Cataclysm-BN/tree/main/data/json).
+* This repo: `doc/WIDGETS.md`, `doc/R3D_STATUS.md`, `data/json/ui/*.json`,
+  `data/json/weather_type.json`, `data/raw/keybindings.json`, `src/panels.cpp`, `src/widget.cpp`,
+  `src/weather.h`, `src/event.h`, `src/game.h`, `src/avatar.h`, `src/character.h`,
+  `src/overmapbuffer.h`, `src/cata_tiles.h`; on `origin/feature/r3d-first-person`:
+  `doc/R3D_FIRST_PERSON.md`, `src/r3d.cpp`, `src/r3d_hud.h`, `src/sdltiles.cpp`.
+
+Known through search-engine summaries only (pages could not be opened from this session):
+
+* CDDA community: [Discourse: What are your sidebar options?](https://discourse.cataclysmdda.org/t/what-are-your-sidebar-options/28203),
+  [Ya'll messed up the interface](https://discourse.cataclysmdda.org/t/yall-messed-up-the-interface/19310),
+  [How hard was the learning curve](https://discourse.cataclysmdda.org/t/how-hard-was-the-learning-curve-for-you-guys/15698),
+  [Good font for overmap?](https://discourse.cataclysmdda.org/t/good-font-for-overmap/15215),
+  [Overmaps, GPS, Maps, Sight](https://discourse.cataclysmdda.org/t/overmaps-gps-maps-sight-and-positioning/12940),
+  [3D visualizer](https://discourse.cataclysmdda.org/t/3d-visualizer/2215),
+  [3d tileset plans](https://discourse.cataclysmdda.org/t/3d-tileset-plans/18424),
+  [The tutorial is not at all user-friendly](https://discourse.cataclysmdda.org/t/the-tutorial-is-not-at-all-user-friendly-for-newbies/4294);
+  [Steam store page](https://store.steampowered.com/app/2330750/Cataclysm_Dark_Days_Ahead/);
+  [Steam tutorial guide](https://steamcommunity.com/sharedfiles/filedetails/?id=2955072583);
+  [TouchArcade review (2016)](https://toucharcade.com/2016/01/15/cataclysm-dark-days-ahead-review/);
+  [GamingOnLinux (2019)](https://www.gamingonlinux.com/2019/03/cataclysm-dark-days-ahead-a-free-and-open-source-turn-based-survival-game-had-a-huge-update/page=1/);
+  [RogueBasin: Bright Nights](https://www.roguebasin.com/index.php/Cataclysm:_Bright_Nights);
+  [RPGHQ: Bright Nights](https://rpghq.org/forums/viewtopic.php?t=165).
+* Design framework: [Fagerholt & Lorentzon, Beyond the HUD (2009)](https://publications.lib.chalmers.se/records/fulltext/111921.pdf).
+* Games: all links in the Part 2 tables (Minecraft, Valheim, The Long Dark, Ghost of Tsushima,
+  Breath of the Wild, Project Zomboid, Daggerfall Unity, Skyrim/Morrowind, Outward, Kingdom Come,
+  Dread Delusion, Far Cry 2, Grimrock, Ultima Underworld, DayZ, Metro Exodus, Cruelty Squad,
+  ZDoom, Metal Gear Solid V, Fortnite, Minecraft accessibility mods, Kenshi below).
+* Kenshi (not used in the tables; UI judged "dated but useful" by critics and odd-coloured by
+  modders): [OpenCritic](https://opencritic.com/game/7007/-),
+  [Steam workshop thread](https://steamcommunity.com/workshop/filedetails/discussion/2804082382/3280321473020126088).
+* Caves of Qud's modern UI (accessible, fully mouse- and gamepad-driven, classic text UI kept as an
+  option): [Fullcleared](https://fullcleared.com/?p=16032),
+  [1.0 devlog](https://freeholdgames.itch.io/cavesofqud/devlog/845582/caves-of-qud-10-out-now).
+* Dwarf Fortress Adventure mode (Steam, January 2025, with a tutorial and improved UI):
+  [mein-mmo](https://mein-mmo.de/dwarf-fortress-steam-adventure-mode-rollenspiel-statt-simulation/),
+  [Bay 12](https://bay12games.com/dwarves), [Steam Deck HQ](https://steamdeckhq.com/news/dwarf-fortress-adventure-mode-released/).
+
+Gaps: no usable source was found for UnReal World's presentation, Arx Fatalis, Dusk or Hrot, so
+they are not used; YouTube reviews of CDDA were not reachable.

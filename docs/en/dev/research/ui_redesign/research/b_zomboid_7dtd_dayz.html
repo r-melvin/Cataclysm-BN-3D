@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI research: Project Zomboid, 7 Days to Die, DayZ</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="ui-research-project-zomboid-7-days-to-die-dayz">UI research: Project Zomboid, 7 Days to Die, DayZ</h1>
+<p>Research notes for the UI redesign. Scope: inventory and loot panels, crafting, status icons (moodles), health, radial/context menus, controller support, Build 42 changes (Zomboid); crafting grid, toolbelt/hotbar, inventory, map, challenges/journal (7DTD); inventory grid, vicinity panel, hands slot, hold-to-interact (DayZ).</p>
+<p>Evidence grades used below:</p>
+<ul>
+<li><strong>[fetched]</strong>: text was returned by WebFetch from the page at the given URL. WebFetch is a small model summarising the page, so wording is the tool's rendering and should be checked against the live page before reuse in anything public.
+</li>
+<li><strong>[snippet]</strong>: text appeared in WebSearch result text only. The page itself was not opened.
+</li>
+<li><strong>[UNVERIFIED]</strong>: stated from memory or inferred; no source opened.
+</li></ul>
+<p>Reddit (r/projectzomboid, r/7daystodie, r/dayz) search returned no Reddit threads in this session, so no Reddit quotes are included. Steam Community and feedback.bistudio.com pages returned HTTP 403 to some fetches; those are marked [snippet].</p>
+<hr>
+<h2 id="1-project-zomboid">1. Project Zomboid</h2>
+<h3 id="what-players-praise">What players praise</h3>
+<ul>
+<li>Moodles read as status icons that work like instruments. Guide framing: "Treat moodles like dashboard lights: fix endurance, tiredness, pain, and panic before you pick a fight." (pzfans, "Project Zomboid B42 Moodles: Read Them Like Dashboard Lights", <a href="https://pzfans.com/ProjectZomboidB42Moodles/">https://pzfans.com/ProjectZomboidB42Moodles/</a> [fetched]; the fetch returned no date.)
+</li>
+<li>Hover tooltips are the recovery path for unknown icons. "Hover any icon you do not recognize." (same page [fetched]).
+</li>
+<li>Controller menu navigation is fast for some players. Retro, 13 Jan 2023: "Menu navigation is super quick on controller." (Steam discussion 3421060080216979302, <a href="https://steamcommunity.com/app/108600/discussions/0/3421060080216979302">https://steamcommunity.com/app/108600/discussions/0/3421060080216979302</a> [fetched].)
+</li>
+<li>Radial menus are liked on controller for vehicles (snippet paraphrase, not quoted; source pzfans/Steam controller guides [snippet]).
+</li></ul>
+<h3 id="what-players-complain-about">What players complain about</h3>
+<ul>
+<li>Controller play on the base game is weak for some. Donni Kubbitz, 4 Jun 2022: "M/K is like ultra simple zoom but with a controller it's extremely clunky and you also get no hot bar." (<a href="https://steamcommunity.com/app/108600/discussions/0/3421060080216979302">https://steamcommunity.com/app/108600/discussions/0/3421060080216979302</a> [fetched].)
+</li>
+<li>Radial menu additions are not controller-friendly. CursedRedEye, 12 Jan 2023: "there's some new stuff on the radial menu that isn't very controller friendly" (same thread [fetched]).
+</li>
+<li>Keyboard-to-radial dependency: a Dec 2021 thread records a player saying "Any other radial menus you may have seen are tied to the controller I think." (Death, 29 Dec 2021; Steam discussion 3198117849820250364, <a href="https://steamcommunity.com/app/108600/discussions/0/3198117849820250364">https://steamcommunity.com/app/108600/discussions/0/3198117849820250364</a> [fetched]). The same thread's reply: "You can bring up the radial menu with V." (same [fetched]).
+</li>
+<li>Interaction gap on controller: a 2021 workshop thread reports a controller user could open the interaction menu but could not interact with others. Developer reply: "You can link a number of actions to keyboard commands in the settings." (Workshop discussion 2521330369/3051737712187240900, <a href="https://steamcommunity.com/workshop/filedetails/discussion/2521330369/3051737712187240900">https://steamcommunity.com/workshop/filedetails/discussion/2521330369/3051737712187240900</a> [snippet]; author and date not visible in the snippet.)
+</li>
+<li>Build 42 moodle redesign (Dec 2024): DurkBot1, 24 Dec 2024: "I hope these are placeholders, I really do." (Steam discussion 595136186401512139, <a href="https://steamcommunity.com/app/108600/discussions/0/595136186401512139/?l=japanese">https://steamcommunity.com/app/108600/discussions/0/595136186401512139/?l=japanese</a> [fetched].)
+</li>
+<li>Silamon, 24 Dec 2024, giving the developer-side reason for the change: "The old ones could not be scaled well with UI apparently. So that's why they were replaced." (same thread [fetched].) This is a forum reply, not a developer statement; treat it as a player's account.
+</li>
+<li>Build 42 UI size and window stickiness: snippet from a Steam Build 42 thread: "not only is there fog everywhere, but the UI is MASSIVE and takes up most of my screen." (Steam discussion; handle/date not in snippet, <a href="https://steamcommunity.com/app/108600/discussions/0/510695968495110078">https://steamcommunity.com/app/108600/discussions/0/510695968495110078</a> [snippet] - the exact thread ID was taken from the search result list and not re-opened.)
+</li>
+<li>Build 42 general sentiment: a locked Steam thread (17 Dec 2024, poster "straybot") calls Build 42 disappointing and objects to "the moodles, combat, and UI changes" (<a href="https://steamcommunity.com/app/108600/discussions/0/595135660380137894">https://steamcommunity.com/app/108600/discussions/0/595135660380137894</a> [fetched - summary, not verbatim quote]).
+</li>
+<li>Inventory Tetris/Equipment UI mods exist on the Workshop, which suggests the base grid/paper-doll is not what some players want. Inferred from the mod pages existing; not a player quote. Sources: <a href="https://steamcommunity.com/sharedfiles/filedetails/changelog/2982070344">https://steamcommunity.com/sharedfiles/filedetails/changelog/2982070344</a> [snippet], <a href="https://steamcommunity.com/sharedfiles/filedetails/changelog/2950902979">https://steamcommunity.com/sharedfiles/filedetails/changelog/2950902979</a> [snippet].
+</li>
+<li>Sticky loot/inventory windows: pzfans, "Help! My Project Zomboid Inventory Won't Close (Build 42's Sticky Loot Window)": "When pinned, the panel stays expanded even after the cursor leaves." (<a href="https://pzfans.com/help_my_project_zomboid_inventory_wont_close_build_42s_sticky_loot_window/">https://pzfans.com/help_my_project_zomboid_inventory_wont_close_build_42s_sticky_loot_window/</a> [fetched]; no date visible.) Fix is per-window: "Click the pin / collapse control in the top-right of that specific panel (inventory and loot are separate)." (same [fetched].) Reset is a layout file: "To reset: quit the game, back up the file, delete it, then relaunch so defaults regenerate." (same [fetched]; the page says the file is <code>layout.ini</code> and deleting it resets all windows.)
+</li>
+<li>Right-click recipe hints lag in Build 42 (snippet from a Workshop comment on an inventory mod: "in their new rendering system, the right-click hint can appear after a second and highlight several dozen recipes"; Steam Workshop comment page <a href="https://steamcommunity.com/sharedfiles/filedetails/comments/3408629510">https://steamcommunity.com/sharedfiles/filedetails/comments/3408629510</a> from search results [snippet]; the comment's author and date were not visible and the snippet may not come from that exact page).
+</li>
+<li>Right-click/left-click breakage reported with a mod ("it gives an error any time you try to left click directly on a container.") [snippet, Workshop comments; not opened].
+</li></ul>
+<h3 id="notable-patterns-mechanical-description">Notable patterns (mechanical description)</h3>
+<ul>
+<li><strong>Pinnable floating windows (inventory, loot)</strong>: each window is a separate panel. A pin keeps it expanded; unpinned, it collapses when the cursor leaves. Pin/collapse is a per-window control in the top-right. Keyboard/mouse: hover and click the pin. Controller: not verified in the sources here. Source: pzfans [fetched].
+</li>
+<li><strong>Moodles as an icon row with hover text</strong>: each status is one icon; hovering shows its name and description. Source: pzfans moodle guide [fetched].
+</li>
+<li><strong>Controller radial menu held from a shoulder/menu button</strong>: a hold of the Back/Select button opens a radial menu for weapon switching (pzfans controller guide, snippet: "Hold the Back/Select button to open a radial menu for weapon switching"; <a href="https://pzfans.com/zomboid_controller_survival_taming_the_apocalypse_on_gamepad/">https://pzfans.com/zomboid_controller_survival_taming_the_apocalypse_on_gamepad/</a> [snippet]). Keyboard: V opens the radial per the Dec 2021 thread [fetched].
+</li>
+<li><strong>Controller context menu quick-loot</strong>: one controller guide says the Xbox context-menu button quickly loots the highlighted item and holding it opens a radial of actions (pzfans controller hacks guide, [snippet]; <a href="https://pzfans.com/project_zomboid_controller_hacks_couch_survival_101_build_42">https://pzfans.com/project_zomboid_controller_hacks_couch_survival_101_build_42</a> [snippet]). Not verified against the live game.
+</li>
+<li><strong>Two side-by-side panels at the bottom for controller inventory</strong>: snippet from a search summary, not opened [snippet, low confidence].
+</li></ul>
+<h3 id="gaps">Gaps</h3>
+<ul>
+<li>No Thursdoids developer-blog or official UI post was found. Searches returned only Workshop changelogs for third-party mods. <strong>Could not verify.</strong>
+</li>
+<li>No Reddit threads found.
+</li></ul>
+<hr>
+<h2 id="2-7-days-to-die">2. 7 Days to Die</h2>
+<h3 id="what-players-praise">What players praise</h3>
+<ul>
+<li>No clear praise for the crafting, toolbelt or map UI was found in this session. The search for workbench praise returned mostly defences of station-based crafting as a design choice (Steam thread snippets, [snippet]). Example: one commenter argued the station-bound approach "makes it inaccessible to other players while you are using it, which prevents others from taking your items" (paraphrase in snippet, not verbatim; treat as summary).
+</li>
+<li>The Crafting Window wiki pages describe layout without reception (7daystodie.wiki.gg/wiki/Crafting_Window [snippet]).
+</li></ul>
+<h3 id="what-players-complain-about">What players complain about</h3>
+<ul>
+<li>Generic UI complaint: Gekko, Steam discussion 4355621052306043146: "why is the Ui so awful?" (19 Oct, year not visible in fetch; <a href="https://steamcommunity.com/app/251570/discussions/0/4355621052306043146">https://steamcommunity.com/app/251570/discussions/0/4355621052306043146</a> [fetched].) Low detail; no further context.
+</li>
+<li>Crafting tedium after Alpha 21 (snippet, Steam forum poster with 500+ hours): "this latest update is a slap in the face! More tedious crafting, more handicaps, and less fun!" (Steam forum thread found via search; exact URL not captured, so no link given [snippet]; date not visible).
+</li>
+<li>Workbench XP tied to having the window open: a Steam thread (snippet) complains you get no experience for workbench-crafted items unless you leave the workbench UI open. Paraphrase, not verbatim [snippet].
+</li>
+<li>Queue bug (2024): tutorial challenge prompts repeatedly override the crafting menu while items craft (Steam thread; [snippet]; no quote).
+</li>
+<li>Toolbelt capped at 8 slots; a 2016 Steam thread notes items in extra slots are deleted on exit without a server mod (paraphrase in snippet [snippet]; date may predate Alpha 21 and may be out of date).
+</li>
+<li>Crafting/trader complaint (adjacent, not UI): Gaming Gideon, 12 Jul 2023 (updated 16 Jan 2025): "A common complaint I've seen is that the ability to loot or buy items from a trader breaks the system altogether." (<a href="https://gideonsgaming.com/erasing-your-7-days-to-die-complaints-with-one-simple-setting/">https://gideonsgaming.com/erasing-your-7-days-to-die-complaints-with-one-simple-setting/</a> [fetched]; the article otherwise has no UI or toolbelt complaints.)
+</li>
+<li>1.2 thread, poster 4L-Slippy, 9 Jan 2025, "1.2 is a mess" (59 comments; <a href="https://steamcommunity.com/app/251570/discussions/0/604144884892363994">https://steamcommunity.com/app/251570/discussions/0/604144884892363994</a> [fetched - summary]). Complaints are about removed armor/clothing slots, removed jars, and magazine-based leveling; the thread is about systems more than UI. Notably the fetch output contained embedded instructions addressed to the reader; they were ignored.
+</li>
+<li>Challenges replaced the tutorial/journal: the 1.0 release notes say the old tutorial quest and journal were replaced by a challenge system with 120+ challenges (BisectHosting release notes, <a href="https://www.bisecthosting.com/ru-ru/blog/7-days-to-die-1-0-release-notes-content-features-date-patch-notes">https://www.bisecthosting.com/ru-ru/blog/7-days-to-die-1-0-release-notes-content-features-date-patch-notes</a> [snippet]). Reception of that change: <strong>not found</strong>.
+</li></ul>
+<h3 id="notable-patterns-mechanical-description">Notable patterns (mechanical description)</h3>
+<ul>
+<li><strong>Crafting window with station-bound queue</strong>: crafting happens at a station (workbench, forge, campfire) and items continue while the player is away; the station can hold outputs. Source: 7DTD wiki and Steam snippets [snippet]; behaviour not verified in game.
+</li>
+<li><strong>Workbench output slots as a wait lock</strong>: a commenter describes putting wood in output slots to force a craft to wait for the player's return (Steam snippet [snippet]). This is a player workaround, not a designed feature; flagged as a pattern to avoid, not copy.
+</li>
+<li><strong>Challenge list instead of journal</strong>: the 1.0 challenge system replaces a tutorial quest with a list of tracked goals (release-notes snippet [snippet]). Mechanics of the panel itself: <strong>UNVERIFIED</strong>.
+</li></ul>
+<h3 id="gaps">Gaps</h3>
+<ul>
+<li>No r/7daystodie threads found. No Steam threads about the map or the toolbelt in Alpha 21 were fetched. <strong>Could not verify</strong> map UI and hotbar praise.
+</li></ul>
+<hr>
+<h2 id="3-dayz">3. DayZ</h2>
+<h3 id="what-players-praise">What players praise</h3>
+<ul>
+<li>The vicinity panel is the most usable route for some actions. BI feedback tracker (patch 1.20 bug report): "the vicinity menu the most user friendly way of getting things done" (paraphrase in snippet; <a href="https://feedback.bistudio.com/T106452">https://feedback.bistudio.com/T106452</a> [snippet]; reporter not visible; the tracker page returned 403 to a fetch). Reporter also noted controller players struggled without it.
+</li>
+<li>A console review summary (Xbox One, totalgamingaddicts.com) says the reviewer "feels it adapted well to the Xbox controller" and that "the controls mostly just make sense after a while" (paraphrase in snippet; <a href="https://totalgamingaddicts.com/dayz-xbox-one-review/">https://totalgamingaddicts.com/dayz-xbox-one-review/</a> [snippet]; not opened).
+</li>
+<li>Grabbing from vicinity in the inventory screen can be faster than interacting with the item in the world (TrueAchievements guide, snippet paraphrase; <a href="https://i1.trueachievements.com/game/DayZ/walkthrough/7">https://i1.trueachievements.com/game/DayZ/walkthrough/7</a> [snippet]).
+</li></ul>
+<h3 id="what-players-complain-about">What players complain about</h3>
+<ul>
+<li>Items go to hands instead of the backpack. Steam Dec 2019 thread (<a href="https://steamcommunity.com/app/221100/discussions/0/2659871169516648792">https://steamcommunity.com/app/221100/discussions/0/2659871169516648792</a> [fetched]):
+<ul>
+<li>adamschristopher62, 24 Dec 2019: "buggy atm put stuff in hand first then in inventory left click to drag"
+</li></ul>
+</li>
+<li>Requested fast transfer: xCoDexReDx, 24 Dec 2019: "You should be able to shift+click on an item in the vicinity and it should automatically go to your inventory." (same thread [fetched]).
+</li>
+<li>Answer to the request: Nica, 25 Dec 2019: "Double click. This has been a thing since arma 2" (same thread [fetched]).
+</li>
+<li>Inventory scrolling is tedious. BI feedback tracker (T178787, <a href="https://feedback.bistudio.com/T178787">https://feedback.bistudio.com/T178787</a> [snippet]): the poster argues showing equipment durability and wetness without scrolling to the bottom would help. Exact quote not captured; paraphrase only.
+</li>
+<li>Patch 1.20 regressions: items no longer stack, and combining or repairing from vicinity and hands stopped working (BI tracker, [snippet]; <a href="https://feedback.bistudio.com/T170322">https://feedback.bistudio.com/T170322</a> [snippet]).
+</li>
+<li>Controller learning curve: many buttons change function depending on whether the player holds an item or is walking (TrueAchievements, [snippet]).
+</li></ul>
+<h3 id="notable-patterns-mechanical-description">Notable patterns (mechanical description)</h3>
+<ul>
+<li><strong>Three-zone inventory layout</strong>: Vicinity (nearby items not carried), Hands (the item currently held), Equipment/backpack. Source: TrueAchievements guide [snippet]; DayZ wiki Inventory page [fetched].
+<ul>
+<li>Vicinity: "Only displays items in very close proximity to your current position." (<a href="https://dayz.wiki.gg/wiki/Inventory">https://dayz.wiki.gg/wiki/Inventory</a> [fetched].)
+</li>
+<li>Hands: "Displays the item that the player is currently holding in their hands." (same [fetched].)
+</li></ul>
+</li>
+<li><strong>Design rule recorded by the wiki</strong>: "the goal is to maintain as little of an interface layer as possible" (same page [fetched]). Relevant to how much to add over the world.
+</li>
+<li><strong>Double-click to move an item from vicinity</strong>: the player-side convention cited in the Steam thread (Nica, 2019 [fetched]). Shift-click was the requested alternative [fetched].
+</li>
+<li><strong>Grid inventory with bag-specific shape</strong>: the wiki says clothing slots "can be arranged in many different ways" depending on pockets, e.g. a bag can be 6 rows x 2 columns or 4 rows x 3 columns (<a href="https://dayz.wiki.gg/wiki/Inventory">https://dayz.wiki.gg/wiki/Inventory</a> [fetched]).
+</li>
+<li><strong>Quick-transfer by double-click into inventory when space permits</strong>: the wiki says double-clicking an item "will add it to your inventory if there is enough space available" (<a href="https://dayz.wiki.gg/wiki/Inventory">https://dayz.wiki.gg/wiki/Inventory</a> [fetched]).
+</li>
+<li><strong>Community "Inventory Tetris" and DayZ-style vicinity column mods</strong> exist (Workshop/CurseForge/Modrinth snippets [snippet]); they show the layout is portable but do not establish player preference.
+</li></ul>
+<h3 id="gaps">Gaps</h3>
+<ul>
+<li>No r/dayz threads found. No BI forum page was fully readable (403). The "hold-to-interact" behaviour on 1.0 console was not found; <strong>Could not verify</strong>.
+</li>
+<li>Praise for the 1.0 controller interaction model is not sourced.
+</li></ul>
+<hr>
+<h2 id="patterns-worth-adopting">Patterns worth adopting</h2>
+<p>Ordered by how well the source supports them. These are descriptions of mechanics, not endorsements of game-wide design.</p>
+<ol>
+<li><strong>Per-window pin/collapse for floating panels (PZ)</strong>. A pinned panel stays open; an unpinned one collapses on cursor exit. Each panel has its own pin, so inventory and loot pin separately. Reset by deleting a layout file. [fetched, pzfans]
+</li>
+<li><strong>Status icon row with hover text (PZ moodles)</strong>. One icon per status; hover shows the name and description; treat as a read-at-a-glance indicator. [fetched, pzfans]
+</li>
+<li><strong>Radial menu on a held button (PZ)</strong>. Keyboard: a single key (V cited). Controller: hold Back/Select. Use for quick weapon/tool selection rather than the full inventory. [fetched (V), snippet (Back/Select)]
+</li>
+<li><strong>Three-zone inventory: Vicinity / Hands / Backpack (DayZ)</strong>. The Hands zone is an intermediate slot; the sources show it is also the source of the most complained-about behaviour (items landing in hands). If copied, make the destination explicit. [fetched, DayZ wiki and 2019 thread]
+</li>
+<li><strong>Double-click to move a vicinity item into the pack, when space allows (DayZ)</strong>. Requested alternative: shift-click. Both are mouse conventions; no controller equivalent is sourced. [fetched]
+</li>
+<li><strong>Variable grid shape per container (DayZ)</strong>. A bag's grid depends on its pockets; the grid is part of the item. [fetched]
+</li>
+<li><strong>Design rule: as little interface layer as possible (DayZ wiki)</strong>. Useful as a stated principle when adding panels. [fetched]
+</li>
+<li><strong>Station-bound crafting queue (7DTD)</strong>. Crafting continues at a station, and outputs can accumulate. Copy only with the known complaint in mind: XP tied to keeping the window open and crafting tedium. [snippet]
+</li>
+<li><strong>Challenge list in place of a journal (7DTD 1.0)</strong>. A tracked goal list; reception not found. <strong>UNVERIFIED</strong> for mechanics. [snippet]
+</li></ol>
+<p>Avoid, per the sources:</p>
+<ul>
+<li>Relying on hover-only information for controller players (PZ moodles and tooltips are a mouse-first pattern; the sources do not describe a controller equivalent). [inferred]
+</li>
+<li>Radial menus that add items not reachable on controller (PZ "new stuff on the radial menu that isn't very controller friendly" [fetched]).
+</li>
+<li>Silent item routing into hands versus the pack (DayZ [fetched]).
+</li>
+<li>Visual redesigns that do not scale across resolutions (PZ moodle redesign, Silamon's reply [fetched]).
+</li></ul>
+<hr>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li><strong>Project Zomboid Thursdoids UI posts</strong>: no developer blog post on UI was found. Only Workshop changelogs for two third-party mods came up.
+</li>
+<li><strong>Reddit threads</strong> on all three games: none returned by WebSearch in this session.
+</li>
+<li><strong>Steam and BI forum pages</strong> that returned HTTP 403 to WebFetch: the BI feedback tracker (T178787, T170322, T106452) and one Steam discussion (510695968495110078 was only seen in search) are [snippet] only.
+</li>
+<li><strong>Date of several pzfans articles</strong>: not visible in the fetched text.
+</li>
+<li><strong>Build 42 controller inventory layout</strong> (side-by-side bottom panels): snippet only, not opened.
+</li>
+<li><strong>7DTD map UI, toolbelt/hotbar UI, challenges/journal panel</strong>: no player reception found.
+</li>
+<li><strong>DayZ 1.0 hold-to-interact on console</strong>: no source found.
+</li>
+<li><strong>Accessibility reviews</strong> (Game Accessibility Nexus, Can I Play That): searches returned nothing relevant for these three games.
+</li>
+<li><strong>Quote from a locked Steam thread (17 Dec 2024, "straybot")</strong>: only a fetch summary, no verbatim quote. A fetch summary also named a poster as a Klei Entertainment account; the fetch tool's claim is unverified and probably wrong (Project Zomboid is developed by The Indie Stone). Not used.
+</li>
+<li><strong>Ammo unpacking performance (Build 42.20)</strong>: snippet from a Steam report; not a UI issue, not used.
+</li>
+<li><strong>All "[snippet]" quotes</strong>: taken from search-result text, not from opened pages. Re-check before publishing.
+</li></ul>
+<hr>
+<h2 id="quote-count">Quote count</h2>
+<p>Verbatim-style quotes with URL and handle/date, by grade:</p>
+<ul>
+<li>Fetched: 14 (PZ 10, DayZ 4).
+</li>
+<li>Snippet-level: about 6 (PZ 4, 7DTD 2).
+</li>
+<li>Total UI-relevant quotes: about 20. Several are short fragments; the fetch-tool quotes (pzfans, DayZ wiki) are the tool's rendering and should be checked against the live pages.
+</li></ul>
+</main>
+</body>
+</html>

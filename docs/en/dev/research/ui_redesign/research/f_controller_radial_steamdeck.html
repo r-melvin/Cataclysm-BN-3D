@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controller-first UI, radial menus and Steam Deck constraints</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="controller-first-ui-radial-menus-and-steam-deck-constraints">Controller-first UI, radial menus and Steam Deck constraints</h1>
+<p>Research pass, 2026-10-21. Sourcing key:</p>
+<ul>
+<li><strong>VERIFIED</strong>: quote or fact taken from a page fetched in this session. URL given.
+</li>
+<li><strong>SNIPPET</strong>: only seen in search-result text, not fetched. Treat as unverified.
+</li>
+<li><strong>UNVERIFIED</strong>: memory, or a claim whose source could not be opened (403 or not found).
+</li></ul>
+<p>Where a quote came back through the fetch tool as a summary, it is marked "(fetch-extracted)" and the exact wording should be checked before reuse.</p>
+<hr>
+<h2 id="1-radial-and-weapon-wheel-design">1. Radial and weapon wheel design</h2>
+<h3 id="1-1-slot-count">1.1 Slot count</h3>
+<p>No source found that directly compares 8-slot and 12-slot wheels for usability. The evidence that exists:</p>
+<ul>
+<li><strong>VERIFIED</strong> Wikipedia, "Pie menu" (<a href="https://en.wikipedia.org/wiki/Pie_menu">https://en.wikipedia.org/wiki/Pie_menu</a>): "Pie menus work well with keyboard acceleration, particularly four and eight item menus". The same page says the slices are "large in size and near the pointer for fast interaction (see Fitts's law)".
+</li>
+<li><strong>SNIPPET</strong> A CHI 2009 marking-menu submission (found via a search summary, not opened) treats eight items per menu as a practical ceiling for high performance, and calls it too few for Word or Photoshop-scale command sets. Primary paper not checked.
+</li>
+<li><strong>SNIPPET</strong> A 1988 comparison is often cited as finding radial menus faster than linear lists for eight items. Only seen through a secondary blog. Not verified.
+</li>
+<li><strong>SNIPPET</strong> The Long Dark wiki (<a href="https://thelongdark.fandom.com/wiki/Radial_Menu">https://thelongdark.fandom.com/wiki/Radial_Menu</a>) says its wheels "have room for only 8 items at a time", and surplus items are left off the wheel. Real-game example of the cap biting, with a manual "Add to Radial" workaround.
+</li>
+<li><strong>SNIPPET</strong> Dying Light 2 guide (powerpyx) says up to four weapons go on the weapon wheel; holding UP and LEFT open consumables and equipment wheels. Not fetched.
+</li>
+<li><strong>SNIPPET</strong> GTA V forum and GTA BOOM criticism: the wheel fills with every weapon the player has ever picked up. See 1.4.
+</li>
+<li><strong>UNVERIFIED</strong> "Long-distance" 12-slot wheels as a norm are not documented in anything I opened. Do not assume 12 is usable.
+</li></ul>
+<p>Working conclusion (inference, not sourced): 4 and 8 are the counts the literature and shipped games converge on. Above 8 the usual answer is paging, categories, or nesting, not more slices.</p>
+<h3 id="1-2-selection-by-angle-not-hover">1.2 Selection by angle, not hover</h3>
+<ul>
+<li><strong>VERIFIED</strong> Wikipedia, "Pie menu": "selection depends on direction instead of distance". Angle selection is the standard for controller pie menus, because the stick gives direction directly.
+</li>
+<li><strong>SNIPPET</strong> An Unreal Engine radial plugin on Fab (<a href="https://www.fab.com/listings/48347aae-042e-4d8d-908f-268c897537f8">https://www.fab.com/listings/48347aae-042e-4d8d-908f-268c897537f8</a>) advertises separate mouse and gamepad deadzones, stick selection through the right stick, and a GapDeg parameter for segment spacing. Vendor page, not evaluated.
+</li>
+<li><strong>SNIPPET</strong> The same Fab listing describes a "flick and let go" confirm gesture for gamepad. Only in a search summary of a different radial plugin listing; treat as unverified.
+</li></ul>
+<h3 id="1-3-examples">1.3 Examples</h3>
+<p><strong>Baldur's Gate 3 (Larian)</strong></p>
+<ul>
+<li><strong>VERIFIED</strong> PlayStation Blog, Emily Gera, Product Manager, Larian Studios, 5 Sep 2023 (<a href="https://blog.playstation.com/2023/09/05/how-baldurs-gate-3-adapts-its-expansive-rpg-gameplay-for-your-dualsense-controller/">https://blog.playstation.com/2023/09/05/how-baldurs-gate-3-adapts-its-expansive-rpg-gameplay-for-your-dualsense-controller/</a>): "turning our original UI into radial menus which felt more intuitive to use with a controller".
+</li>
+<li><strong>VERIFIED</strong> Same post: "A light pull of the trigger will let you peek at your radial menus for a moment".
+</li>
+<li><strong>VERIFIED</strong> Same post: "Your most essential tools can be accessed at the pull of a trigger button".
+</li>
+<li><strong>SNIPPET</strong> Steam community BG3 thread (<a href="https://steamcommunity.com/app/1086940/discussions/0/6045572169621274305/?ctp=3">https://steamcommunity.com/app/1086940/discussions/0/6045572169621274305/?ctp=3</a>): a player reports that on controller, holding Y/Triangle cancels concentration; the Steam Deck hover prompt shows "hold (Y)". Fetch of the page returned no post text, so the quote is UNVERIFIED.
+</li>
+<li><strong>SNIPPET</strong> Shacknews BG3 controls guide: Right Trigger opens the Shortcut Menu. Not fetched.
+</li>
+<li><strong>SNIPPET</strong> Steam BG3 thread: a controller player reports a radial-menu stutter. Anecdotal, 2023.
+</li></ul>
+<p><strong>Factorio (Switch port)</strong></p>
+<ul>
+<li><strong>VERIFIED</strong> Factorio wiki, "Quick panel" (<a href="https://wiki.factorio.com/Quick_panel">https://wiki.factorio.com/Quick_panel</a>): "The Quick panel is a radial menu in the Nintendo Switch version of the game." It replaces the PC quickbar, shortcut bar and minimap buttons.
+</li>
+<li><strong>VERIFIED</strong> Same page: "It is open while holding L (left bumper)."
+</li>
+<li><strong>VERIFIED</strong> Same page: "The different tabs of the quick panel can be selected by pressing Right and Left on the D-pad."
+</li>
+<li><strong>VERIFIED</strong> Same page: "Individual buttons in the quick panel are selected by moving the Left Stick in the direction of the button".
+</li>
+<li><strong>VERIFIED</strong> Same page: "Note that the quick panel is also available on the PC version of the game while using a controller."
+</li>
+<li><strong>SNIPPET</strong> Factorio wiki also describes a free cursor / auto cursor toggle on the right stick for Switch. The fetched page did not include that text, so UNVERIFIED.
+</li></ul>
+<p>This is the cleanest example of paging a radial: the wheel holds one set of items, and D-pad left and right switch between sets.</p>
+<p><strong>Dying Light 2</strong></p>
+<ul>
+<li><strong>SNIPPET</strong> Powerpyx guide: up to four weapons are assigned to the wheel, then the wheel is opened by holding the weapon key (Hold RIGHT on controller). Not fetched.
+</li>
+<li><strong>SNIPPET</strong> Shacknews controls page: Cycle Weapons on D-pad Right. Not fetched.
+</li></ul>
+<p><strong>Deep Rock Galactic</strong></p>
+<ul>
+<li><strong>UNVERIFIED</strong> No official source on the weapon wheel was opened. Search summaries mention a Steam Input profile that remaps the D-pad to a radial to free the resupply input. Not verified.
+</li></ul>
+<p><strong>GTA V / GTA 6</strong></p>
+<ul>
+<li><strong>VERIFIED</strong> GTA BOOM, Aron Gerencser, 31 Jan 2016 (<a href="https://www.gtaboom.com/gta-online-desperately-needs-better-weapon-management-eccb">https://www.gtaboom.com/gta-online-desperately-needs-better-weapon-management-eccb</a>): "If you want to select a weapon within a category you'll need to cycle through all weapons in that category."
+</li>
+<li><strong>VERIFIED</strong> Same article proposes "restrict players to carrying only one weapon from each category while out and about", with a weapons locker in apartments.
+</li>
+<li><strong>VERIFIED</strong> Dexerto, published Oct 19, 2026 (<a href="https://www.dexerto.com/gta/gta-6-devs-tried-a-million-weapon-wheel-alternatives-as-struggles-with-rdr2-realism-led-some-to-quit-3420111/">https://www.dexerto.com/gta/gta-6-devs-tried-a-million-weapon-wheel-alternatives-as-struggles-with-rdr2-realism-led-some-to-quit-3420111/</a>), fetch-extracted: "developers worried that keeping GTA 5's traditional weapon wheel would leave players staring at empty slots". Quoting Bloomberg's Jason Schreier: "And so they spent months, if not years, trying a million different things that would replace the weapon wheel". Confirm the exact wording before reuse.
+</li>
+<li><strong>SNIPPET</strong> Kotaku and Notebookcheck report GTA 6 preview backlash to the wheel's blurred background and large rectangular boxes. Not fetched.
+</li></ul>
+<p><strong>Diablo 4 (controller)</strong></p>
+<ul>
+<li><strong>SNIPPET</strong> Forum and Icy Veins complaints: four skills plus left and right click is the limit; the basic skill shares a button with Interact, so it blocks looting while on cooldown; no manual inventory sorting on controller. Dates unconfirmed. Not a radial example, but relevant to slot limits.
+</li></ul>
+<p><strong>Divinity: Original Sin 2</strong></p>
+<ul>
+<li><strong>SNIPPET</strong> RPGamer E3 2018 impression (<a href="https://rpgamer.com/2018/06/divinity-original-sin-ii-definitive-edition-e3-impression-2/">https://rpgamer.com/2018/06/divinity-original-sin-ii-definitive-edition-e3-impression-2/</a>) described trigger-driven radial menus as the gateway to inventory and stats. Not fetched.
+</li>
+<li><strong>SNIPPET</strong> Steam forum: "moving items around is a total pain with the controller compared to the drag/drop mechanic". Anecdotal, not dated in the summary.
+</li></ul>
+<p><strong>Caves of Qud</strong></p>
+<ul>
+<li>Not a radial example. See section 2.
+</li></ul>
+<h3 id="1-4-praise-and-complaints-radial">1.4 Praise and complaints (radial)</h3>
+<ul>
+<li>Praise: BG3's developer frames radials as the intended controller answer (VERIFIED, PlayStation Blog above).
+</li>
+<li>Complaint: whole-wheel cycling and unwieldy long lists (VERIFIED, GTA BOOM 2016).
+</li>
+<li>Complaint: visual style, empty slots (VERIFIED, Dexerto 2026, fetch-extracted).
+</li></ul>
+<hr>
+<h2 id="2-controller-navigation-of-inventories-and-grids">2. Controller navigation of inventories and grids</h2>
+<h3 id="2-1-virtual-cursor-why-it-is-disliked">2.1 Virtual cursor: why it is disliked</h3>
+<ul>
+<li><strong>VERIFIED</strong> Push Square, Sammy Barker, 18 Feb 2019 (<a href="https://www.pushsquare.com/news/2019/02/soapbox_can_we_please_kill_cursors_in_console_games">https://www.pushsquare.com/news/2019/02/soapbox_can_we_please_kill_cursors_in_console_games</a>):
+<ul>
+<li>"I've no problem with what Destiny did: the user interface is probably my favourite part of that series."
+</li>
+<li>"What's wrong with using the d-pad to browse your inventory?" (on Assassin's Creed)
+</li>
+<li>"it's time to kill the cursor in console games."
+</li>
+<li>"Consoles have analogue sticks and d-pads, not a mouse and keyboard."
+</li></ul>
+</li>
+<li><strong>SNIPPET</strong> Summary of a UX Collective article, "Game UX: The cursor that wasn't supposed to be there" (<a href="https://uxdesign.cc/game-ux-the-cursor-that-wasnt-supposed-to-be-there-f9369dafc451">https://uxdesign.cc/game-ux-the-cursor-that-wasnt-supposed-to-be-there-f9369dafc451</a>). The summary says it reviewed 235 console releases and 507 player comments, and that the most common request ("appearing 95 times") was to make the cursor optional, not remove it. <strong>UNVERIFIED</strong>: the fetch returned HTTP 403. Do not quote the numbers until the article is opened.
+</li>
+<li><strong>SNIPPET</strong> Warframe forum thread (<a href="https://forums.warframe.com/topic/1103360-controller-ux-is-still-significantly-behind-what-it-was-a-year-ago/">https://forums.warframe.com/topic/1103360-controller-ux-is-still-significantly-behind-what-it-was-a-year-ago/</a>): a poster says the new console UI still lacks basic D-pad scrolling. Fetch returned 403. UNVERIFIED wording.
+</li>
+<li><strong>SNIPPET</strong> Minecraft console feedback (<a href="https://feedback.minecraft.net/hc/en-us/community/posts/360009229292/comments/360004784072">https://feedback.minecraft.net/hc/en-us/community/posts/360009229292/comments/360004784072</a>): players ask for customizable inventory combos and D-pad wraparound. Fetch returned 403. UNVERIFIED wording.
+</li>
+<li><strong>SNIPPET</strong> Crate Entertainment forum: a player calls the cursor "a necessary compromise" and asks that D-pad movement jump to the next item. Not fetched.
+</li></ul>
+<p>Pattern the sources support: cursors are tolerated on a few well-designed menus, hated on inventory and shop screens, and the most frequent ask is an option to turn them off (not a demand to remove them). This last point is the SNIPPET source; treat it as unverified.</p>
+<h3 id="2-2-focus-bumpers-triggers-stick-acceleration">2.2 Focus, bumpers, triggers, stick acceleration</h3>
+<ul>
+<li>Bumper-held tab switching: Factorio quick panel (VERIFIED, section 1.3).
+</li>
+<li>Trigger two-stage: BG3 light pull peeks, full pull opens (VERIFIED, PlayStation Blog).
+</li>
+<li>Stick acceleration and focus highlight: not sourced in this pass. UNVERIFIED for any specific title.
+</li></ul>
+<h3 id="2-3-complex-port-examples">2.3 Complex-port examples</h3>
+<p><strong>RimWorld Console Edition</strong></p>
+<ul>
+<li><strong>SNIPPET</strong> Reviews from July 2022 say the console UI was rebuilt rather than ported, with a central circle for world interaction and corner UI opened by shoulder buttons, and a stated target of no more than three presses to any screen. Not fetched. Also reported: reviewers found the menus heavy to read, and noted no in-game font size option at launch. UNVERIFIED.
+</li>
+<li><strong>SNIPPET</strong> PlayStation Blog says the UI "required a full makeover and rework for the DualShock 4". Not fetched.
+</li></ul>
+<p><strong>Stardew Valley (console ports)</strong></p>
+<ul>
+<li><strong>SNIPPET</strong> A review says UI and inventory management are "much slower and cumbersome when using a controller". Not fetched. Radial inventory on PC is a mod (Star Control), not vanilla. UNVERIFIED that console versions have no radial.
+</li></ul>
+<p><strong>Terraria</strong></p>
+<ul>
+<li><strong>SNIPPET</strong> Steam forum thread: a "Hotbar Scroll time to Radial" slider in Controls can be moved right to turn the radial hotbar off and restore bumper switching. User report, not official docs. UNVERIFIED.
+</li></ul>
+<hr>
+<h2 id="3-text-input-on-controller">3. Text input on controller</h2>
+<ul>
+<li><strong>VERIFIED</strong> Steamworks, Steam Deck recommendations (<a href="https://partner.steamgames.com/doc/steamdeck/recommendations">https://partner.steamgames.com/doc/steamdeck/recommendations</a>): "games automatically display an on-screen keyboard when requiring the user to input text".
+</li>
+<li><strong>SNIPPET</strong> Steamworks compatibility docs (same family of pages) say a game must either call a Steamworks text-entry API for controller users, or provide its own in-game entry that works with a controller alone. Search summary cited ShowFloatingGamepadTextInput and ShowGamepadTextInput. Not confirmed on a fetched page.
+</li>
+<li><strong>SNIPPET</strong> Defold forum post: a Deck review failed a title because the player-name field did not trigger the on-screen keyboard; the title was marked Playable rather than Verified. Not fetched.
+</li></ul>
+<hr>
+<h2 id="4-steam-input-glyphs-and-sdl3">4. Steam Input, glyphs and SDL3</h2>
+<h3 id="4-1-action-sets-and-layers">4.1 Action sets and layers</h3>
+<ul>
+<li><strong>VERIFIED</strong> Steamworks, Concepts (<a href="https://partner.steamgames.com/doc/features/steam_controller/concepts">https://partner.steamgames.com/doc/features/steam_controller/concepts</a>): "An action set is a logical grouping of associated actions." and "Action Set Layers are optional sets of action bindings which can be overlaid upon an existing set of controls."
+</li>
+<li><strong>VERIFIED</strong> Steamworks, Action Set Layers (<a href="https://partner.steamgames.com/doc/features/steam_controller/action_set_layers">https://partner.steamgames.com/doc/features/steam_controller/action_set_layers</a>):
+<ul>
+<li>"Activating a new action set will clear all active layers from the old set."
+</li>
+<li>"Activating an action set layer that is already active will not change its order in the stack."
+</li>
+<li>"Deactivating an action set layer, and then activating it, will set it to the top of the stack."
+</li>
+<li>"The last layer applied will override any conflicting information that came before"
+</li>
+<li>"Calling ActivateActionSetLayer is cheap and can be safely called repeatedly"
+</li>
+<li>"Just because you can re-apply action set layers every frame doesn't mean you should"
+</li>
+<li>"Action set layers are intended for narrow use cases"
+</li></ul>
+</li>
+<li><strong>SNIPPET</strong> "Only one action set can be active for any given input device at a given time." Appears in a search summary of the concepts page. The fetched page did not contain that sentence. UNVERIFIED.
+</li></ul>
+<h3 id="4-2-in-game-actions-file">4.2 In-Game Actions file</h3>
+<ul>
+<li><strong>VERIFIED</strong> Steamworks, IGA file (<a href="https://partner.steamgames.com/doc/features/steam_controller/iga_file">https://partner.steamgames.com/doc/features/steam_controller/iga_file</a>): "Developers must supply an in-game actions (IGA) file that defines the actions, action sets, and basic structure"
+</li>
+<li><strong>VERIFIED</strong> Same page: "By default, the official configuration will be loaded by players"
+</li>
+<li><strong>VERIFIED</strong> Same page: "the steam client uses your master IGA file to generate a starting template"
+</li></ul>
+<h3 id="4-3-glyph-api">4.3 Glyph API</h3>
+<ul>
+<li><strong>VERIFIED</strong> Steamworks, ISteamInput (<a href="https://partner.steamgames.com/doc/api/ISteamInput">https://partner.steamgames.com/doc/api/ISteamInput</a>). Functions and their stated purposes:
+<ul>
+<li><code>GetGlyphPNGForActionOrigin(EInputActionOrigin, ESteamInputGlyphSize, uint32)</code>: "Get a local path to a PNG file for the provided origin's glyph."
+</li>
+<li><code>GetGlyphSVGForActionOrigin(EInputActionOrigin, uint32)</code>: "Get a local path to a SVG file for the provided origin's glyph."
+</li>
+<li><code>GetGlyphForXboxOrigin(EXboxOrigin)</code>: "Get a local path to art for on-screen glyph for a particular Xbox controller origin."
+</li>
+<li><code>GetStringForActionOrigin(EInputActionOrigin)</code>: "Returns a localized string (from Steam's language setting) for the specified origin."
+</li>
+<li><code>GetActionOriginFromXboxOrigin(InputHandle_t, EXboxOrigin)</code>: "Get an action origin that you can use in your glyph look up table or passed into"
+</li>
+<li><code>GetInputTypeForHandle(InputHandle_t)</code>: "Returns the input type (device model) for the specified controller."
+</li>
+<li><code>GetDigitalActionOrigins</code> and <code>GetAnalogActionOrigins</code>: "Use this to display the appropriate on-screen prompt for the action."
+</li>
+<li><code>GetGlyphForActionOrigin_Legacy</code>: "New code should use GetGlyphPNGForActionOrigin or GetGlyphSVGForActionOrigin instead."
+</li></ul>
+</li>
+<li><strong>VERIFIED</strong> Steamworks compat (below): Valve "strongly recommend[s] using the SteamInput API, which will automatically show the correct glyphs".
+</li></ul>
+<p>Practical note for a non-Steam-API game: the SteamInput glyph calls need the Steamworks SDK. A game built with SDL3 but shipped on Steam still needs Steam Input for correct Deck glyphs unless it resolves glyphs itself.</p>
+<h3 id="4-4-sdl3">4.4 SDL3</h3>
+<ul>
+<li><strong>VERIFIED</strong> SDL wiki, SDL_GetGamepadButtonLabel (<a href="https://wiki.libsdl.org/SDL3/SDL_GetGamepadButtonLabel">https://wiki.libsdl.org/SDL3/SDL_GetGamepadButtonLabel</a>): signature <code>SDL_GamepadButtonLabel SDL_GetGamepadButtonLabel(SDL_Gamepad *gamepad, SDL_GamepadButton button);</code>. Returns "the SDL_GamepadButtonLabel enum corresponding to the button label." Fetch states "This function is available since SDL 3.2.0."
+</li>
+<li><strong>Conflict</strong>: a search summary said the official wiki lists 3.0.0. The fetched page says 3.2.0. Check the SDL headers for the version you target.
+</li>
+<li><strong>UNVERIFIED</strong> Enum names (<code>SDL_GAMEPAD_BUTTON_LABEL_*</code>): not listed on the pages opened. Check <code>SDL_gamepad.h</code>.
+</li>
+<li><strong>VERIFIED</strong> Companion function <code>SDL_GetGamepadButtonLabelForType</code> exists (linked from the wiki page). Its contents were not fetched.
+</li></ul>
+<hr>
+<h2 id="5-steam-deck-verification-checklist">5. Steam Deck verification checklist</h2>
+<p>Source for each item is the Steamworks compatibility page (<a href="https://partner.steamgames.com/doc/steamdeck/compat">https://partner.steamgames.com/doc/steamdeck/compat</a>) unless noted.</p>
+<table><thead><tr><th>#</th><th>Requirement</th><th>Source status</th></tr></thead><tbody><tr><td>1</td><td>Smallest on-screen font character "should never fall below 9 pixels in height at 1280x800." Aim for 12px where possible.</td><td>VERIFIED</td></tr><tr><td>2</td><td>"Interface text must be easily readable at a distance of 12 inches/30 cm from the screen."</td><td>VERIFIED</td></tr><tr><td>3</td><td>Support user-adjustable text size; contrast "when possible".</td><td>SNIPPET (search summary of the compat page; the fetched Steamworks recommendations page had no text-size guidance)</td></tr><tr><td>4</td><td>Run at a supported resolution: "1280x800 (preferred) or 1280x720."</td><td>VERIFIED</td></tr><tr><td>5</td><td>Glyphs must match the active input: "On-screen glyphs must match the inputs being used, whether it's Deck, Steam Controller, or Xbox glyphs."</td><td>VERIFIED</td></tr><tr><td>6</td><td>Mouse and keyboard glyphs hidden when not the active input.</td><td>VERIFIED</td></tr><tr><td>7</td><td>"Interacting with any Deck or Steam Controller inputs using the default configuration must not show non-controller glyphs."</td><td>VERIFIED</td></tr><tr><td>8</td><td>Default controller configuration must reach all content: "the default controller configuration must provide users with the ability to access all content."</td><td>VERIFIED</td></tr><tr><td>9</td><td>"Players must not need to adjust any in-game settings in order to enable controller support or this configuration."</td><td>VERIFIED</td></tr><tr><td>10</td><td>Automatic on-screen keyboard for any text entry: "games automatically display an on-screen keyboard when requiring the user to input text" (Steam Deck recommendations page).</td><td>VERIFIED</td></tr><tr><td>11</td><td>Use the SteamInput API for glyphs.</td><td>VERIFIED (recommendation, not a hard rule on the compat page)</td></tr><tr><td>12</td><td>Touchscreen use does not satisfy the controller test.</td><td>SNIPPET (GamingOnLinux commentary, not official text)</td></tr><tr><td>13</td><td>Gyro/trackpad friendliness is automatic when using the Steam Input API.</td><td>VERIFIED (Steam Deck recommendations page)</td></tr></tbody></table>
+<p>Note: the compat page has been revised more than once (a newer version covers Steam Machine). Re-check the live page before submitting.</p>
+<hr>
+<h2 id="6-how-complex-games-did-controller-ports-summary">6. How complex games did controller ports (summary)</h2>
+<table><thead><tr><th>Game</th><th>Approach</th><th>Status</th></tr></thead><tbody><tr><td>Baldur's Gate 3</td><td>Radial menus with trigger peek; developer quote VERIFIED</td><td>Praised in dev post; forum complaints on radial performance (SNIPPET)</td></tr><tr><td>Divinity: Original Sin 2</td><td>Trigger radials; inventory weak spot</td><td>Mixed. Praise in SNIPPET forum; inventory complaints SNIPPET</td></tr><tr><td>Factorio (Switch)</td><td>Bumper-held radial "Quick panel", D-pad tabs, left stick selection; same radial on PC with controller</td><td>VERIFIED wiki; PC availability VERIFIED</td></tr><tr><td>Caves of Qud</td><td>Full native controller support finalized Nov 2023; no settings changes needed; Deck Verified</td><td>VERIFIED (SteamDeckHQ, GamingOnLinux 2024). One commenter in 2024 said the UI redesign was "impossible to play with a controller even on steam deck."</td></tr><tr><td>Dwarf Fortress (Steam)</td><td>No native controller support; Steam Input workaround; mouse for some menus</td><td>VERIFIED (GamingOnLinux, 6 Dec 2022, Liam Squires-Hand)</td></tr><tr><td>RimWorld Console</td><td>UI rebuilt, not ported; readability and learning complaints</td><td>SNIPPET reviews; UNVERIFIED</td></tr><tr><td>Stardew Valley</td><td>Console ports; UI slow with controller; radial via PC mods</td><td>SNIPPET</td></tr><tr><td>Terraria</td><td>Radial hotbar option, toggle via settings slider</td><td>SNIPPET forum</td></tr><tr><td>CDDA (Steam Deck)</td><td>Community Steam Input layout, Vim/WASD scheme</td><td>VERIFIED (community post, supersquirrel, 8 May 2024)</td></tr><tr><td>Dying Light 2</td><td>Weapon wheel with up to four slots; D-pad cycling</td><td>SNIPPET</td></tr><tr><td>GTA V</td><td>Long-list wheel, criticised for cycling</td><td>VERIFIED (GTA BOOM 2016)</td></tr></tbody></table>
+<h3 id="6-1-caves-of-qud-closest-analogue-for-a-roguelike">6.1 Caves of Qud (closest analogue for a roguelike)</h3>
+<ul>
+<li><strong>VERIFIED</strong> SteamDeckHQ, Noah Kupetsky, 15 Nov 2023 (<a href="https://steamdeckhq.com/news/caves-of-qud-finalizes-steam-deck-support">https://steamdeckhq.com/news/caves-of-qud-finalizes-steam-deck-support</a>): "we now have finalized Steam Deck support"; "Part of this includes the game getting full native controller support, making using the Deck's gamepad easy and efficient."; "There's also no need to change any settings to make the gamepad work".
+</li>
+<li><strong>VERIFIED</strong> GamingOnLinux, 16 May 2024 (<a href="https://www.gamingonlinux.com/2024/05/caves-of-qud-gets-a-huge-new-beta-released-with-the-big-ui-redesign/">https://www.gamingonlinux.com/2024/05/caves-of-qud-gets-a-huge-new-beta-released-with-the-big-ui-redesign/</a>): the beta UI is "Much better for gamepad and Steam Deck players."; "works fully with mouse or gamepad (on top of keyboard)."; the game "has Native Linux support and is Steam Deck Verified."
+</li>
+<li><strong>VERIFIED</strong> Same article, reader comment dated 18 May 2024 by EduAAA: the UI makes it "impossible to play with a controller even on steam deck." A complaint about a redesign shipping in beta. Single reader comment, not a developer statement.
+</li>
+<li><strong>Lesson (inference, not stated by the developers)</strong>: Caves of Qud is keyboard-first and still got Deck Verified. The sources say the controller works with no settings change and that the redesigned UI works with "mouse or gamepad (on top of keyboard)". None of the fetched sources says how cursor navigation works, so do not read "no cursor emulation" into them.
+</li></ul>
+<h3 id="6-2-dwarf-fortress">6.2 Dwarf Fortress</h3>
+<ul>
+<li><strong>VERIFIED</strong> GamingOnLinux, Liam Squires-Hand, 6 Dec 2022 (<a href="http://www.gamingonlinux.com/2022/12/dwarf-fortress-arrives-on-steam-works-on-linux-desktop-and-steam-deck/">http://www.gamingonlinux.com/2022/12/dwarf-fortress-arrives-on-steam-works-on-linux-desktop-and-steam-deck/</a>): "It doesn't have controller support though"; "you'll need to mess about with Steam Input for a while"; "it does work on Linux desktop and Steam Deck with Proton".
+</li>
+<li><strong>VERIFIED</strong> Same article, comment by Theodis: "I had to use the mouse to interact with the various menus"; comment by Philadelphus: "some menus need the mouse".
+</li></ul>
+<h3 id="6-3-cdda-community-steam-deck-layout">6.3 CDDA community Steam Deck layout</h3>
+<ul>
+<li><strong>VERIFIED</strong> Post by supersquirrel, 8 May 2024 (<a href="https://discourse.cataclysmdda.org/t/cataclysm-dda-steam-deck-fully-mapped-easy-to-remember-control-scheme-based-on-vim-wasd/29241">https://discourse.cataclysmdda.org/t/cataclysm-dda-steam-deck-fully-mapped-easy-to-remember-control-scheme-based-on-vim-wasd/29241</a>): layout uses Vim keys on left stick, WASD ring on left trackpad, number ring on right trackpad; Escape on the menu button, Tab on view, Enter on right trigger, Shift on left trigger. Y single press is "/", double press "?"; A single press opens the movement toggle.
+</li>
+<li><strong>VERIFIED</strong> Same post, self-caveat: "a somewhat tenous mapping to remember I concede." and "this is a draft tho."
+</li>
+<li><strong>SNIPPET</strong> Lemmy commenters: "This is cool as hell but my brain is not gonna learn it". Not fetched.
+</li></ul>
+<hr>
+<h2 id="7-patterns-worth-adopting">7. Patterns worth adopting</h2>
+<p>Mechanics for a keyboard-first roguelike like CBN. Each is tied to a source above.</p>
+<ol>
+<li><strong>Hold-to-open, release-to-select radial, selection by stick angle.</strong> Pie-menu selection depends on direction, not hover (Wikipedia). Factorio uses hold L to open, stick direction to pick. Adopt the Factorio pattern for a quick-action wheel.
+</li>
+<li><strong>Cap wheel slots at 4 or 8.</strong> Wikipedia names four and eight as the keyboard-acceleration sizes. Overflow goes to pages or categories, not extra slices (The Long Dark cap is an example of what users hit, SNIPPET).
+</li>
+<li><strong>Paging via D-pad inside the wheel.</strong> Factorio switches tabs with D-pad left and right while the bumper holds the wheel open. Gives more than one "slot set" without growing one wheel.
+</li>
+<li><strong>Two-stage trigger.</strong> BG3: a light pull peeks, a full pull opens. Useful for a "peek at status" vs "open full menu" split.
+</li>
+<li><strong>Direction-as-category.</strong> Dying Light 2 holds UP and LEFT for other wheels (SNIPPET). Use four directions, one per category.
+</li>
+<li><strong>Keep the wheel to one category and short.</strong> GTA's long-list complaint (VERIFIED) argues against an unbounded wheel that holds every item.
+</li>
+<li><strong>Do not build a virtual cursor for the grid.</strong> Push Square's argument (VERIFIED): D-pad browsing is the console expectation. If a cursor is needed, make it optional (SNIPPET-level ask, UNVERIFIED count).
+</li>
+<li><strong>Make the default controller binding reach every function.</strong> Steamworks rule, VERIFIED. Players must not need to change settings to get controller support.
+</li>
+<li><strong>Use Steam Input glyphs, not hard-coded labels.</strong> <code>GetGlyphPNGForActionOrigin</code> or SVG for Steam builds; <code>SDL_GetGamepadButtonLabel</code> for SDL3 builds. The API is the recommended path (VERIFIED).
+</li>
+<li><strong>Use action set layers only for narrow contexts.</strong> Steamworks: "Action set layers are intended for narrow use cases" and "apply and remove them only on specific game state changes" (VERIFIED). Apply on mode change, not every frame.
+</li>
+<li><strong>Text input: always auto-show a keyboard.</strong> VERIFIED Steamworks recommendation. Missing this failed a real Deck review (SNIPPET, Defold).
+</li>
+<li><strong>Text size 9px floor, 12px target at 1280x800.</strong> VERIFIED. Set a user text-size option, because the compat page recommends one.
+</li></ol>
+<hr>
+<h2 id="8-steam-deck-verification-checklist-for-cbn">8. Steam Deck verification checklist (for CBN)</h2>
+<ul>
+<li>[ ] Smallest font glyph height at 1280x800 is at least 9 px; target 12 px (Steamworks compat).
+</li>
+<li>[ ] Interface text readable at 30 cm (Steamworks compat).
+</li>
+<li>[ ] User-adjustable text size exists (search summary of Steamworks compat; not on a fetched page, re-check).
+</li>
+<li>[ ] Runs at 1280x800 (preferred) or 1280x720 (Steamworks compat).
+</li>
+<li>[ ] Default controller config reaches all functionality (Steamworks compat).
+</li>
+<li>[ ] No in-game settings change needed to enable controller support (Steamworks compat).
+</li>
+<li>[ ] Deck or Steam Controller button glyphs shown under default config; no keyboard or mouse glyphs (Steamworks compat).
+</li>
+<li>[ ] Glyphs match the active input device; use the glyph API (Steamworks compat, ISteamInput).
+</li>
+<li>[ ] Automatic on-screen keyboard for every text entry (Steamworks recommendations).
+</li>
+<li>[ ] Action sets and layers used for context switches, not per-frame (Steamworks action_set_layers).
+</li>
+<li>[ ] Verify the live compat page; it has been revised more than once (Steamworks compat).
+</li></ul>
+<hr>
+<h2 id="9-could-not-verify">9. Could not verify</h2>
+<ul>
+<li><strong>8 vs 12 slot usability.</strong> No direct study or critique found. The only quantitative anchor is a secondary-blog reference to a 1988 eight-item study and an unopened CHI 2009 paper.
+</li>
+<li><strong>UX Collective figures (235 releases, 507 comments, 95 requests).</strong> Article returned 403.
+</li>
+<li><strong>Warframe, Minecraft forum complaints.</strong> Both returned 403. Quotes shown are search-summary paraphrases.
+</li>
+<li><strong>BG3 concentration-cancel post.</strong> Steam page fetched, but the post text was not in the returned content.
+</li>
+<li><strong>Factorio free-cursor toggle.</strong> Mentioned in a search summary; not in the fetched wiki text.
+</li>
+<li><strong>Deep Rock Galactic weapon wheel.</strong> No official source found.
+</li>
+<li><strong>Diablo 4 controller complaints.</strong> Only search-level sources, dates unconfirmed; sources not fetched.
+</li>
+<li><strong>RimWorld Console UI rules (three-press limit, font size).</strong> Search-level; reviews not opened.
+</li>
+<li><strong>Dying Light 2 wheel details.</strong> Search-level guide; not opened.
+</li>
+<li><strong>Stardew, Terraria console radial status.</strong> Search-level only.
+</li>
+<li><strong>Divinity: Original Sin 2 inventory and radial specifics.</strong> Forum and impression snippets only.
+</li>
+<li><strong>SDL_GamepadButtonLabel enum names.</strong> Not on any opened page.
+</li>
+<li><strong>SDL availability version.</strong> Conflicting: 3.0.0 in a search summary, 3.2.0 on the fetched wiki page.
+</li>
+<li><strong>Steamworks "one action set active per device".</strong> Search summary only; not on fetched pages.
+</li>
+<li><strong>Steam Deck touchscreen-does-not-satisfy-test rule.</strong> Commentary from GamingOnLinux, not official text.
+</li>
+<li><strong>Hold-to-open timings and stick acceleration values</strong> for any title. Not found.
+</li>
+<li><strong>Focus highlighting specifics and bumper/trigger paging conventions across titles.</strong> Only Factorio and BG3 covered, from fetched sources.
+</li></ul>
+</main>
+</body>
+</html>

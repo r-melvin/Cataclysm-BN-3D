@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repo trim plan</title>
+<style>
+:root { --bg:#fbfbfa; --fg:#1d2127; --muted:#5d6672; --line:#d9dde2; --card:#fff; --accent:#1f6feb; --keep:#1a7f37; --move:#9a6700; --drop:#cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#13161a; --fg:#e4e7eb; --muted:#9aa4b0; --line:#2c323a; --card:#1a1e24; --accent:#58a6ff; --keep:#3fb950; --move:#d29922; --drop:#f85149; } }
+:root[data-theme="dark"] { --bg:#13161a; --fg:#e4e7eb; --muted:#9aa4b0; --line:#2c323a; --card:#1a1e24; --accent:#58a6ff; --keep:#3fb950; --move:#d29922; --drop:#f85149; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:1.8rem; margin:0 0 4px; } h2 { font-size:1.25rem; margin:36px 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; } h3 { font-size:1.02rem; margin:18px 0 6px; }
+p.lede { color:var(--muted); margin:0 0 18px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin:14px 0; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+.card b { display:block; font-size:1.4rem; } .card span { color:var(--muted); font-size:.85rem; }
+table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); font-size:.92rem; display:block; overflow-x:auto; }
+th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:var(--muted); font-weight:600; white-space:nowrap; }
+.k { color:var(--keep); font-weight:600; } .m { color:var(--move); font-weight:600; } .d { color:var(--drop); font-weight:600; }
+.note { border-left:3px solid var(--accent); background:var(--card); padding:8px 12px; margin:12px 0; border-radius:0 6px 6px 0; }
+.warn { border-left-color:var(--drop); }
+code { font:0.88em ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--card); border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+ol li, ul li { margin:4px 0; }
+svg { max-width:100%; height:auto; } svg text { fill:var(--fg); font:12px system-ui,sans-serif; }
+.bar { fill:var(--accent); } .barbg { fill:var(--line); }
+footer { color:var(--muted); font-size:.85rem; margin-top:40px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Repo trim plan</h1>
+<p class="lede">Branch <code>chore/repo-trim-audit</code> (from <code>main</code>). Merged from five read-only audits in <code>docs/en/dev/research/repo_trim/</code>. Nothing has been deleted or moved yet. Claims marked <em>unverified</em> were not checked by the auditors.</p>
+
+<div class="cards">
+  <div class="card"><b>~72 MB</b><span>removable from the working tree (84 MB with unifont)</span></div>
+  <div class="card"><b>7 GiB</b><span>git history; trimming files does not shrink it</span></div>
+  <div class="card"><b>3.8 GB</b><span>stale <code>tmp_pack</code> file in <code>.git</code></span></div>
+  <div class="card"><b>138 / 1</b><span>commits ahead / behind upstream</span></div>
+</div>
+
+<div class="note warn"><b>The honest headline.</b> The working tree is only about 120 MB. Two things are about 90% of what can go: <code>android/</code> (45.5 MB, of which <code>deps.zip</code> is 44.6 MB) and unused tilesets (25.6 MB). The source tree, which is where most of the 21 MB lives, is mostly upstream game logic you intend to keep. A trim will make the repo tidier and quicker to browse, but it will not make it small. The size problem is git history: about 5.5 GiB of the 7 GiB is <code>lang/po</code>.</div>
+
+<h2>Where the space is</h2>
+<svg viewBox="0 0 640 170" role="img" aria-label="Removable size by area">
+  <rect class="barbg" x="150" y="10" width="470" height="18" rx="3"/><rect class="bar" x="150" y="10" width="470" height="18" rx="3"/><text x="8" y="24">android/ (incl. deps.zip)</text><text x="560" y="24" style="fill:#fff">45.5 MB</text>
+  <rect class="barbg" x="150" y="42" width="470" height="18" rx="3"/><rect class="bar" x="150" y="42" width="264" height="18" rx="3"/><text x="8" y="56">unused tilesets</text><text x="352" y="56" style="fill:#fff">25.6 MB</text>
+  <rect class="barbg" x="150" y="74" width="470" height="18" rx="3"/><rect class="bar" x="150" y="74" width="58" height="18" rx="3"/><text x="8" y="88">translated docs (ko/ja/ru/de)</text><text x="214" y="88">5.6 MB</text>
+  <rect class="barbg" x="150" y="106" width="470" height="18" rx="3"/><rect class="bar" x="150" y="106" width="28" height="18" rx="3"/><text x="8" y="120">English docs upstream has</text><text x="184" y="120">2.7 MB+</text>
+  <rect class="barbg" x="150" y="138" width="470" height="18" rx="3"/><rect class="bar" x="150" y="138" width="22" height="18" rx="3"/><text x="8" y="152">build-data/osx</text><text x="178" y="152">2.1 MB</text>
+</svg>
+
+<h2>Answers to your questions</h2>
+<table>
+<tr><th>Question</th><th>Answer</th><th>Source</th></tr>
+<tr><td>Do we need deno?</td><td><span class="d">No.</span> Not needed to build or test. Used only by the optional <code>docs:gen</code> post-build step, <code>build-scripts/fmt.sh</code>, and <code>AGENTS.md</code> (lines 99-100, 132), which would need updating.</td><td>01_tooling</td></tr>
+<tr><td>JS / TypeScript?</td><td><span class="d">No.</span> 48 .ts + 2 .js, none touched by build or tests. Only <code>scripts/gen_cli_docs.ts</code> feeds <code>docs:gen</code>.</td><td>01_tooling</td></tr>
+<tr><td>Python?</td><td><span class="m">A little.</span> Keep three dev scripts: <code>tools/r3d_spike/astyle_347.py</code> (used by <code>format-cpp.sh</code>), <code>check_po_printf_format.py</code>, <code>dialogue_validator.py</code>. The rest can go.</td><td>01_tooling</td></tr>
+<tr><td>Ship graphics?</td><td><span class="m">Mostly no.</span> Keep UltimateCataclysm, hoder and ASCIITiles (~4.1 MB): tests load them and the geometry snapshot is pinned to the in-tree UltimateCataclysm. Delete the rest (25.6 MB).</td><td>02_assets</td></tr>
+<tr><td>Separate repos for graphics and sound?</td><td><span class="m">Not for BN.</span> No tileset or soundpack repo exists (404). Upstream CI downloads zips from I-am-Erk/CDDA-Tilesets. Fetching the three test tilesets at build time would break offline builds and risk the snapshot, so don't. Sound is only 28 KB: keep.</td><td>02_assets</td></tr>
+<tr><td>Docs to wiki / own branch?</td><td><span class="m">Yes.</span> Research goes to a <code>docs-archive</code> branch; player guides and extra build guides to the wiki; translated docs deleted (upstream has them).</td><td>03_docs</td></tr>
+<tr><td>Only pull game logic from upstream?</td><td><span class="m">Feasible for data, harder for source.</span> 99% of data is byte-identical to upstream and the game reads one overridable data dir, so an upstream-data + overlay build needs no C++ change. For source, a long-lived fork with merges is cheaper than a patch queue or submodule at this divergence.</td><td>04_source, 05_data</td></tr>
+</table>
+
+<h2>Verdicts by area</h2>
+<table>
+<tr><th>Path</th><th>Size</th><th>Verdict</th><th>Notes</th></tr>
+<tr><td><code>android/</code></td><td>45.5 MB</td><td class="d">Delete (archive branch optional)</td><td>No CMake references. 93% of all removable files.</td></tr>
+<tr><td><code>build-data/osx</code></td><td>2.1 MB</td><td class="d">Delete</td><td>Also remove the block at <code>CMakeLists.txt:969-1002</code>.</td></tr>
+<tr><td><code>.github/</code></td><td>small</td><td class="d">Delete most</td><td>Keep PR template and <code>llm_review_guide.md</code>. CI does not run on this fork. Check whether any local vcpkg overlay uses <code>vcpkg_ports</code>.</td></tr>
+<tr><td><code>msvc-full-features</code>, <code>doxygen_doc</code>, <code>utilities</code>, legacy <code>tools/</code>, most of <code>scripts/</code></td><td>small</td><td class="d">Delete</td><td>Keep the shader scripts in <code>build-scripts/</code>, <code>CMakeModules</code>, <code>lang/CMakeLists.txt</code>.</td></tr>
+<tr><td><code>tools/format</code>, <code>tools/clang-tidy-plugin</code></td><td>-</td><td class="k">Keep (for now)</td><td>The <code>linux-full</code> preset turns on <code>JSON_FORMAT</code> and <code>CATA_CLANG_TIDY_PLUGIN</code>. Removing them means changing the preset.</td></tr>
+<tr><td>Unused tilesets in <code>gfx/</code> (MSX++, ChestHole16, RetroDays x2, BrownLikeBears, HitButton_iso)</td><td>25.6 MB</td><td class="d">Delete</td><td>HitButton_iso is named in an env default in <code>src/r3d.cpp</code> and <code>compare_iso.sh</code>.</td></tr>
+<tr><td>UltimateCataclysm, hoder, ASCIITiles</td><td>4.1 MB</td><td class="k">Keep</td><td>Required by tests and the snapshot.</td></tr>
+<tr><td><code>unifont.ttf</code></td><td>12 MB</td><td class="k">Keep</td><td>Unicode fallback font.</td></tr>
+<tr><td>Translated docs (ko, ja, ru, de) + README.ja/ko</td><td>5.6 MB</td><td class="d">Delete</td><td>Upstream has the same paths (listed, contents not diffed).</td></tr>
+<tr><td>Generic English docs (mod, JSON, Lua guides, i18n, contribute)</td><td>2.7 MB+</td><td class="d">Delete</td><td>Upstream has them.</td></tr>
+<tr><td>Fork docs: README, AGENTS, BACKLOG, 4 renderer/UI guides, 4 dev guides</td><td>~25 files</td><td class="k">Keep</td><td>Code comments cite <code>guided_onboarding.md</code>; <code>CMakeLists.txt:641</code> cites <code>cmake.md</code>.</td></tr>
+<tr><td><code>docs/en/dev/research/*</code>, <code>design/vehicle_tiles.md</code></td><td>112 KB</td><td class="m">Archive branch</td><td>BACKLOG.md has ~25 links into research, AGENTS.md has 1. Repoint them.</td></tr>
+<tr><td>Mods: ~12 obsolete Lua demo mods, ~17 tiny No_* / wildlife mods, tileset-art mods</td><td>small</td><td class="m">Optional</td><td>Only <code>bn</code> is core; tests load <code>bn</code> + <code>test_data</code>.</td></tr>
+<tr><td>Defense mode</td><td>1.6k lines</td><td class="k">Keep</td><td>5 hooks in upstream files; removing it adds merge friction.</td></tr>
+<tr><td><code>ncurses_def</code>, <code>wincurse</code>, curses CMake target/presets</td><td>~1.4k lines</td><td class="m">Remove with UI-02</td><td>Small. <code>cursesport.cpp</code> must stay: it still draws every menu in the tiles build.</td></tr>
+</table>
+
+<h2>The upstream-merge problem</h2>
+<p>This is the real constraint on how much you can trim. The fork is <b>203 files changed (+29,113 / -487)</b> against upstream: 130 new files (about 16k lines of <code>r3d_*</code>, onboarding, status report, UI theme and 25 test files), and 73 modified upstream files (+1,562 / -487). Nothing is deleted yet.</p>
+<ul>
+<li><b>Deleting upstream-owned paths causes modify/delete conflicts</b> every time upstream touches them. That makes <code>android/</code>, translated docs and the CI files good candidates (upstream rarely changes them), and game source a poor one. How often upstream touches each path was not checked.</li>
+<li><b>Only 4 modified source files exceed 100 changed lines:</b> options, sdltiles, handle_action and input. The main merge risk is upstream changing <code>sdltiles.cpp</code> or <code>cata_tiles.h</code>.</li>
+<li><b>About 12 modified files touch pure game logic</b> (warning cleanups plus one map-bounds fix, e.g. <code>mapbuffer</code> -101 lines). That is avoidable friction.</li>
+<li><b>Retiring the 2D path is not a trim.</b> The 3D view is a toggle inside the SDL3 tiles build and reuses <code>cata_tiles</code> and the cursesport menus.</li>
+</ul>
+
+<h2>Proposed order</h2>
+<ol>
+<li><b>Free the disk.</b> Remove the 3.8 GB stale <code>tmp_pack_q0VdVp</code> (nothing references it; no git process is running). Needs your OK.</li>
+<li><b>Safe deletions that upstream rarely touches</b> (one commit each, each followed by a build): <code>android/</code>; <code>build-data/osx</code> with its CMake block; unused tilesets; translated docs; most of <code>.github</code>, <code>msvc-full-features</code>, <code>doxygen_doc</code>, <code>utilities</code>.</li>
+<li><b>Tooling.</b> Drop deno, the TypeScript and JS, and the docs-site tooling. Update <code>AGENTS.md</code> in the same commit.</li>
+<li><b>Docs moves.</b> Create <code>docs-archive</code> for research, repoint the BACKLOG and AGENTS links, move player guides to the wiki.</li>
+<li><b>Reorganise our code.</b> Move <code>r3d_*</code> source and tests into subdirectories so the fork's files are separated from upstream's.</li>
+<li><b>Data overlay (later, optional).</b> Pin an upstream commit, sparse-fetch <code>data/</code>, and keep only the 16 fork data files as an overlay. Needs checks on <code>--datadir</code> for tests and CMake's direct <code>data/</code> references.</li>
+<li><b>Curses retirement</b> follows the UI redesign (UI-02), screen by screen.</li>
+</ol>
+<p>Verification after each step: <code>cmake --build --preset linux-full --target cataclysm-bn-tiles cata_test-tiles</code> and the <code>[r3d]</code> test filter (the full sharded suite took 6:52 per <code>linux-test-profile.md</code>; not run here).</p>
+
+<h2>Decisions I need from you</h2>
+<ol>
+<li>Keep Windows or macOS support? This decides whether the Visual Studio, macOS bundle and Windows scripts go.</li>
+<li>Will upstream merges continue indefinitely? If yes, avoid deleting game-logic paths. If you plan to stop merging, you can trim much harder.</li>
+<li>Delete the 3.8 GB stale pack file now?</li>
+<li>Archive <code>android/</code> on a branch, or delete it (it stays in history either way)?</li>
+<li>Drop deno entirely, or keep a minimal <code>docs:gen</code> for the Lua reference?</li>
+<li>Keep the clang-tidy plugin and JSON formatter in the <code>linux-full</code> preset?</li>
+<li>Keep the PO and translation tooling, or take translations from upstream only?</li>
+<li>Go ahead with the data overlay approach, or stay with in-tree data for now?</li>
+</ol>
+
+<h2>Not verified</h2>
+<ul>
+<li>That docs and gfx files are byte-identical to upstream (paths were listed, contents not diffed; the gfx/sound diff against upstream was empty).</li>
+<li>Whether <code>pch/</code>, the SDL3 Find modules, the SDL2/libbacktrace checksum files, <code>fix-compilation-database.py</code>, <code>changelog.txt</code>, credits, <code>external_tileset</code> and <code>unifont.ttf</code> are used.</li>
+<li>Whether <code>tests/test_main.cpp</code> honours <code>--datadir</code>, and whether the keybindings loader globs its directory.</li>
+<li>Licences of Hoder, ASCII and MSX tilesets.</li>
+<li>Nothing was built or tested by the auditors.</li>
+</ul>
+
+<footer>Reports: 01_tooling, 02_assets, 03_docs, 04_source, 05_data (Markdown, same folder).</footer>
+</main>
+</body>
+</html>

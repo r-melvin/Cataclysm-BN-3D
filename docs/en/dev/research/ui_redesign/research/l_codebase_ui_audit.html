@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L. Codebase UI audit: screens, primitives and text rendering</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="l-codebase-ui-audit-screens-primitives-and-text-rendering">L. Codebase UI audit: screens, primitives and text rendering</h1>
+<p>Research date: 2026-10-21. Branch: <code>feat/ui-overhaul</code>. Read-only audit of <code>src/</code>. Line counts are from <code>wc -l</code>. Line references were read in the source during this audit.</p>
+<p>Key for the table:</p>
+<ul>
+<li><strong>Primitives</strong> use the counts from <code>rg -c</code> per file: <code>ui_adaptor</code>, <code>uilist</code>, <code>input_context</code>, <code>scrollable</code> (scrollable_text / scrollable views), <code>string_input_popup</code>, <code>query_popup|query_yn</code>, <code>draw_border</code>, <code>mvwprintz|mvwprintw</code>. Counts of 0 mean the file does not use that primitive directly.
+</li>
+<li><strong>Mouse</strong> is inferred from registered input actions, not run. <code>uilist</code> registers <code>SELECT</code> and <code>SCROLL_UP/DOWN</code> (<code>ui.cpp:230-235</code>, <code>ui.cpp:271</code>). The default bindings map <code>SELECT</code> to <code>MOUSE_LEFT</code> and <code>SCROLL_UP/DOWN</code> to the wheel (<code>data/raw/keybindings/keybindings.json</code>, around lines 1209-1221 and 3210-3220). So a uilist accepts a left-click that activates the <strong>highlighted</strong> row, and the wheel. <code>ui.cpp</code> contains no coordinate hit-test, so a click does not select the row under the pointer. Explicit <code>COORDINATE</code> (cursor-pick) support exists only in <code>game.cpp:3818</code>, <code>game.cpp:10123</code> (look-around), <code>ranged.cpp:3284</code> (targeting) and <code>popup.cpp:292</code>.
+</li>
+<li><strong>Modal / full-screen</strong>: every screen runs its own blocking input loop, so all are modal. "Full-screen" means the file sizes its windows from terminal dimensions (<code>TERMX</code>/<code>TERMY</code>/<code>FULL_SCREEN</code> references, counted per file). This is an inference from code, not a runtime check.
+</li>
+<li>Paths are under <code>/home/richard/Projects/Cataclysm-BN-3D/src/</code> unless shown otherwise.
+</li></ul>
+<h2 id="1-screen-and-menu-inventory">1. Screen and menu inventory</h2>
+<p>Default keys are from <code>data/raw/keybindings/keybindings.json</code>. Dispatch is from <code>src/handle_action.cpp</code>.</p>
+<table><thead><tr><th>Screen</th><th>Entry (key / action)</th><th>Files (absolute)</th><th>LOC</th><th>Primitives (ui_ad / uilist / input_ctx / scroll / strpop / query / border / mvwprint)</th><th>Mouse</th><th>Modal / full-screen</th></tr></thead><tbody><tr><td>Main menu, opening screen</td><td>Startup. <code>opening_screen()</code> at <code>main_menu.cpp:611</code>. ESC is bound to <code>main_menu</code>. (Startup call site not traced.)</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/main_menu.cpp</code></td><td>1218</td><td>3 / 9 / 1 / 0 / 0 / 7 / 2 / 0</td><td>uilist click/wheel in sub-menus</td><td>modal, full-screen</td></tr><tr><td>New character creation</td><td>Main menu "New Game" tab, <code>main_menu.cpp:889</code> (<code>new_character_tab</code>), calls <code>avatar::create</code> at <code>newcharacter.cpp:579</code>. Tab setters: <code>set_points</code> 913, <code>set_stats</code>, <code>set_traits</code>, <code>set_bionics</code>, <code>set_magic</code>, <code>set_scenario</code>, <code>set_profession</code>, <code>set_skills</code>, <code>set_description</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/newcharacter.cpp</code></td><td>4799</td><td>27 / 4 / 11 / 1 / 5 / 15 / 1 / 114</td><td>uilist click/wheel (partial)</td><td>modal, full-screen (tabbed)</td></tr><tr><td>Load character / world tab</td><td><code>main_menu.cpp:1018</code> (<code>load_character_tab</code>), <code>main_menu.cpp:1080</code> (<code>world_tab</code>)</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/main_menu.cpp</code>; world list and mods: <code>/home/richard/Projects/Cataclysm-BN-3D/src/worldfactory.cpp</code></td><td>1648 (worldfactory)</td><td>worldfactory: 18 / 0 / 5 / 0 / 4 / 5 / 4 / 11</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Inventory</td><td><code>i</code> (<code>inventory</code>). <code>game_menus::inv::common</code> at <code>game_inventory.cpp:266</code>. Selector class <code>inventory_selector</code> at <code>inventory_ui.cpp:1246+</code>; drawing: <code>draw_columns</code> 1860, <code>draw_frame</code> 1899, <code>draw_footer</code> 1917; input: <code>on_input</code> 2017.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/inventory_ui.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/game_inventory.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/inventory_ui.h</code> (799 lines)</td><td>2840 (inventory_ui.cpp); 2341 (game_inventory.cpp)</td><td>inventory_ui: 15 / 0 / 0 / 0 / 3 / 0 / 1 / 5. game_inventory: 3 / 0 / 1 / 0 / 0 / 0 / 0 / 0</td><td>keyboard only (no SELECT/COORDINATE registered in these files)</td><td>modal, full-screen (columns)</td></tr><tr><td>Wear, wield, read, gun-mod pick</td><td><code>W</code> wear (<code>handle_action.cpp:1572</code>), <code>w</code> wield, <code>R</code> read (<code>handle_action.cpp:1598</code>). These use inventory pickers <code>game_menus::inv::wear/read</code>. Gun-mod picker: <code>gunmod_inventory_preset</code> at <code>game_inventory.cpp:930</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/game_inventory.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/handle_action.cpp</code></td><td>(see inventory)</td><td>(see inventory)</td><td>keyboard only</td><td>modal, popup-sized picker</td></tr><tr><td>Reload (ammo selection, target pick)</td><td><code>r</code> reload_item (keybindings.json). Called from <code>avatar_action.cpp:1528</code> (<code>reload_ui::select_ammo</code>) and <code>avatar_action.cpp:1636</code> (<code>reload_ui::pick_target</code>).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/reload/reload_ui.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/reload/reload_ui.h</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/reload/reload.cpp</code></td><td>469</td><td>0 / 3 / 2 / 0 / 0 / 0 / 0 / 0</td><td>uilist click/wheel (partial)</td><td>modal, popup</td></tr><tr><td>Advanced inventory</td><td><code>/</code> (<code>advinv</code>). <code>create_advanced_inv()</code> at <code>handle_action.cpp:2546</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/advanced_inv.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/advanced_inv_pane.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/advanced_inv_area.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/advanced_inv_listitem.cpp</code></td><td>1930 + 282 + 470 + 73 = 2755</td><td>advanced_inv: 5 / 7 / 5 / 0 / 4 / 3 / 3 / 26 (pane and area: 0 direct uses)</td><td>uilist click/wheel (partial)</td><td>modal, full-screen (two panes)</td></tr><tr><td>Crafting / recipe browser</td><td><code>&amp;</code> (<code>craft</code>). <code>handle_action.cpp:2792</code> calls <code>u.craft()</code>, which goes to <code>crafting.cpp:674</code> (<code>craft_command</code>). Recipe picker: <code>select_crafting_recipe</code> at <code>crafting_gui.cpp:675</code>, input context at <code>crafting_gui.cpp:644</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/crafting_gui.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/crafting.cpp</code> (2600 lines, logic)</td><td>2144</td><td>3 / 6 / 4 / 0 / 2 / 1 / 0 / 4</td><td>uilist click/wheel (partial)</td><td>modal, full-screen</td></tr><tr><td>Construction menu</td><td><code>*</code> (<code>construct</code>). <code>handle_action.cpp:2850</code> calls <code>construction_menu( false )</code> at <code>construction.cpp:416</code>. Blueprint variant also used from <code>clzones.cpp:443</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/construction.cpp</code></td><td>2493</td><td>3 / 1 / 1 / 0 / 3 / 1 / 1 / 3</td><td>uilist click/wheel (partial)</td><td>modal, full-screen</td></tr><tr><td>Pickup</td><td><code>g</code> (<code>pickup</code>). <code>game::pickup</code> at <code>game.cpp:8941</code>, selector <code>do_pickup</code> at <code>pickup.cpp:448</code>, entry <code>pickup::pick_up</code> at <code>pickup.cpp:1237</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/pickup.cpp</code></td><td>1532</td><td>3 / 2 / 3 / 0 / 4 / 1 / 0 / 4</td><td>uilist click/wheel (partial)</td><td>modal, popup</td></tr><tr><td>Examine (<code>e</code>) and furniture/item examine</td><td><code>e</code> (<code>examine</code>). <code>game::examine()</code> at <code>game.cpp:8702</code>. Item examine: <code>examine_item_menu.cpp</code>. Furniture menus: <code>iexamine.cpp</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/examine_item_menu.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/iexamine.cpp</code> (8865, mostly gameplay)</td><td>552 + 8865</td><td>examine_item: 3 / 2 / 1 / 0 / 0 / 0 / 0 / 0. iexamine: 3 / 43 / 1 / 0 / 8 / 71 / 0 / 0</td><td>uilist click/wheel (partial)</td><td>modal, popup</td></tr><tr><td>Vehicle interaction</td><td>Examine a vehicle: <code>game::exam_vehicle</code> at <code>game.cpp:7967</code>, which calls <code>veh_interact::run</code>. Entry key not traced (<code>e</code> examines). Parts/tanks picker: <code>veh_interact::select_part</code> (used from <code>character.cpp:7826</code>).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/vehicle/veh_interact.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/vehicle/veh_interact.h</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/vehicle/vehicle_display.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/vehicle/vehicle_preview.cpp</code></td><td>3270 + 476 + 248</td><td>veh_interact: 11 / 12 / 3 / 0 / 4 / 1 / 1 / 8. vehicle_display: 0 / 0 / 0 / 0 / 0 / 0 / 0 / 11</td><td>uilist click/wheel (partial)</td><td>modal, full-screen</td></tr><tr><td>Look around (<code>x</code> / <code>;</code>)</td><td><code>look_around()</code> at <code>game.cpp:10061</code>. Registers <code>COORDINATE</code> at <code>game.cpp:10123</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/game.cpp</code> (17323, mixed gameplay)</td><td>(shared with game.cpp)</td><td>game.cpp: 50 / 13 / 16 / 2 / 5 / 28 / 5 / 62</td><td><strong>COORDINATE: cursor-pick</strong> plus mouse hits (game.cpp has 9 mouse-constant references)</td><td>modal, full-screen (map overlay)</td></tr><tr><td>Item info (item stats text)</td><td>Built by <code>item::info()</code> at <code>item.cpp:4522</code> (iteminfo vector). Rendered by <code>draw_item_info</code> (<code>output.cpp:806</code>, <code>988</code>, <code>995</code>), data struct <code>item_info_data</code> at <code>output.h:493</code>. Shown from inventory and examine.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/item.cpp</code> (12007, mostly gameplay data), <code>/home/richard/Projects/Cataclysm-BN-3D/src/output.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/output.h</code></td><td>(item.cpp) / 2233 / 1049</td><td>output.cpp: 6 / 0 / 5 / 5 / 3 / 5 / 4 / 9. item.cpp: 0</td><td>keyboard only</td><td>modal, popup</td></tr><tr><td>Character sheet (<code>@</code>)</td><td><code>@</code> (<code>player_data</code>). <code>character_display::disp_info</code> at <code>character_display.cpp:1306</code>. Tabs (<code>draw_*_tab</code>): stats 401, encumbrance 549, traits 584, bionics 633, effects 698, skills 806, speed 945.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/character_display.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/character_display.h</code></td><td>1751</td><td>38 / 0 / 3 / 0 / 3 / 1 / 8 / 39</td><td>keyboard only</td><td>modal, full-screen (tabbed)</td></tr><tr><td>Skills</td><td>No separate screen. Skills is a tab in the character sheet (<code>draw_skills_tab</code>, <code>character_display.cpp:806</code>, <code>draw_skills_info</code> 912).</td><td>(see character sheet)</td><td>(see above)</td><td>(see above)</td><td>keyboard only</td><td>modal, full-screen (tab)</td></tr><tr><td>Mutations</td><td><code>[</code> (<code>mutations</code>). <code>show_mutations_ui</code> at <code>mutation_ui.cpp:106</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/mutation_ui.cpp</code></td><td>643</td><td>3 / 0 / 2 / 0 / 0 / 4 / 1 / 6</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Bionics</td><td><code>p</code> (<code>bionics</code>). <code>show_bionics_ui</code> at <code>bionics_ui.cpp:557</code>. (Bionics logic in <code>bionics.cpp</code>, 3263 lines.)</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/bionics_ui.cpp</code></td><td>968</td><td>6 / 1 / 2 / 0 / 0 / 0 / 1 / 3</td><td>uilist click/wheel (partial)</td><td>modal, full-screen</td></tr><tr><td>Perks</td><td><code>CTRL+P</code> (<code>perks</code>). <code>draw_perk_menu</code> at <code>perk_menu.cpp:57</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/perk_menu.cpp</code></td><td>215</td><td>3 / 0 / 1 / 0 / 0 / 0 / 2 / 0</td><td>keyboard only</td><td>modal, popup</td></tr><tr><td>Armour layers (sort armour)</td><td><code>+</code> (<code>sort_armor</code>). <code>show_armor_layers_ui</code> (<code>handle_action.cpp:2784</code>). Implementation in <code>armor_layers.cpp</code> (1000 lines, not read in depth).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/armor_layers.cpp</code></td><td>1000</td><td>not counted</td><td>not checked</td><td>modal</td></tr><tr><td>Overmap map</td><td><code>m</code> (<code>map</code>). <code>ui::omap::display()</code> at <code>overmap_ui.cpp:2245</code> (static <code>display</code> at 1993). Notes manager at 643.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/overmap/overmap_ui.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/overmap/overmap_ui.h</code></td><td>2312</td><td>20 / 8 / 8 / 0 / 4 / 5 / 4 / 50</td><td><strong>SELECT + mouse hits (4 MOUSE, 2 SELECT)</strong>; cursor set at 1311</td><td>modal, full-screen</td></tr><tr><td>Messages log</td><td><code>P</code> (<code>messages</code>). <code>Messages::display_messages()</code> at <code>messages.cpp:848</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/messages.cpp</code></td><td>939</td><td>7 / 0 / 2 / 0 / 2 / 0 / 2 / 5</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Sidebar panels</td><td>Not a menu. Layouts chosen from <code>panels.cpp:2588</code> (<code>initialize_default_panel_layouts</code>): <code>classic</code>, <code>compact</code>, <code>labels-narrow</code>, <code>labels</code>. Default <code>labels</code> set at <code>panels.cpp:2608</code>. <code>SIDEBAR_POSITION</code> option read at <code>panels.cpp:2630</code>. Panel-manager UI (<code>}</code> toggle, <code>panel_mgmt</code>) at <code>panels.cpp:2860</code> (<code>show_adm</code>).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/panels.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/panels.h</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/panels_utility.cpp</code></td><td>3040</td><td>8 / 0 / 1 / 0 / 0 / 0 / 1 / 255</td><td>keyboard only (1 mouse hit)</td><td>not modal in play; <code>show_adm</code> modal</td></tr><tr><td>Options</td><td><code>open_options</code> action (<code>handle_action.cpp:3025</code> calls <code>get_options().show( true )</code>). Implementation <code>options_manager::show</code> at <code>options.cpp:3886</code>. Key not verified.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/options.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/options.h</code></td><td>4671</td><td>7 / 0 / 1 / 0 / 4 / 1 / 5 / 6</td><td>keyboard only (1 mouse hit)</td><td>modal, full-screen</td></tr><tr><td>Keybindings menu</td><td><code>?</code> (<code>HELP_KEYBINDINGS</code>). <code>input_context::display_menu</code> at <code>input.cpp:1206</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/input.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/input.h</code></td><td>1726 (input.cpp), 779 (input.h)</td><td>input.cpp: 3 / 0 / 59 / 0 / 2 / 4 / 1 / 7</td><td>keyboard + 8 mouse hits in input.cpp</td><td>modal, full-screen</td></tr><tr><td>Action menu (<code>Enter</code>)</td><td><code>RETURN</code> (<code>action_menu</code>) and <code>%</code> (<code>item_action_menu</code>). Action menu entries built in <code>action.cpp</code> (<code>make_register_actions</code> at 1013; menu at ~1129).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/action.cpp</code></td><td>1599</td><td>1 / 11 / 10 / 0 / 0 / 0 / 0 / 0</td><td>uilist click/wheel (partial)</td><td>modal, popup</td></tr><tr><td>Help</td><td><code>0</code> (<code>help</code>). <code>help::display_help()</code> at <code>help.cpp:143</code>. Text viewer uses <code>scrollable_text</code> (<code>output.h:325</code>).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/help.cpp</code></td><td>234</td><td>3 / 0 / 0 / 1 / 0 / 0 / 1 / 0</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Safemode</td><td><code>!</code> (<code>safemode</code>). <code>safemode::show()</code> at <code>safemode_ui.cpp:40</code>, <code>show( name, is_safemode )</code> at 51.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/safemode_ui.cpp</code></td><td>858</td><td>9 / 0 / 2 / 0 / 3 / 2 / 3 / 16</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Autopickup manager</td><td><code>open_autopickup</code> (no default key checked). <code>user_interface::show()</code> at <code>auto_pickup.cpp:55</code>; player and NPC settings at 403 and 779.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/auto_pickup.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/auto_pickup.h</code></td><td>824</td><td>9 / 0 / 2 / 0 / 2 / 2 / 3 / 9</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Zones manager</td><td><code>Y</code> (<code>zones</code>). <code>game::zones_manager()</code> at <code>game.cpp:9548</code>; implementation <code>clzones.cpp</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/clzones.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/clzones.h</code> (490 lines)</td><td>1627</td><td>0 / 3 / 0 / 0 / 3 / 1 / 0 / 0</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Missions</td><td><code>M</code> (<code>missions</code>). <code>game::list_missions()</code> at <code>mission_ui.cpp:22</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/mission_ui.cpp</code></td><td>219</td><td>3 / 0 / 1 / 0 / 0 / 0 / 1 / 4</td><td>keyboard only</td><td>modal, popup</td></tr><tr><td>Factions</td><td><code>#</code> (<code>factions</code>). <code>faction_manager::display()</code> at <code>faction.cpp:610</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/faction.cpp</code></td><td>911</td><td>3 / 0 / 1 / 0 / 0 / 0 / 1 / 20</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>NPC dialogue / chat</td><td>Talk to NPC: <code>game::chat()</code> at <code>npctalk.cpp:428</code>. Dialogue window class <code>dialogue_window</code> at <code>dialogue_win.h:21</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/npctalk.cpp</code> (3940, mixed chat and gameplay), <code>/home/richard/Projects/Cataclysm-BN-3D/src/dialogue_win.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/dialogue_win.h</code></td><td>3940 + 281</td><td>npctalk: 3 / 4 / 1 / 0 / 3 / 3 / 0 / 0. dialogue_win: 1 / 0 / 0 / 0 / 0 / 0 / 1 / 11</td><td>uilist click/wheel (partial)</td><td>modal, popup over map</td></tr><tr><td>Trade</td><td>Entered from NPC dialogue. <code>trading_window</code> at <code>trade_win.h:16</code>; <code>show_item_data</code> at <code>trade_win.cpp:666</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/trade_win.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/trade_win.h</code></td><td>1482</td><td>7 / 0 / 4 / 0 / 3 / 2 / 6 / 48</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Gun mods, reload, wear (see above)</td><td>See rows above</td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>Debug menu</td><td><code>F12</code> (<code>debug</code>). <code>debug()</code> at <code>debug_menu.cpp:1517</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/debug_menu.cpp</code></td><td>2340</td><td>2 / 164 / 0 / 0 / 9 / 2 / 0 / 0</td><td>uilist click/wheel + 3 mouse hits</td><td>modal, popup</td></tr><tr><td>Lua console</td><td><code></code> <code> </code><code> (</code>lua_console<code>). </code>show_lua_console_impl()<code> at </code>catalua_console.cpp:151`.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/catalua_console.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/catalua_console.h</code></td><td>417</td><td>3 / 0 / 1 / 0 / 0 / 0 / 1 / 12</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Color manager</td><td><code>open_color</code> action. <code>all_colors.show_gui()</code> (<code>handle_action.cpp:3045</code>).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/color.cpp</code> (1088)</td><td>1088</td><td>color.cpp not counted for primitives</td><td>not checked</td><td>modal</td></tr><tr><td>Diary</td><td><code>HOME</code> (<code>diary</code>). <code>diary::show_diary_ui()</code> (<code>handle_action.cpp:2987</code>).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/diary_ui.cpp</code></td><td>411</td><td>12 / 0 / 7 / 11 / 1 / 3 / 3 / 31</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>Scores / achievements</td><td><code>)</code> (<code>scores</code>). <code>show_scores_ui()</code> at <code>scores_ui.cpp:69</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/scores_ui.cpp</code></td><td>217</td><td>6 / 0 / 2 / 0 / 0 / 0 / 2 / 0</td><td>keyboard only</td><td>modal, popup</td></tr><tr><td>Morale</td><td><code>v</code> (<code>morale</code>). <code>u.disp_morale()</code> (<code>handle_action.cpp:2995</code>). Implementation not traced.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/morale.cpp</code> (1148)</td><td>1148</td><td>not counted</td><td>not checked</td><td>modal</td></tr><tr><td>Status report (text)</td><td><code>F4</code> (<code>status_report</code>). <code>status_report( u )</code> at <code>status_report.cpp:69</code> builds one text string. <code>handle_action.cpp:3287</code> calls <code>add_msg</code> and <code>popup()</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/status_report.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/status_report.h</code></td><td>157</td><td>0 (uses <code>popup()</code>)</td><td>keyboard only</td><td>modal, popup</td></tr><tr><td>3D HUD overlay (r3d)</td><td>Not a menu. Text in <code>sdltiles.cpp:1611</code> (<code>draw_r3d_hud_texts</code>). Geometry and arrows drawn with <code>SDL_Renderer</code> in <code>r3d_hud.cpp</code> (<code>fill_triangles</code> 141, <code>draw_arrow</code> 195, <code>draw_edge_arrows</code> 210). Math in <code>r3d_hud_math.cpp</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/r3d_hud.cpp</code> (624), <code>/home/richard/Projects/Cataclysm-BN-3D/src/r3d_hud_math.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/sdltiles.cpp</code></td><td>624</td><td>0 (no catacurses widgets)</td><td>not applicable</td><td>not modal (overlay)</td></tr><tr><td>Onboarding overlay and checklist</td><td><code>onboarding.cpp</code> <code>manager::show_popup( lesson )</code> at 894; <code>show_checklist()</code> at 1195. Core logic <code>onboarding_core.cpp</code> (343), header <code>onboarding_core.h</code> (199), <code>onboarding.h</code> (73), <code>onboarding_input.h</code> (8).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/onboarding.cpp</code> (1361), <code>/home/richard/Projects/Cataclysm-BN-3D/src/onboarding_core.cpp</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/onboarding.h</code>, <code>/home/richard/Projects/Cataclysm-BN-3D/src/onboarding_core.h</code></td><td>1361 + 343 + 199 + 73 + 8</td><td>onboarding.cpp: 0 / 2 / 2 / 0 / 0 / 1 / 0 / 0</td><td>keyboard only</td><td>modal, popup</td></tr><tr><td>Salvage</td><td><code>ACTION_SALVAGE</code> (no default key checked). <code>salvage.cpp</code> (538).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/salvage.cpp</code></td><td>538</td><td>0 / 0 / 2 / 0 / 0 / 2 / 0 / 0</td><td>keyboard only</td><td>modal, popup</td></tr><tr><td>Computer terminal</td><td>Map computer, <code>computer_session.cpp</code> (1703).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/computer_session.cpp</code></td><td>1703</td><td>3 / 1 / 3 / 0 / 0 / 7 / 1 / 0</td><td>uilist click/wheel (partial)</td><td>modal, full-screen</td></tr><tr><td>Loading screen</td><td>Shown during world load. <code>loading_ui.cpp</code> (570).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/loading_ui.cpp</code></td><td>570</td><td>3 / 1 / 0 / 0 / 0 / 0 / 1 / 1</td><td>keyboard only</td><td>modal, full-screen</td></tr><tr><td>String editor (multi-line text)</td><td>Used by notes and other text fields. <code>string_editor_window.cpp</code> (749).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/string_editor_window.cpp</code></td><td>749</td><td>4 / 0 / 1 / 0 / 0 / 0 / 0 / 3</td><td>keyboard only</td><td>modal, popup</td></tr><tr><td>Character preview (in creation)</td><td><code>character_preview.cpp</code> (370).</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/character_preview.cpp</code></td><td>370</td><td>0 / 0 / 0 / 0 / 0 / 0 / 1 / 0</td><td>keyboard only</td><td>embedded in creation</td></tr><tr><td>Pixel minimap</td><td>Map overlay. <code>pixel_minimap.cpp</code> (708). Toggle <code>toggle_pixel_minimap</code>.</td><td><code>/home/richard/Projects/Cataclysm-BN-3D/src/pixel_minimap.cpp</code></td><td>708</td><td>not counted</td><td>not checked</td><td>not modal (overlay)</td></tr><tr><td>Game map (main view)</td><td>Not a menu. Tiles: <code>cata_tiles.cpp</code> (7552), SDL side <code>sdltiles.cpp</code> (4463). Curses: <code>game.cpp</code> drawing.</td><td>see section 2</td><td>see section 2</td><td>see section 2</td><td>COORDINATE in default context (<code>game.cpp:3818</code>)</td><td>not modal</td></tr></tbody></table>
+<p>Notes on the table:</p>
+<ul>
+<li>The "Mouse" column is the broadest uncertainty. A left-click on a uilist activates the highlighted row, but the code never hit-tests the click position. That is a reading of <code>ui.cpp</code> and needs a runtime check.
+</li>
+<li>The "Modal / full-screen" column is partly inferred from window-sizing references, as described above.
+</li></ul>
+<p>Sub-counts (LOC for the screen files above, de-duplicated, from <code>wc -l</code>):</p>
+<ul>
+<li>Screen-file set (sum of the files in section 1, excluding <code>game.cpp</code>, <code>item.cpp</code>, <code>iexamine.cpp</code>, which are mostly gameplay): <strong>64,931 LOC</strong>. This includes <code>npctalk.cpp</code> (3,940, mixed chat and gameplay).
+</li>
+<li>Primitive set (<code>ui.{h,cpp}</code>, <code>ui_manager.{h,cpp}</code>, <code>output.{h,cpp}</code>, <code>popup.{h,cpp}</code>, <code>string_input_popup.{h,cpp}</code>, <code>cursesdef.h</code>, <code>ncurses_def.{h,cpp}</code>, <code>cursesport.{h,cpp}</code>, <code>sdltiles.{h,cpp}</code>, <code>sdl_font.cpp</code>, <code>font_loader.cpp</code>, <code>cata_tiles.{h,cpp}</code>, <code>color.{h,cpp}</code>, <code>input.h</code>, <code>ui_theme.{h,cpp}</code>, <code>drawing_primitives.cpp</code>): <strong>25,472 LOC</strong>.
+</li>
+<li>Combined (no file in both sets): <strong>90,403 LOC</strong>.
+</li>
+<li>Five largest UI screen files: <code>newcharacter.cpp</code> 4799, <code>options.cpp</code> 4671, <code>npctalk.cpp</code> 3940 (mixed), <code>vehicle/veh_interact.cpp</code> 3270, <code>panels.cpp</code> 3040.
+</li>
+<li>Five largest rendering and UI-infrastructure files: <code>cata_tiles.cpp</code> 7552, <code>sdltiles.cpp</code> 4463, <code>output.cpp</code> 2233, <code>ui.cpp</code> 1228, <code>color.cpp</code> 1088.
+</li></ul>
+<h2 id="2-primitives-and-text-rendering-path">2. Primitives and text rendering path</h2>
+<h3 id="2-1-window-abstraction-catacurses">2.1 Window abstraction (<code>catacurses</code>)</h3>
+<ul>
+<li><code>src/cursesdef.h:52</code> defines <code>class window</code>. <code>cursesdef.h:40</code> declares <code>init_interface()</code>. <code>cursesdef.h:94-130</code> declares the wrapper functions: <code>wborder</code>, <code>mvwhline</code>, <code>mvwvline</code>, <code>wnoutrefresh</code>, <code>wrefresh</code>, <code>refresh</code>, <code>mvwprintw</code>, <code>wprintw</code>, <code>werase</code>, <code>wmove</code>, <code>mvwaddch</code>, <code>wattron</code>, <code>wattroff</code>, <code>curs_set</code>.
+</li>
+<li><code>cursesdef.h:20-27</code> documents the three backends: ncurses (<code>ncurses_def.cpp</code>), the in-house <code>cata_cursesport</code> (<code>cursesport.cpp</code>), and Windows curses.
+</li>
+<li>Terminal build: <code>src/ncurses_def.cpp:80</code> (<code>wnoutrefresh</code>), <code>:85</code> (<code>wrefresh</code>), <code>:152</code> (<code>refresh</code>), <code>:157</code> (<code>refresh_display</code>). <code>ncurses_def.cpp:306</code> registers the ncurses mouse.
+</li>
+<li>Tiles build: <code>src/cursesport.cpp:1</code> is compiled only under <code>#if defined(TILES) || defined(_WIN32)</code>. The SDL frame is presented in <code>src/sdltiles.cpp:531</code> (<code>SDL_RenderPresent</code>).
+</li></ul>
+<h3 id="2-2-drawing-helpers-output-h-implemented-in-output-cpp">2.2 Drawing helpers (<code>output.h</code>, implemented in <code>output.cpp</code>)</h3>
+<ul>
+<li><code>mvwprintz</code> declared <code>output.h:342</code>, defined <code>output.cpp:2220</code>. Variadic wrapper at <code>output.h:344</code>.
+</li>
+<li><code>draw_border</code> declared <code>output.h:364</code>, defined <code>output.cpp:585</code>. It checks <code>get_ui_theme()</code> (<code>output.cpp:588</code>).
+</li>
+<li><code>draw_custom_border</code> <code>output.h:359</code>. <code>border_helper</code> <code>output.h:368</code>.
+</li>
+<li><code>draw_tabs</code> <code>output.h:768</code>, <code>:771</code>, <code>:785</code>, <code>:807</code>. <code>draw_tab</code> <code>:755</code>, <code>draw_subtab</code> <code>:757</code>.
+</li>
+<li><code>draw_scrollbar</code> <code>output.h:822</code>. <code>scrollbar</code> class <code>:828</code>.
+</li>
+<li><code>scrollable_text</code> declared <code>output.h:325</code>, defined <code>output.cpp:362</code>.
+</li>
+<li><code>scrolling_text_view</code> <code>output.h:871</code>. <code>scrollingcombattext</code> <code>output.h:892</code>.
+</li>
+<li><code>print_colored_text</code> <code>output.h:211</code>. <code>trim_and_print</code> <code>:296</code>. <code>center_print</code> <code>:318</code>. <code>insert_table</code> <code>:322</code>.
+</li>
+<li><code>draw_item_info</code> overloads: <code>output.h:534</code>, <code>:536</code>, <code>:538</code>; defined at <code>output.cpp:806</code>, <code>:988</code>, <code>:995</code>. Data struct <code>item_info_data</code> at <code>output.h:493</code>.
+</li>
+<li><code>refresh_display()</code> declared <code>output.h:1011</code>, defined in <code>ncurses_def.cpp:157</code>.
+</li></ul>
+<h3 id="2-3-uilist-ui-h-ui-cpp">2.3 Uilist (<code>ui.h</code>, <code>ui.cpp</code>)</h3>
+<ul>
+<li><code>uilist_entry</code> <code>ui.h:55</code>. <code>uilist_callback</code> <code>ui.h:169</code>. <code>class uilist</code> <code>ui.h:189</code> (forward decl at <code>:159</code>). <code>pointmenu_cb</code> <code>ui.h:446</code>.
+</li>
+<li><code>uilist::init()</code> <code>ui.cpp:152</code>. <code>uilist::query()</code> <code>ui.cpp:1042</code>.
+</li>
+<li>Registered actions: <code>SCROLL_UP</code> / <code>SCROLL_DOWN</code> at <code>ui.cpp:230-231</code> and <code>:271-272</code>, <code>PAGE_UP</code> / <code>PAGE_DOWN</code> at <code>:226-227</code> and <code>:267-268</code>, <code>SELECT</code> at <code>ui.cpp:235</code>.
+</li>
+<li>Scroll bar: <code>uilist::apply_scrollbar()</code> at <code>ui.cpp:755</code> uses <code>scrollbar()</code>.
+</li></ul>
+<h3 id="2-4-popups-and-text-input">2.4 Popups and text input</h3>
+<ul>
+<li><code>class query_popup</code> <code>popup.h:36</code>. <code>static_popup</code> <code>popup.h:275</code>. <code>throbber_popup</code> <code>popup.h:310</code>. <code>popup.cpp:292</code> registers <code>COORDINATE</code>.
+</li>
+<li><code>class string_input_popup</code> <code>string_input_popup.h:47</code>. Query loop <code>string_input_popup.cpp:340</code>. Cursor set for screen readers at <code>string_input_popup.cpp:326</code>.
+</li></ul>
+<h3 id="2-5-input-routing-input-h-input-cpp">2.5 Input routing (<code>input.h</code>, <code>input.cpp</code>)</h3>
+<ul>
+<li><code>enum mouse_buttons</code> <code>input.h:89</code>: <code>MOUSE_BUTTON_LEFT</code>, <code>MOUSE_BUTTON_RIGHT</code>, <code>SCROLLWHEEL_UP</code>, <code>SCROLLWHEEL_DOWN</code>, <code>MOUSE_MOVE</code>.
+</li>
+<li><code>class input_manager</code> <code>input.h:232</code>. <code>class input_context</code> <code>input.h:399</code>. Coordinate action documented at <code>input.h:518</code>.
+</li>
+<li><code>input.cpp:82</code> <code>is_mouse_enabled()</code>. Key names <code>MOUSE_LEFT</code> / <code>SCROLL_UP</code> mapped at <code>input.cpp:444-448</code>.
+</li>
+<li>Mouse events are translated to actions at <code>input.cpp:1059-1071</code>: an unbound mouse event is dropped unless the context is handling coordinates.
+</li>
+<li><code>input_context::register_action</code> <code>input.cpp:733</code>. Built-in directional actions <code>LEFTUP</code> etc. at <code>input.cpp:1098-1101</code>.
+</li>
+<li><code>input_context::display_menu</code> (keybindings menu) at <code>input.cpp:1206</code>.
+</li></ul>
+<h3 id="2-6-screen-composition-ui-manager">2.6 Screen composition (<code>ui_manager</code>)</h3>
+<ul>
+<li><code>class ui_adaptor</code> <code>ui_manager.h:65</code>: redraw callbacks (<code>redraw_callback_t</code> at <code>:68</code>), <code>disable_uis_below</code> at <code>:71</code>.
+</li>
+<li><code>class background_pane</code> <code>ui_manager.h:244</code>. <code>invalidate()</code> <code>:262</code>, <code>redraw()</code> <code>:270</code>, <code>redraw_invalidated()</code> <code>:274</code>, <code>screen_resized()</code> <code>:279</code>. Implementation <code>ui_manager.cpp</code> (489 lines).
+</li>
+<li>Screens register a <code>ui_adaptor</code> and draw in its callback, which is how most newer screens redraw.
+</li></ul>
+<h3 id="2-7-colours-and-theme">2.7 Colours and theme</h3>
+<ul>
+<li><code>color.h</code> / <code>color.cpp</code>: <code>color_manager::name_to_color</code> <code>color.cpp:102</code>, <code>color_to_id</code> <code>:130</code>, <code>get</code> <code>:149</code>, <code>get_invert</code> <code>:167</code>, <code>get_highlight</code> <code>:189</code>.
+</li>
+<li>Terminal palette: <code>ncurses_def.cpp:252-268</code> asserts that base colours match ncurses constants.
+</li>
+<li>Tiles palette: <code>sdltiles.cpp:117</code> (<code>windowsPalette</code>), lookup at <code>sdltiles.cpp:430</code>. Used for glyph colouring at <code>sdl_font.cpp:338-339</code> and <code>:465</code>.
+</li>
+<li>Theme: <code>ui_theme.h:6-13</code> (<code>struct ui_theme</code>: <code>modern_borders</code>, <code>border</code>, <code>title</code>), <code>ui_theme.cpp:5</code> <code>get_ui_theme()</code>. Selected by the <code>MODERN_MENUS</code> option (<code>options.cpp:2546</code>). The only caller found is <code>output.cpp:588</code> (<code>draw_border</code>). The theme does not alter <code>color.cpp</code> pairs.
+</li></ul>
+<h3 id="2-8-tiles-text-rendering-sdl-build">2.8 Tiles text rendering (SDL build)</h3>
+<ul>
+<li><code>sdltiles.cpp:183</code> <code>TTF_Init()</code>. <code>sdltiles.cpp:188</code> <code>atexit(TTF_Quit)</code>.
+</li>
+<li>Font selection: <code>sdltiles.cpp:3932</code> (<code>font_loader fl</code>). <code>font_loader.cpp:8</code> <code>ensure_unifont_loaded</code> adds <code>unifont.ttf</code> from <code>PATH_INFO::fontdir()</code>. <code>font_loader.cpp:12</code> <code>load_throws</code>, <code>:44</code> <code>load()</code>.
+</li>
+<li><code>sdl_font.cpp:51</code> <code>Font::load_font()</code>. If the typeface ends with <code>.bmp</code> or <code>.png</code> it is treated as a bitmap font (<code>sdl_font.cpp:57-80</code>). Otherwise TrueType (<code>sdl_font.cpp:81</code> onward). <code>sdl_font.cpp:12</code> <code>open_font_index()</code> uses <code>TTF_OpenFontWithProperties</code> (SDL3_ttf API). <code>sdl_font.cpp:243</code> lists known suffixes <code>.ttf .otf .ttc .fon</code>.
+</li>
+<li>Glyph rasterisation: <code>sdl_font.cpp:338-339</code>, <code>TTF_RenderText_Blended</code> when blending is on, else <code>TTF_RenderText_Solid</code>, both with <code>windowsPalette[color]</code>. <code>Font::draw_ascii_lines</code> at <code>sdl_font.cpp:94</code> draws line-drawing glyphs.
+</li>
+<li>Conclusion: text in the tiles build is <strong>SDL_ttf (SDL3_ttf) with a bitmap-font fallback path</strong>, not ImGui and not a plain bitmap atlas. Default TTF is <code>unifont.ttf</code>.
+</li>
+<li>Map: <code>cata_tiles.h:736</code> <code>class cata_tiles</code>. <code>cata_tiles.cpp</code> (7552 lines). Context created at <code>sdltiles.cpp:3952</code>. Overmap drawing <code>cata_tiles::draw_om</code> <code>cata_tiles.cpp:826</code> (and <code>sdltiles.cpp</code> references).
+</li>
+<li>r3d overlay: drawn with raw <code>SDL_Renderer</code> in <code>r3d_hud.cpp</code> and text via <code>sdltiles.cpp:1611</code>.
+</li></ul>
+<h3 id="2-9-terminal-build">2.9 Terminal build</h3>
+<ul>
+<li>Non-tiles build uses <code>ncurses_def.cpp</code> (ncurses library) directly. Text is terminal glyphs with <code>init_pair</code>-style colours (<code>ncurses_def.cpp:252-268</code>).
+</li></ul>
+<h2 id="3-accessibility-and-screen-reader-search-results">3. Accessibility and screen-reader search results</h2>
+<p>Commands run, with results:</p>
+<ol>
+<li><code>rg -i &#x27;tts|speech|narrat|screen.?reader|accessib&#x27; src/</code> returned many hits. All were unrelated:
+<ul>
+<li><code>speech</code> is the game's Speech skill and in-game speech sounds (<code>activity_speed.cpp:304</code>, <code>character_effects.cpp:139</code>, <code>speech.cpp</code>, <code>iuse.cpp:5517</code>, <code>npc.cpp:1796</code>).
+</li>
+<li><code>accessible</code> / <code>inaccessible</code> refers to reachability in pathfinding and item access (<code>pathfinding.h:182-193</code>, <code>map.cpp</code>, <code>crafting.cpp:557</code>).
+</li></ul>
+</li>
+<li>Stricter grep: <code>rg -in &#x27;\btts\b|text.?to.?speech|speech.?synth|screen.?reader|narrat|accessibil|colou?r.?blind|high.?contrast|nvda|jaws|a11y&#x27; src/</code> returned <strong>15 hits</strong>, all comments or unrelated names:
+<ul>
+<li><code>messages.cpp:887</code> and <code>:920</code>: "messages will not be missed by screen readers" (wredrawln keeps message lines in the output so screen readers pick them up).
+</li>
+<li><code>ui_manager.h:41</code> and <code>:157</code>: <code>record_cursor</code> / <code>set_cursor</code> documented as "for screen readers and IME preview". Line 157 says screen readers "do not work with the current tiles implementation".
+</li>
+<li><code>string_input_popup.cpp:326</code>: cursor placed "for screen readers and IME preview".
+</li>
+<li><code>game.cpp:4940</code> and <code>:5132</code>: the cursor is placed over the player, "This allows screen readers to describe the area around the player". Line 4940 is inside the map draw path.
+</li>
+<li><code>game.cpp:7349</code>: "we don't have screen readers in game", paired with the message "You can not see a computer screen!" for blind characters.
+</li>
+<li><code>game.cpp:11453</code>: cursor moved to the selected item "(for screen readers)".
+</li>
+<li><code>overmap/overmap_ui.cpp:1311</code>: "Set cursor for screen readers".
+</li>
+<li><code>status_report.h:15</code>: <code>status_report</code> is described as "meant for the message log and screen readers" (plain-text summary of surroundings).
+</li>
+<li>Unrelated uses: <code>item_contents.h:102</code> ("accessibility" in item expansion), <code>vehicle/vehicle_selector.h:38</code> (line-of-sight), <code>vehicle/vpart_range.h:99</code> and <code>:101</code> (C++ constructor access, NOLINT).
+</li></ul>
+</li>
+<li><code>rg -il imgui</code> (excluding docs) returned <strong>0 files</strong>. ImGui is not used.
+</li>
+<li>There is <strong>no TTS, screen-reader API, narration, colour-blind mode or high-contrast mode</strong> in <code>src/</code>, <code>data/json</code> or <code>data/raw</code> by these searches. The only accessibility-adjacent option found is <code>MODERN_MENUS</code> (<code>options.cpp:2546</code>), which is a border/title colour theme, not an accessibility feature.
+</li>
+<li>Related research documents already in this folder: <code>g_accessibility_guidelines.md</code> and <code>h_screen_reader_tts.md</code> (not reviewed in this audit).
+</li></ol>
+<p>What the code does provide: the <strong>hardware cursor is placed</strong> on the focused element (<code>ui_adaptor::set_cursor</code>, <code>ui_manager.h:157</code> onward), so a platform screen reader using the terminal's cursor can follow the focus on the curses build. The comment at <code>ui_manager.h:157</code> says this does not work on tiles.</p>
+<h2 id="4-not-found-uncertain">4. Not found / uncertain</h2>
+<ul>
+<li><strong>Not found:</strong> TTS, speech output, narration, a screen-reader API, colour-blind palette, high-contrast mode, ImGui. The stricter grep found only comments.
+</li>
+<li><strong>Uncertain: mouse semantics.</strong> Click activates the highlighted row, with no hit-test, is read from <code>ui.cpp</code> (no coordinate code) and the key bindings. It has not been run.
+</li>
+<li><strong>Uncertain: modal vs full-screen.</strong> Inferred from window-sizing references per file. Not checked at runtime.
+</li>
+<li><strong>Keys not verified:</strong> options (<code>open_options</code>, keybindings.json:2592), autopickup (<code>open_autopickup</code>, :2598), autonotes, distraction manager (<code>open_distraction_manager</code>, :2616), colour manager (<code>open_color</code>, :2622), vehicle examine key, armour layers, salvage, gun-mod menu entry. Each has an action ID in <code>keybindings.json</code> but the key was not read.
+</li>
+<li><strong>Not traced:</strong> whether <code>main.cpp</code> calls <code>opening_screen()</code> at startup; the implementation of <code>disp_morale</code> (<code>morale.cpp</code>); <code>armor_layers.cpp</code> (1000 lines) and <code>pixel_minimap.cpp</code> (708 lines) were counted but not read.
+</li>
+<li><strong>Mixed-use files:</strong> <code>game.cpp</code> (17,323), <code>item.cpp</code> (12,007), <code>iexamine.cpp</code> (8,865), <code>npctalk.cpp</code> (3,940), <code>ranged.cpp</code> (4,921, targeting uses <code>COORDINATE</code> at <code>ranged.cpp:3284</code>). Their UI parts were not separated into LOC. The totals above exclude <code>game.cpp</code>, <code>item.cpp</code> and <code>iexamine.cpp</code>, but include <code>npctalk.cpp</code>.
+</li>
+<li><strong>Gun mod and reload menu entry points:</strong> the reload path is verified (<code>avatar_action.cpp:1528</code> and <code>:1636</code>). The gun-mod picker is verified as an inventory preset (<code>game_inventory.cpp:930</code>), but the action that opens it was not traced.
+</li>
+<li><strong>Primitive counts</strong> are from <code>rg -c</code> on each file and undercount helper functions in other files that reuse these primitives.
+</li></ul>
+</main>
+</body>
+</html>

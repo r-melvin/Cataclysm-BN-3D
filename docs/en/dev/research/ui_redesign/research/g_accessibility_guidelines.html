@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game accessibility guidelines and exemplary implementations</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="game-accessibility-guidelines-and-exemplary-implementations">Game accessibility guidelines and exemplary implementations</h1>
+<p>Research note for the UI redesign. Sources were fetched on 2026-10-21. Items marked <strong>UNVERIFIED</strong> come from memory or from a source I could not open. Items under "Could not verify" were not confirmed.</p>
+<h2 id="1-checklist-table">1. Checklist table</h2>
+<p>Guideline wording is verbatim from gameaccessibilityguidelines.com (GAG) unless stated. Level and category come from the page where the item appears. Some items appear under several categories on the source site; they are listed once per primary category.</p>
+<table><thead><tr><th>#</th><th>Item</th><th>Category</th><th>Level (GAG)</th><th>Source URL</th></tr></thead><tbody><tr><td>1</td><td>Include an option to adjust the game speed</td><td>motor</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>2</td><td>Include toggle/slider for any haptics</td><td>motor</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>3</td><td>Ensure interactive elements / virtual controls are large and well spaced, particularly on small or touch screens</td><td>motor</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>4</td><td>Include an option to adjust the sensitivity of controls</td><td>motor</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>5</td><td>Ensure that all areas of the user interface can be accessed using the same input method as the gameplay</td><td>motor</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>6</td><td>Ensure controls are as simple as possible, or provide a simpler alternative</td><td>motor</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>7</td><td>Allow controls to be remapped / reconfigured</td><td>motor</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>8</td><td>Avoid flickering images and repetitive patterns</td><td>cognitive</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>9</td><td>Allow players to progress through text prompts at their own pace</td><td>cognitive</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>10</td><td>Include interactive tutorials</td><td>cognitive</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>11</td><td>Use simple clear language</td><td>cognitive</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>12</td><td>Allow the game to be started without the need to navigate through multiple levels of menus</td><td>cognitive</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>13</td><td>Use simple clear text formatting</td><td>cognitive / vision</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>14</td><td>Use an easily readable default font size</td><td>cognitive / vision</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>15</td><td>Provide high contrast between text/UI and background</td><td>vision</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>16</td><td>Avoid VR simulation sickness triggers</td><td>vision</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>17</td><td>If the game uses field of view (3D engine only), set an appropriate default for the expected viewing environment</td><td>vision</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>18</td><td>Ensure no essential information is conveyed by a fixed colour alone</td><td>vision</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>19</td><td>If any subtitles / captions are used, present them in a clear, easy to read way</td><td>hearing</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>20</td><td>Ensure no essential information is conveyed by sounds alone</td><td>hearing</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>21</td><td>Provide separate volume controls or mutes for effects, speech and background / music</td><td>hearing</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>22</td><td>Provide subtitles for all important speech</td><td>hearing</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>23</td><td>Ensure that speech input is not required, and included only as a supplementary / alternative input method</td><td>speech</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>24</td><td>Solicit accessibility feedback</td><td>general</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>25</td><td>Ensure that all settings are saved/remembered</td><td>general</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>26</td><td>Provide details of accessibility features in-game</td><td>general</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>27</td><td>Provide details of accessibility features on packaging and/or website</td><td>general</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>28</td><td>Offer a wide choice of difficulty levels</td><td>general</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>29</td><td>Avoid / provide alternatives to requiring buttons to be held down</td><td>motor</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>30</td><td>Provide a macro system</td><td>motor</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>31</td><td>Allow interfaces to be resized</td><td>motor / vision</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>32</td><td>Allow interfaces to be rearranged</td><td>motor</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>33</td><td>If producing a PC game, support windowed mode for compatibility with overlaid virtual keyboards</td><td>motor</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>34</td><td>Avoid repeated inputs (button-mashing/quick time events)</td><td>motor</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>35</td><td>Make interactive elements that require accuracy (eg. cursor/touch controlled menu options) stationary</td><td>motor</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>36</td><td>Support more than one input device</td><td>motor</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>37</td><td>Highlight important words</td><td>cognitive</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>38</td><td>Provide a choice of text colour, low/high contrast choice as a minimum</td><td>cognitive</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>39</td><td>Ensure no essential information (especially instructions) is conveyed by text alone, reinforce with visuals and/or speech</td><td>cognitive</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>40</td><td>Include a means of practicing without failure, such as a practice level or sandbox mode</td><td>cognitive</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>41</td><td>Indicate / allow reminder of controls during gameplay</td><td>cognitive</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>42</td><td>Indicate / allow reminder of current objectives during gameplay</td><td>cognitive</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>43</td><td>Include contextual in-game help / guidance / tips</td><td>cognitive</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>44</td><td>Give a clear indication that interactive elements are interactive</td><td>cognitive / vision</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>45</td><td>Provide an option to turn off / hide background movement</td><td>cognitive / vision</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>46</td><td>Provide an option to adjust contrast</td><td>vision</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>47</td><td>Provide a choice of cursor / crosshair colours / designs</td><td>vision</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>48</td><td>Ensure sound / music choices for each key objects / events are distinct from each other</td><td>cognitive / vision</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>49</td><td>Allow subtitle/caption presentation to be customised</td><td>hearing</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>50</td><td>Provide a visual indication of who is currently speaking</td><td>hearing</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>51</td><td>Provide captions or visuals for significant background sounds</td><td>hearing</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>52</td><td>Ensure that all important supplementary information (eg. the direction you are being shot from) conveyed by audio is... (truncated on source)</td><td>hearing</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>53</td><td>Provide a stereo/mono toggle</td><td>hearing</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>54</td><td>Support text chat as well as voice for multiplayer</td><td>hearing / speech</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>55</td><td>Base speech recognition on individual words from a small vocabulary (eg. 'yes' 'no' 'open') instead of long phrases... (truncated on source)</td><td>speech</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>56</td><td>Include assist modes such as auto-aim and assisted steering</td><td>general</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>57</td><td>Provide an autosave feature</td><td>general</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>58</td><td>Offer a means to bypass gameplay elements that aren't part of the core mechanic, via settings or in-game skip option</td><td>general</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>59</td><td>Allow difficulty level to be altered during gameplay, either through settings or adaptive difficulty</td><td>general</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>60</td><td>Include some people with impairments amongst play-testing participants</td><td>general</td><td>Intermediate</td><td><a href="https://gameaccessibilityguidelines.com/intermediate/">https://gameaccessibilityguidelines.com/intermediate/</a></td></tr><tr><td>61</td><td>Provide very simple control schemes that are compatible with assistive technology devices, such as switch or eye tracking</td><td>motor</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>62</td><td>Include a cool-down period (post acceptance delay) of 0.5 seconds between inputs</td><td>motor</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>63</td><td>Do not make precise timing essential to gameplay, offer alternatives (truncated on source)</td><td>motor</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>64</td><td>Allow play in both landscape and portrait</td><td>motor</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>65</td><td>Provide an option to turn off / hide all non interactive elements</td><td>cognitive</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>66</td><td>Allow all narrative and instructions to be replayed</td><td>cognitive</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>67</td><td>Avoid any sudden unexpected movement or events</td><td>cognitive</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>68</td><td>Provide an option to disable blood and gore</td><td>cognitive</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>69</td><td>Provide pre-recorded voiceovers for all text, including menus and installers</td><td>cognitive / vision</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>70</td><td>Ensure screen reader support, including menus &amp; installers</td><td>vision</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>71</td><td>Allow the font size to be adjusted</td><td>vision</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>72</td><td>Provide an audio description track</td><td>vision</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>73</td><td>Provide signing</td><td>hearing</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>74</td><td>Ensure that subtitles/captions are cut down to and presented at an appropriate words-per-minute for the target age-group</td><td>hearing</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>75</td><td>Realtime text &lt;-&gt; speech transcription</td><td>general / speech</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>76</td><td>Allow settings to be saved to different profiles, at either game or platform level</td><td>general</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>77</td><td>Base speech recognition on hitting a volume threshold (eg. 50%) instead of words</td><td>speech</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>78</td><td>Use symbol-based chat (smileys etc)</td><td>speech / hearing</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>79</td><td>Include every relevant category of impairment (motor, cognitive etc) amongst play-testing participants, in representative proportions (truncated on source)</td><td>general</td><td>Advanced</td><td><a href="https://gameaccessibilityguidelines.com/advanced/">https://gameaccessibilityguidelines.com/advanced/</a></td></tr><tr><td>80</td><td>Xbox XAG 118: Photosensitivity (guideline page exists; body not fetched)</td><td>visual</td><td>XAG</td><td><a href="https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines">https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines</a></td></tr><tr><td>81</td><td>Xbox XAG 101: Text display (goal: minimum default sizes, spacing, configurable style and colour)</td><td>visual</td><td>XAG</td><td><a href="https://devdocs.xbox.com/build/game-principles/accessibility/xag-deep-dives/xag-101-text-display.md">https://devdocs.xbox.com/build/game-principles/accessibility/xag-deep-dives/xag-101-text-display.md</a></td></tr><tr><td>82</td><td>Xbox XAG 102: Contrast</td><td>visual</td><td>XAG</td><td><a href="https://devdocs.xbox.com/build/game-principles/accessibility/xag-deep-dives/xag-102-contrast.md">https://devdocs.xbox.com/build/game-principles/accessibility/xag-deep-dives/xag-102-contrast.md</a></td></tr><tr><td>83</td><td>Xbox XAG 103 Additional cues; 104 Subtitles and captions; 105 Audio accessibility; 106 Screen narration; 111 Audio description</td><td>audio</td><td>XAG</td><td><a href="https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines">https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines</a></td></tr><tr><td>84</td><td>Xbox XAG 107 Input; 110 Haptic feedback; 109 Object clarity; 112 UI navigation; 113 UI focus handling; 114 UI context; 117 Visual distractions and motion</td><td>input / visual</td><td>XAG</td><td><a href="https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines">https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines</a></td></tr><tr><td>85</td><td>Xbox XAG 108 Difficulty options; 115 Error messages; 116 Time limits; 119 Chat (STT/TTS); 120 Communication; 121 Accessible feature documentation; 122 Accessible customer support; 123 Mental health best practices</td><td>difficulty / communication / docs</td><td>XAG</td><td><a href="https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines">https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines</a></td></tr><tr><td>86</td><td>PlayStation Accessibility Tags: more than 50 tags across six categories (Visual, Audio, Subtitles and captions, Controls, Gameplay, Online communication)</td><td>platform tag</td><td>Sony</td><td><a href="https://stevivor.com/news/accessibility-tags-added-to-playstation-store">https://stevivor.com/news/accessibility-tags-added-to-playstation-store</a> (secondary; primary: <a href="https://blog.playstation.com/?p=377775">https://blog.playstation.com/?p=377775</a>)</td></tr><tr><td>87</td><td>Accessible Games Initiative tag example: "Playable without Touch Controls" ("Lets you play without using touchpads or touchscreens"), category Input Features</td><td>platform tag</td><td>AGI</td><td><a href="https://accessiblegames.com/">https://accessiblegames.com/</a></td></tr><tr><td>88</td><td>Can I Play That: reviews cover settings-menu features, subtitle legibility, screen reader support; criteria-specific reviews are dormant</td><td>review criteria</td><td>CIPT</td><td><a href="https://caniplaythat.com/?p=1742">https://caniplaythat.com/?p=1742</a></td></tr><tr><td>89</td><td>Ensure no essential information is conveyed by a fixed colour alone (GAG Basic; mirrors item 18)</td><td>colour</td><td>Basic</td><td><a href="https://gameaccessibilityguidelines.com/basic/">https://gameaccessibilityguidelines.com/basic/</a></td></tr><tr><td>90</td><td>Colour-vision redundancy rule: pair colour with shape, icon, label, pattern or position (secondary guidance, not a GAG quote)</td><td>colour</td><td>secondary</td><td><a href="https://caniplaythat.com/?p=8897">https://caniplaythat.com/?p=8897</a></td></tr><tr><td>91</td><td>Photosensitivity: no more than three flashes in any one-second period (WCAG 2.2 SC 2.3.1)</td><td>photosensitivity</td><td>WCAG</td><td><a href="https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html">https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html</a></td></tr><tr><td>92</td><td>Text contrast: 4.5:1 normal text, 3:1 large text (18pt / 14pt bold) (WCAG 2.2 SC 1.4.3)</td><td>contrast</td><td>WCAG</td><td><a href="https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html">https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html</a></td></tr><tr><td>93</td><td>UI components and graphical objects: 3:1 against adjacent colours (WCAG 2.2 SC 1.4.11)</td><td>contrast</td><td>WCAG</td><td><a href="https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html">https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html</a></td></tr></tbody></table>
+<p>Counts from the GAG full-list page: 123 entries including repeats, about 106 unique guidelines. The fetched basic list gives 28 items; this table takes the lists as the fetch tool returned them. Some GAG wording was truncated by the fetch tool (marked "..."). Check the source page for full text before quoting.</p>
+<h2 id="2-platform-and-reviewer-criteria">2. Platform and reviewer criteria</h2>
+<h3 id="game-accessibility-guidelines-gag">Game Accessibility Guidelines (GAG)</h3>
+<ul>
+<li>Three levels: Basic ("Easy to implement, wide reaching and apply to almost all game mechanics"), Intermediate ("Require some planning and effort but still just good general game design"), Advanced ("Complex adaptations for profound impairments and specific niche mechanics"). Source: <a href="https://gameaccessibilityguidelines.com/">https://gameaccessibilityguidelines.com/</a>
+</li>
+<li>The GAG homepage does not list items by category. Items are on /basic/, /intermediate/, /advanced/ and /full-list/.
+</li></ul>
+<h3 id="xbox-accessibility-guidelines-xags">Xbox Accessibility Guidelines (XAGs)</h3>
+<ul>
+<li>Version 3.2, published 8 June 2023. Each XAG has Goal, Overview, Scoping questions, Key areas to target, Implementation guidelines, Example content, Potential player impact, Resources. Source: <a href="https://learn.microsoft.com/en-us/gaming/accessibility/guidelines">https://learn.microsoft.com/en-us/gaming/accessibility/guidelines</a> (also mirrored at <a href="https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines">https://devdocs.xbox.com/build/game-principles/accessibility/xbox-accessibility-guidelines</a>).
+</li>
+<li>The XAGs are a "checklist to validate the accessibility of their titles" for test teams. The source says they are not a compliance checklist.
+</li>
+<li>Numbering (from devdocs index): XAG 101 to 123 (see checklist items 80 to 85). Titles of XAG 101 and 102 were verified from their deep-dive pages; other titles are from the index only.
+</li></ul>
+<h3 id="sony-playstation-accessibility-tags">Sony / PlayStation Accessibility Tags</h3>
+<ul>
+<li>More than 50 tags across six categories: Visual, Audio, Subtitles and captions, Controls, Gameplay, Online communication. Shown on PS Store game hubs (Triangle button on PS5). Rollout started April 2023. Sources: <a href="https://stevivor.com/news/accessibility-tags-added-to-playstation-store,">https://stevivor.com/news/accessibility-tags-added-to-playstation-store,</a> <a href="https://www.gematsu.com/2023/04/playstation-store-for-ps5-adds-accessibility-tags.">https://www.gematsu.com/2023/04/playstation-store-for-ps5-adds-accessibility-tags.</a> Current tag list not fetched (PlayStation store pages were not opened).
+</li></ul>
+<h3 id="accessible-games-initiative-tags-accessiblegames-com">Accessible Games Initiative tags (accessiblegames.com)</h3>
+<ul>
+<li>One example tag verified: "Playable without Touch Controls" ("Lets you play without using touchpads or touchscreens"), in the Input Features category. The full tag list at <a href="https://accessiblegames.com/accessibility-tags/">https://accessiblegames.com/accessibility-tags/</a> did not load its content in the fetch (dynamic list). The site says the initiative was first proposed by Sony Interactive Entertainment among others.
+</li></ul>
+<h3 id="can-i-play-that-cipt">Can I Play That (CIPT)</h3>
+<ul>
+<li>Current model is broad "Accessibility Reviews" that mix professional and lived experience. Criteria-specific reviews are dormant. No published numeric rubric found. Source: <a href="https://caniplaythat.com/?p=1742">https://caniplaythat.com/?p=1742</a>
+</li>
+<li>A 2026 DiGRA paper maps CIPT reviews (2019 to 2025) onto GAG: reviews foreground basic hearing, motor and visual provisions (subtitles, remapping, legible text); advanced guidelines largely absent. Source: <a href="https://dl.digra.org/index.php/dl/article/view/2833">https://dl.digra.org/index.php/dl/article/view/2833</a>
+</li></ul>
+<h3 id="game-accessibility-nexus">Game Accessibility Nexus</h3>
+<ul>
+<li>Search did not find an organisation or database under this name. The closest result was Ubisoft's Assassin's Creed Nexus VR accessibility spotlight (motor, visual, auditory groupings, comfort presets). Not treated as the same resource. Could not verify the intended resource.
+</li></ul>
+<h2 id="3-per-game-implementation-notes">3. Per-game implementation notes</h2>
+<p>Each entry cites the source it came from. Where a feature was only in a secondary source, that is stated.</p>
+<h3 id="the-last-of-us-part-ii-playstation-naughty-dog">The Last of Us Part II (PlayStation / Naughty Dog)</h3>
+<p>Source: <a href="https://www.playstation.com/en-us/games/the-last-of-us-part-ii/accessibility/">https://www.playstation.com/en-us/games/the-last-of-us-part-ii/accessibility/</a> (fetched)</p>
+<ul>
+<li><strong>Presets:</strong> Vision, Hearing, Motor. Each switches on a bundle; individual options can be changed after applying one.
+</li>
+<li><strong>Text-to-speech:</strong> "Enables narration of on-screen text." Separate volume slider. Source as above.
+</li>
+<li><strong>High contrast:</strong> listed as "High contrast display" under Magnification and visual aids: "Mutes environment colors and adds distinct contrast coloring to allies, enemies, items, and interactive objects."
+</li>
+<li><strong>Lock-on:</strong> "Lock-on aim" (Assistance): "Automatically lock-on to enemy targets when aiming." Also Lock-on strength and Arc-throw lock-on.
+</li>
+<li><strong>Hold to toggle:</strong> no option with that exact name. Hold/Toggle choice exists for Aiming mode, Listen mode, Sprinting, Crafting, Backpack weapon swap and Hold breath mode.
+</li>
+<li><strong>Navigation and traversal:</strong> two options. "Navigation assistance" (pressing L3 faces the camera in the direction of story progression) and "Traversal assistance" ("Enables simplified traversal input.").
+</li>
+<li><strong>Audio cues:</strong> Traversal cues, Combat audio cues, Combat vibration cues, Guitar vibration cues; Accessibility audio cues volume; Audio cue glossary.
+</li>
+<li><strong>Colour options:</strong> HUD colorblind mode is listed under Magnification and visual aids; the page lists it and HUD flashing, HUD scale, HUD background, HUD colour.
+</li>
+<li><strong>Other:</strong> Subtitles (size, background, names, name colours, direction, colour); Camera shake, Motion blur, Dolly zoom, Field of view, Persistent center dot under Motion sickness.
+</li>
+<li>Secondary (2020 Naughty Dog / PS blog text quoted in search results, NOT opened): the Vision preset includes TTS, High Contrast Display, HUD scale Large, Lock-On Auto-Target, Traversal and Combat Audio Cues. Naughty Dog blog returned a DNS error in this session. <a href="https://blog.playstation.com/2020/06/09/the-last-of-us-part-ii-accessibility-features-detailed">https://blog.playstation.com/2020/06/09/the-last-of-us-part-ii-accessibility-features-detailed</a>
+</li></ul>
+<h3 id="forza-horizon-5-playground-games-xbox">Forza Horizon 5 (Playground Games / Xbox)</h3>
+<p>Sources: <a href="https://support.forza.net/hc/en-us/articles/4409280058259-Forza-Horizon-5-Accessibility-Support">https://support.forza.net/hc/en-us/articles/4409280058259-Forza-Horizon-5-Accessibility-Support</a> (returned HTTP 403, not read); <a href="https://news.xbox.com/en-us/2021/11/04/gaming-for-everyone-the-accessibility-features-of-forza-horizon-5/">https://news.xbox.com/en-us/2021/11/04/gaming-for-everyone-the-accessibility-features-of-forza-horizon-5/</a> (not opened); search summaries only.</p>
+<ul>
+<li><strong>Sign language:</strong> ASL and BSL interpreter for cinematics, announced at launch as picture-in-picture. Shipping status <strong>not verified</strong> from the support page (blocked). Source: <a href="https://www.neowin.net/news/forza-horizon-5-is-gaining-an-on-screen-sign-language-interpreter-for-cutscenes/">https://www.neowin.net/news/forza-horizon-5-is-gaining-an-on-screen-sign-language-interpreter-for-cutscenes/</a> (search summary).
+</li>
+<li><strong>Text size:</strong> subtitle font size, background opacity, keyword highlighting; menu and gameplay font size customisation (per announcement summary). Source: search summary of the Xbox news post.
+</li>
+<li><strong>Narration:</strong> screen narrator reads text, buttons and elements (announcement summary).
+</li></ul>
+<h3 id="celeste-maddy-makes-games">Celeste (Maddy Makes Games)</h3>
+<p>Source: <a href="https://gameaccessibilityguidelines.com/celeste-assist-mode">https://gameaccessibilityguidelines.com/celeste-assist-mode</a> (fetched); developer name spelling conflicts across sources (noted in search results).</p>
+<ul>
+<li><strong>Assist Mode options (as named by GAG page):</strong> Game speed, Infinite stamina, Air dashes, Invincibility. Dash assist is named in one secondary review (search summary, UNVERIFIED against the game).
+</li>
+<li>GAG links the example to: "Allow gameplay to be fine-tuned by exposing as many variables as possible"; "Include an option to adjust the game speed"; "Include assist modes such as auto-aim and assisted steering".
+</li>
+<li>Secondary review (newnormative.com, <a href="https://newnormative.com/2018/01/25/celestes-assist-mode-brings-welcome-accessibility-options">https://newnormative.com/2018/01/25/celestes-assist-mode-brings-welcome-accessibility-options</a>) describes game speed going down to 50% in 10% steps. Not opened.
+</li></ul>
+<h3 id="hades-supergiant-games">Hades (Supergiant Games)</h3>
+<ul>
+<li><strong>Could not verify</strong> the official option list. One database (familygamingdatabase, <a href="https://www.familygamingdatabase.com/accessibility/Hades">https://www.familygamingdatabase.com/accessibility/Hades</a>) reportedly says subtitles are on by default and their size cannot be adjusted. Conflicting page in search results. Not opened.
+</li>
+<li>Community mods (PC only): Erumi's Blind Accessibility Options (May 2021), audio cues for doors, lava damage removal. Source: <a href="https://caniplaythat.com/?p=5182">https://caniplaythat.com/?p=5182</a> (search summary).
+</li></ul>
+<h3 id="god-of-war-ragnarok-santa-monica-studio-sony">God of War Ragnarok (Santa Monica Studio / Sony)</h3>
+<p>Source: <a href="https://www.playstation.com/en-us/games/god-of-war-ragnarok/accessibility/">https://www.playstation.com/en-us/games/god-of-war-ragnarok/accessibility/</a> (fetched).</p>
+<ul>
+<li><strong>UI:</strong> "Icon size" (Small, Default, Large, X-Large); "UI Text Size" (Default, Large, X-Large, XX-Large); "Icon, subtitle and caption size" also present in some summaries (not on the fetched page).
+</li>
+<li><strong>High contrast:</strong> "High Contrast HUD", "High Contrast Cinematics", "High Contrast Display Preset" (Off, General, Red-Green, Green-Red, Blue-Yellow, Collector, Danger, Lighting). Also "Visualization contrast" (Light, Medium, Dark). Also individual colour selectors for ten categories (Kratos, Atreus, Boss/Miniboss, Enemy, NPC, Target, Interact, Hazard, Traversal markings, Background).
+</li>
+<li><strong>Colour-blind modes:</strong> "UI color correction" (Default, Set 1, Set 2, Set 3); "Color filter" (Off, Red-Green, Green-Red, Blue-Yellow), described on the page as Daltonization. Search summaries said no colour-blind mode found; the fetched page contradicts that, so the search summary is treated as wrong.
+</li>
+<li><strong>Audio cues:</strong> "Audio Cues" and "Screen Reader for select key menus (English only)"; "Audio Cue glossary"; Accessibility audio cues volume.
+</li>
+<li><strong>Subtitles:</strong> size (Default, Large, X-Large), background (None, Light, Dark), speaker names, speaker colour, direction indicators.
+</li>
+<li><strong>Presets:</strong> Vision, Hearing, Motion reduction, Motor (each Off/some/full).
+</li></ul>
+<h3 id="spider-man-2-insomniac-games-sony">Spider-Man 2 (Insomniac Games / Sony)</h3>
+<p>Source: Insomniac support article <a href="https://support.insomniac.games/hc/en-us/articles/46730041467027-What-Accessibility-options-does-Marvel-s-Spider-Man-2-feature">https://support.insomniac.games/hc/en-us/articles/46730041467027-What-Accessibility-options-does-Marvel-s-Spider-Man-2-feature</a> (returned via search only; not opened, the page is the authoritative list). Summaries from search results (UNVERIFIED against the page):</p>
+<ul>
+<li>Game speed (30%, 50%, 70% of real time), adjustable enemy health/damage, stealth detection speed.
+</li>
+<li>Chase Assist; solid-colour shaders for throwables and collectibles; high-contrast background and Spider-Sense; high-contrast Perfect Dodge effect.
+</li>
+<li>Frequency filters for audio (high, low or custom range); screen reader for on-screen menu text; on-screen captions and audio descriptions for cinematics.
+</li>
+<li>Button-hold alternatives for aiming, swinging and parkour; Web-Shooter Burst; remapping and axis inversion.
+</li>
+<li>Family Gaming Database counts 41 features. Source: <a href="https://www.familygamingdatabase.com/accessibility/Marvels+Spider-Man+2">https://www.familygamingdatabase.com/accessibility/Marvels+Spider-Man+2</a>
+</li></ul>
+<h3 id="sea-of-thieves-rare-xbox">Sea of Thieves (Rare / Xbox)</h3>
+<p>Sources: community databases and patch-note coverage (search results only):</p>
+<ul>
+<li><strong>Menu narration:</strong> supports Xbox screen reader when navigating menus; "Let Games Read to Me" option extended in Season 3 to cosmetic chests, Shop menus, Pirate Log Season and Reputation sections, Trading Company menus.
+</li>
+<li><strong>Toast narration:</strong> "Narrate Toast Messages" option in update 2.0.15.1 (<a href="https://www.gamewatcher.com/sea-of-thieves-update-2-0-15-1-patch-notes">https://www.gamewatcher.com/sea-of-thieves-update-2-0-15-1-patch-notes</a>).
+</li>
+<li><strong>Toast duration</strong> setting and opaque menu backgrounds (Season 3).
+</li>
+<li><strong>TTS/STT for chat:</strong> platform-tied, reported as limited to US-configured systems at review time (caveat: may be out of date).
+</li>
+<li>Source: <a href="https://caniplaythat.com/?p=3000">https://caniplaythat.com/?p=3000</a> and <a href="https://www.familygamingdatabase.com/accessibility/Sea+of+Thieves">https://www.familygamingdatabase.com/accessibility/Sea+of+Thieves</a>
+</li></ul>
+<h3 id="diablo-iv-blizzard">Diablo IV (Blizzard)</h3>
+<p>Sources: <a href="https://caniplaythat.com/2023/05/23/diablo-iv-accessibility-detailed-by-blizzard/">https://caniplaythat.com/2023/05/23/diablo-iv-accessibility-detailed-by-blizzard/</a> and <a href="https://news.blizzard.com/diablo4/23954932">https://news.blizzard.com/diablo4/23954932</a> (search summaries; not opened).</p>
+<ul>
+<li>Built-in screen reader that reads in-game menu text; works with JAWS/NVDA (per one source). Adjustable volume, speed and voice.
+</li>
+<li>Speech-to-text for chat (microphone input).
+</li>
+<li>Adjustable text and cursor sizes; gear audio cues tied to rarity.
+</li>
+<li>Blizzard claimed over 50 accessibility features at 2023 launch.
+</li>
+<li>Status as of 2026 <strong>UNVERIFIED</strong>.
+</li></ul>
+<h3 id="overwatch-2-blizzard">Overwatch 2 (Blizzard)</h3>
+<p>Sources: <a href="https://www.familygamingdatabase.com/accessibility/Overwatch+2">https://www.familygamingdatabase.com/accessibility/Overwatch+2</a> (27 features, count only); <a href="https://www.slashgear.com/overwatch-gets-updated-colorblind-feature-with-nine-color-options-22546973">https://www.slashgear.com/overwatch-gets-updated-colorblind-feature-with-nine-color-options-22546973</a> and Blizzard forum threads (search summaries).</p>
+<ul>
+<li><strong>Colour-blind options:</strong> nine colour-blind-friendly colours for nameplates, HUD, health bars, hero outlines; friendly and enemy colours separate; under Video &gt; Color Blind Options. A forum user reported ability effects (Tracer's red blink) not covered.
+</li>
+<li><strong>Subtitles:</strong> text scalability, portrait icons, speaker name, text colour, background colour, preview.
+</li>
+<li><strong>Cursor size</strong> (PC) and custom Group/Alert colours.
+</li>
+<li><strong>Narration:</strong> none found in search results. Status <strong>UNVERIFIED</strong>.
+</li></ul>
+<h2 id="4-colour-blindness">4. Colour-blindness</h2>
+<h3 id="4-1-prevalence-congenital-cvd">4.1 Prevalence (congenital CVD)</h3>
+<p>Source: 2025 systematic review and meta-analysis of children and adolescents, 56 studies, Ophthalmology, via <a href="https://pubmed.ncbi.nlm.nih.gov/40769301/">https://pubmed.ncbi.nlm.nih.gov/40769301/</a> (search summary; abstract figures quoted from the search result, primary page not opened).</p>
+<table><thead><tr><th>Type</th><th>Males</th><th>Females</th></tr></thead><tbody><tr><td>Deutan</td><td>3.66% (95% CI 3.02 to 4.44)</td><td>0.46% (95% CI 0.30 to 0.69)</td></tr><tr><td>Protan</td><td>1.54% (95% CI 1.30 to 1.82)</td><td>0.30% (95% CI 0.21 to 0.43)</td></tr><tr><td>Tritan</td><td>0.67% (95% CI 0.20 to 2.22)</td><td>not reported in the summary</td></tr></tbody></table>
+<ul>
+<li>Global congenital CVD estimate: about 2.59%.
+</li>
+<li>The review notes reliance on the Ishihara test may underestimate tritan prevalence.
+</li>
+<li>Older reference figure for tritan (search summary, source not identified): 1 in 15,000 to 1 in 50,000. Treat as <strong>UNVERIFIED</strong>.
+</li>
+<li>Population figures for adults in the general population were not gathered. Commonly quoted figures (about 8% of men, 0.5% of women, for red-green) are <strong>UNVERIFIED</strong> memory-only claims.
+</li></ul>
+<h3 id="4-2-daltonisation-vs-designed-palettes">4.2 Daltonisation vs designed palettes</h3>
+<ul>
+<li>Simulation (Machado 2009, Viénot 1999, Brettel 1997) is a model of the colour view. It is not a fix. Source: <a href="https://pypi.org/project/daltonlens/0.1.2/">https://pypi.org/project/daltonlens/0.1.2/</a> (tool lists the models).
+</li>
+<li>Daltonisation filters shift colours to separate confusable hues. They distort colours, can introduce false distinctions, and may not improve performance. Simon-Liedtke, Farup and Laeng state it "remains unclear" whether these methods improve performance (summary from search result; primary paper not opened). Trade-off between contrast and naturalness: source as search result on daltonisation.
+</li>
+<li>Practical conclusion: ship designed palettes plus redundancy (section 4.4), and let the player choose colours for the important elements. GAG lists "Provide a choice of cursor / crosshair colours / designs" (item 47). The Overwatch and God of War entries show palette presets; GoW's Daltonization is a filter.
+</li>
+<li>A QA guide notes that a single alternative palette often covers only the red-green case; test against each deficiency type. Source: <a href="https://bugnet.io/blog/qa-testing-for-colorblind-modes">https://bugnet.io/blog/qa-testing-for-colorblind-modes</a> (search summary).
+</li></ul>
+<h3 id="4-3-safe-palettes-with-hex-values">4.3 Safe palettes with hex values</h3>
+<p><strong>Okabe-Ito (8 colours)</strong> - Okabe and Ito, Color Universal Design, 2008; popularised by Bang Wong, "Points of view: Color blindness", Nature Methods 8(6):441, 2011, doi:10.1038/nmeth.1618 (citation from red-bean.com BibTeX entry, search result).</p>
+<table><thead><tr><th>Name</th><th>Hex</th></tr></thead><tbody><tr><td>Orange</td><td>#E69F00</td></tr><tr><td>Sky Blue</td><td>#56B4E9</td></tr><tr><td>Bluish Green</td><td>#009E73</td></tr><tr><td>Yellow</td><td>#F0E442</td></tr><tr><td>Blue</td><td>#0072B2</td></tr><tr><td>Vermillion</td><td>#D55E00</td></tr><tr><td>Reddish Purple</td><td>#CC79A7</td></tr><tr><td>Black</td><td>#000000</td></tr></tbody></table>
+<p>Source for hex values: <a href="https://conceptviz.app/blog/okabe-ito-palette-hex-codes-complete-reference">https://conceptviz.app/blog/okabe-ito-palette-hex-codes-complete-reference</a> (secondary). The primary page <a href="https://jfly.uni-koeln.de/color/">https://jfly.uni-koeln.de/color/</a> returned HTTP 403, so these hex values are <strong>not confirmed against the primary source</strong>. Check the primary page before citing.</p>
+<p><strong>Paul Tol (SRON colour schemes page)</strong> - source <a href="https://sronpersonalpages.nl/~pault/">https://sronpersonalpages.nl/~pault/</a> (fetched).</p>
+<table><thead><tr><th>Scheme</th><th>Hex codes</th><th>Page note</th></tr></thead><tbody><tr><td>Bright</td><td>#4477AA #EE6677 #228833 #CCBB44 #66CCEE #AA3377 #BBBBBB</td><td>"colour-blind safe"</td></tr><tr><td>Vibrant</td><td>#EE7733 #0077BB #33BBEE #EE3377 #CC3311 #009988 #BBBBBB</td><td>"equally colour-blind safe" (alt. to Bright)</td></tr><tr><td>High-contrast</td><td>#004488 #DDAA33 #BB5566</td><td>"colour-blind safe and optimized for contrast"</td></tr><tr><td>Muted</td><td>#CC6677 #332288 #DDCC77 #117733 #88CCEE #882255 #44AA99 #999933 #AA4499 (bad data #DDDDDD)</td><td>"equally colour-blind safe with more colours, but lacking a clear red or medium blue"</td></tr><tr><td>Medium-contrast</td><td>#6699CC #004488 #EECC66 #994455 #997700 #EE99AA</td><td>"colour-blind safe with more colours"</td></tr><tr><td>Dark</td><td>#4477BB #CC4466 #228833 #2255AA #993366 #006644 #117788 #882288 #BB4488 #775500 #444444</td><td>"only some cost for people who are colour blind"</td></tr><tr><td>Light</td><td>#77AADD #EE8866 #EEDD88 #FFAABB #99DDFF #44BB99 #BBCC33 #AAAA00 #DDDDDD</td><td>"reasonably distinct in both normal and colour-blind vision"</td></tr><tr><td>Pale</td><td>#AACCEE #CCEEFF #BBDDBB #EEEEBB #FFBBCC #EEBBDD #DDDDDD</td><td>"not very distinct in either normal or colour-blind vision"</td></tr><tr><td>Sunset (diverging)</td><td>#364B9A #4A7BB7 #6EA6CD #98CAE1 #C2E4EF #EAECCC #FEDA8B #FDB366 #F67E4B #DD3D2D #A50026 (bad data #FFFFFF)</td><td>"also works in colour-blind vision"</td></tr><tr><td>Nightfall (diverging)</td><td>#125A56 #00767B #238F9D #42A7C6 #60BCE9 #9DCCEF #C6DBED #DEE6E7 #ECEADA #F0E6B2 #F9D576 #FFB954 #FD9A44 #F57634 #E94C1F #D11807 #A01813 (bad data #FFFFFF)</td><td>"also works in colour-blind vision"</td></tr></tbody></table>
+<p>Tol's discrete rainbow (23-colour variant) and smooth rainbow exist on the same page; the page says the discrete scheme "should not be interpolated" to stay colour-blind safe.</p>
+<p><strong>IBM Carbon data-visualisation categorical palette</strong> - <a href="https://carbondesignsystem.com/data-visualization/color-palettes/">https://carbondesignsystem.com/data-visualization/color-palettes/</a> (fetched). Order is curated for neighbour contrast; the page does not claim colour-blind safety.</p>
+<table><thead><tr><th>Order</th><th>Name</th><th>Hex</th></tr></thead><tbody><tr><td>1</td><td>Purple 70</td><td>#6929c4</td></tr><tr><td>2</td><td>Cyan 50</td><td>#1192e8</td></tr><tr><td>3</td><td>Teal 70</td><td>#005d5d</td></tr><tr><td>4</td><td>Magenta 70</td><td>#9f1853</td></tr><tr><td>5</td><td>Red 50</td><td>#fa4d56</td></tr><tr><td>6</td><td>Red 90</td><td>#570408</td></tr><tr><td>7</td><td>Green 60</td><td>#198038</td></tr><tr><td>8</td><td>Blue 80</td><td>#002d9c</td></tr><tr><td>9</td><td>Magenta 50</td><td>#ee538b</td></tr><tr><td>10</td><td>Yellow 50</td><td>#b28600</td></tr><tr><td>11</td><td>Teal 50</td><td>#009d9a</td></tr><tr><td>12</td><td>Cyan 90</td><td>#012749</td></tr><tr><td>13</td><td>Orange 70</td><td>#8a3800</td></tr><tr><td>14</td><td>Purple 50</td><td>#a56eff</td></tr></tbody></table>
+<p><strong>Wong 2011</strong> - the palette is the Okabe-Ito set above (Wong's article is the citation). Primary text not fetched.</p>
+<h3 id="4-4-redundancy-rules">4.4 Redundancy rules</h3>
+<ul>
+<li>Never use colour alone for essential information (GAG Basic item 18; XAG 102 contrast and related XAGs). Add an icon, a label, a pattern, or a position.
+</li>
+<li>Double-coding (colour plus shape/label) is the standard recommendation. Source: search summary of gamedev and CIPT colour guidance (<a href="https://caniplaythat.com/?p=8897;">https://caniplaythat.com/?p=8897;</a> <a href="https://gamedev.net/blogs/entry/2260691-the-problem-with-color">https://gamedev.net/blogs/entry/2260691-the-problem-with-color</a>).
+</li>
+<li>Common failures named in sources: status effects shown only by tint; team colours without another marker; map markers separated only by hue; damage numbers distinguished only by colour.
+</li>
+<li>Avoid red/green, blue/green and yellow/purple pairs for critical differences (university guide, search summary: <a href="https://sc.edu/about/offices_and_divisions/digital-accessibility/toolbox/best_practices/color_usage/">https://sc.edu/about/offices_and_divisions/digital-accessibility/toolbox/best_practices/color_usage/</a>).
+</li></ul>
+<h2 id="5-contrast-and-tools">5. Contrast and tools</h2>
+<ul>
+<li><strong>Text:</strong> WCAG 2.2 SC 1.4.3 requires 4.5:1 for normal text and 3:1 for large text. Large text is at least 18pt, or 14pt bold (about 24px and 18.5px). Ratios are not rounded: 4.499:1 fails. Exceptions: incidental text, pure decoration, logotypes, and text in inactive UI components. Source: <a href="https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html">https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html</a>
+</li>
+<li><strong>UI components and graphics:</strong> WCAG 2.2 SC 1.4.11 requires 3:1 against adjacent colours. Source: <a href="https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html">https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html</a>
+</li>
+<li><strong>Tools:</strong> the search did not verify specific checker tools. Commonly used checkers (WebAIM Contrast Checker, Colour Contrast Analyser by TPGi, Figma/Stark plug-ins) are <strong>UNVERIFIED</strong> memory-only mentions. Carbon's accessibility guidance says the system meets WCAG AA contrast in its themes (search summary, <a href="https://carbondesignsystem.com/guidelines/accessibility/color">https://carbondesignsystem.com/guidelines/accessibility/color</a>).
+</li>
+<li>Carbon also notes tokens apply across themes while hex values are theme-specific.
+</li></ul>
+<h2 id="6-photosensitivity-and-reduced-motion">6. Photosensitivity and reduced motion</h2>
+<h3 id="flash-thresholds-wcag-2-2-sc-2-3-1-harding-itc-basis">Flash thresholds (WCAG 2.2 SC 2.3.1, Harding/ITC basis)</h3>
+<p>Source: <a href="https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html">https://www.w3.org/WAI/WCAG22/Understanding/three-flashes-or-below-threshold.html</a> (fetched)</p>
+<ul>
+<li>Pass by having no more than <strong>three flashes in any one-second period</strong> (general or red flashes).
+</li>
+<li>Or pass by having a flashing area that stays within the <strong>.006 steradians in any 10-degree visual field</strong> (25% of a 10-degree field). The glossary gives a reference of 341 x 256 px at 1024 x 768, which the Intent text converts to <strong>87,296 CSS pixels</strong>.
+</li>
+<li><strong>General flash:</strong> a pair of opposing luminance changes of 10% or more of maximum relative luminance (1.0), where the darker image is below 0.80 relative luminance.
+</li>
+<li><strong>Red flash:</strong> a pair of opposing transitions involving saturated red (R/(R+G+B) at least 0.8, and a chromaticity difference above 0.2 in CIE 1976 UCS).
+</li>
+<li>Fine, balanced patterns (e.g. checkerboards with squares under 0.1 degree) are exempt.
+</li>
+<li>Intent note: industry definition for non-sRGB or HDR uses a change of 20 cd/m2 or more where the darker image is below 160 cd/m2 (ITU-R BT.1702).
+</li></ul>
+<h3 id="harding-fpa">Harding FPA</h3>
+<ul>
+<li>Harding FPA is a UK-developed system that analyses video frame by frame for flashes, patterns and fast cuts (search summary of news and secondary sources).
+</li>
+<li>The 3-per-second and 25%-area figures are cited from an Epilepsy Society summary and an Ofcom ruling summary (search result: <a href="https://epilepsysociety.org.uk/node/4424">https://epilepsysociety.org.uk/node/4424</a>). The current Ofcom Broadcasting Code text was <strong>not</strong> retrieved; treat these as UNVERIFIED for broadcast regulation.
+</li></ul>
+<h3 id="reduced-motion-guidance">Reduced motion (guidance)</h3>
+<ul>
+<li>GAG Basic items 8 and 45 and Advanced items 66 and 67 cover flicker, background movement and sudden events.
+</li>
+<li>PlayStation presets (TLOU2, God of War, Spider-Man 2) include camera shake, motion blur, camera sway, persistent centre dot, cinematic smoothing, and film grain options (see per-game notes).
+</li>
+<li>VR comfort (GAG Basic item 16): Ubisoft's AC Nexus lists dynamic vignettes and a comfort preset set (search summary, news.ubisoft.com).
+</li></ul>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li><strong>Game Accessibility Nexus:</strong> no resource of that name found in search.
+</li>
+<li><strong>Full XAG 101 to 123 titles:</strong> only 101, 102, 109, 112, 113, 114, 117, 118 (index), 103 to 106, 107, 108, 110, 111, 115, 116, 119 to 123 from the devdocs index. Full guideline text not read.
+</li>
+<li><strong>Sony tag list (current):</strong> not fetched. The rollout details are from 2023 news.
+</li>
+<li><strong>Accessible Games Initiative full tag list:</strong> the page content did not load. Only one tag is verified.
+</li>
+<li><strong>Can I Play That scoring rubric:</strong> none published in the sources found.
+</li>
+<li><strong>Hades official options:</strong> conflicting; not confirmed. Colour-blind options not confirmed.
+</li>
+<li><strong>Forza Horizon 5 sign language shipping status and option names:</strong> the support page returned 403; only announcement summaries were available.
+</li>
+<li><strong>Spider-Man 2 option names:</strong> from search summaries only; the Insomniac support page was not opened.
+</li>
+<li><strong>Sea of Thieves, Diablo IV, Overwatch 2 current options:</strong> from 2021 to 2023 summaries; not checked against current patches.
+</li>
+<li><strong>Naughty Dog TLOU2 blog:</strong> DNS failure; Vision preset details taken from search summary only.
+</li>
+<li><strong>Okabe-Ito hex values from primary source:</strong> primary page returned 403. Hex values come from a secondary blog.
+</li>
+<li><strong>Wong 2011 article text:</strong> not read.
+</li>
+<li><strong>Daltonisation evidence (Simon-Liedtke, Farup, Laeng; Jefferson and Harvey 2006):</strong> only summary-level evidence; Jefferson and Harvey not found.
+</li>
+<li><strong>Adult CVD prevalence (general population):</strong> not gathered with a source. Memory figures are UNVERIFIED.
+</li>
+<li><strong>Accessibility checker tools list:</strong> only Carbon is linked; others UNVERIFIED.
+</li>
+<li><strong>Ofcom Broadcasting Code flash rules:</strong> not retrieved.
+</li>
+<li><strong>GAG item wording:</strong> several items were truncated by the fetch tool; full text unverified for items 52, 55, 63, 79.
+</li></ul>
+</main>
+</body>
+</html>

@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crafting and base-building UI in survival sandboxes</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="crafting-and-base-building-ui-in-survival-sandboxes">Crafting and base-building UI in survival sandboxes</h1>
+<p>Research date: 2026-10-21. Scope: Valheim, Subnautica (and Subnautica 2), Minecraft (vanilla recipe book, JEI/REI), Vintage Story, Satisfactory, Sons of the Forest, Green Hell, Grounded, Enshrouded.</p>
+<h2 id="method-and-reliability">Method and reliability</h2>
+<ul>
+<li>Sources were found with WebSearch, then opened with WebFetch. WebFetch returns text rewritten by a small model, so quotes marked <strong>[fetched]</strong> are the extracted wording, not a byte-exact copy. Re-check any quote before publishing it.
+</li>
+<li>Quotes marked <strong>[snippet]</strong> come only from search-result summaries. I did not open those pages, so treat them as UNVERIFIED.
+</li>
+<li>Dates are shown only where the page or thread showed them.
+</li>
+<li>Reddit was not reachable through search in this session. No Reddit thread is cited.
+</li>
+<li>Steam pages that returned HTTP 403 or no thread body are listed under "Could not verify".
+</li>
+<li>Quoted handles are as displayed on the source page.
+</li></ul>
+<h2 id="1-valheim">1. Valheim</h2>
+<h3 id="praise">Praise</h3>
+<ul>
+<li>No verified praise for the hammer UI turned up in the fetched threads. The sources were mostly questions and complaints. Mod pages are the closest thing to praise, but they are self-description, not user reviews.
+</li></ul>
+<h3 id="complaints-fetched">Complaints (fetched)</h3>
+<ul>
+<li>Raman, 31 Jan 2025, Steam "Valheim" discussion 600769077072443583 <strong>[fetched]</strong>: "With 49 wood in inventory+hammer equipped,right click shows me furniture tab,However in this tab..."
+</li>
+<li>Raman, 31 Jan 2025, same thread <strong>[fetched]</strong>: "Most strange was following a top ranked guide and that stated to craft workbench open furniture tab"
+</li>
+<li>xanthosthewise, 19 Dec 2022, Steam discussion 3101267090242259022 <strong>[fetched]</strong>: "IT IS TIME - The building tab is too cluttered. Split into Masonry and Carpentry tabs"
+</li>
+<li>Rhapsody, 19 Dec 2022, same thread, supporting a queue <strong>[fetched]</strong>: "queuing of some sort could probably be useful for players with controllers or some kind of accessibility issues."
+</li>
+<li>N0ma13, 14 Apr 2021, Steam discussion 5143704785449399781 <strong>[fetched]</strong>: "This is one of the most annoying aspects of the hammer imho."
+</li>
+<li>Daxzier, 29 Jan 2022, Steam discussion 4594236462785672596 <strong>[fetched]</strong>: "If items don't show up in crafting menu, I can't craft them?"
+</li>
+<li>Thor'sHammer, 21 May 2023, same thread as Daxzier <strong>[fetched]</strong>: "IF YOU ARE MISSING WINDMILL AND OTHER ITEMS YOU SHOULD CRAFT SOME IRON NAILS!!"
+</li></ul>
+<p>The pattern in these threads: stations and pieces are hidden behind unlocks and tabs, and the player cannot tell why an item is missing from the menu. The answers that fixed it were tab location and unlock prerequisites, not UI changes.</p>
+<h3 id="patterns-the-fans-built-mods-fetched">Patterns the fans built (mods, fetched)</h3>
+<ul>
+<li><strong>Recipe Pinner</strong> (KadrioS, Thunderstore, v1.3.0, "3 months ago" on the page) <strong>[fetched]</strong>: "Pin any recipe or build piece to your HUD and track the materials you still need in real time."
+</li>
+<li><strong>HammerCraftingMaterials</strong> (DrummerCraig, v1.1.3) <strong>[fetched]</strong>: "Right-click any piece in the hammer build menu to pull its required materials from nearby chests." It also says: "Searches all accessible chests within a configurable radius (default 10 m)."
+</li>
+<li><strong>AAA Build Menu</strong> (Azumatt) <strong>[fetched, model-rendered]</strong>: classic menu quick filters "Can Craft, Missing, Favorites, and Recent"; the 1.0 menu's Can Build tab shows "only what you have the materials and crafting station for right now"; and the pinned tracker "lists the materials you still need for your pinned builds." Filter text: "Type to filter the current category, or every category at once when global search is on."
+</li>
+<li><strong>Buildheim</strong> changelog (AugusDogus) <strong>[snippet]</strong>: material and station shortage display follows vanilla rules, including shortage colours and a crafting-station indicator.
+</li></ul>
+<p>Takeaway: the modding community added the features the base game lacks: missing-material lists, a can-build filter, pins, and remote material pull. These are concrete, already-tested requests.</p>
+<h2 id="2-subnautica-original-and-subnautica-2">2. Subnautica (original) and Subnautica 2</h2>
+<h3 id="praise">Praise</h3>
+<ul>
+<li>SeeJay, 21 Mar 2018, Steam discussion 1698294337766641677, on a habitat-builder idea <strong>[fetched]</strong>: "Would be nice to have it in game tho. Great idea." This is a suggestion, not a review. Included because it's the only fetched praise in this group.
+</li></ul>
+<h3 id="complaints-fetched">Complaints (fetched)</h3>
+<ul>
+<li>gowar20, 18 Jun 2017, Steam discussion 2333276539607034660 <strong>[fetched]</strong>: "This morning the modification station blue print is not amongst the build menu."
+</li>
+<li>Tagom, 5 Jul 2017, same thread <strong>[fetched]</strong>: the station is "NOT present in the Habitat builder tool menu."
+</li>
+<li>atroxpaulsen, 21 Mar 2018, Steam discussion 1698294337766641677 <strong>[fetched]</strong>: "Since the right-click function closes the menu today." The request was to let the player batch-select blueprints from the construction menu.
+</li>
+<li>Valden21, 9 Jul 2018, Steam discussion 1727575977594933279 <strong>[fetched]</strong>: "How to get Habitat Builder?" The thread is mostly answers, which shows the Habitat Builder's unlock path was not discoverable in-game.
+</li></ul>
+<h3 id="subnautica-2-2026-changes">Subnautica 2 (2026) changes</h3>
+<ul>
+<li>Rasea, Substack, 21 May 2026 <strong>[fetched]</strong>: "Additionally, the fabricator menu never disappears." "So now everything will snap into place on a grid, and you can turn it off if you want." Also: "your fabricator and Habitat Builder will now craft items pulling from your storage."
+</li>
+<li>The same post describes these as fan-mod features pulled into the base game. That is a secondhand description; I did not open the mods.
+</li></ul>
+<h3 id="snippet-only-unverified">Snippet-only (UNVERIFIED)</h3>
+<ul>
+<li>Keengamer guide [snippet]: the Habitat Builder is crafted at a Fabricator from 2 Titanium, 1 Glass, 1 Basic Battery, and 1 Copper Wire. Some players don't see the tool equipped and are told to check the PDA Inventory.
+</li></ul>
+<h3 id="patterns">Patterns</h3>
+<ul>
+<li>Blueprint unlock status is hidden: players could not tell whether a piece was missing or locked (gowar20, Tagom). A visible "unlock needed" state would have answered most of these threads.
+</li>
+<li>A menu that stays open while placing (the 2026 Subnautica 2 change) answers a complaint that dated to 2018.
+</li></ul>
+<h2 id="3-minecraft-vanilla-recipe-book-java-and-bedrock">3. Minecraft (vanilla recipe book, Java and Bedrock)</h2>
+<p>Note: every Mojang feedback page and the Mojira bug returned HTTP 403 or no body when fetched. The material below is from search snippets, not fetched pages. Treat all of it as UNVERIFIED until checked.</p>
+<h3 id="complaints-snippet-unverified">Complaints [snippet, UNVERIFIED]</h3>
+<ul>
+<li>Feedback forum (360017835352): a request to make the recipe book closed by default. Commenters say they "already know their recipes or look them up online" and find the panel distracting.
+</li>
+<li>Feedback forum (360043036392): shift-click into the crafting table is requested because it would avoid "hunting through the inventory for each ingredient."
+</li>
+<li>An Xbox player says the recipe book is "too cluttered to replace the older grid-distribution controls."
+</li>
+<li>Mojira MC-259107 (layout bug): at aspect ratios taller than 16:9 the recipe book appears above the crafting table and does not populate the grid.
+</li>
+<li>An itch.io commenter argues recipes should not depend on where items sit in the grid.
+</li></ul>
+<h3 id="praise">Praise</h3>
+<ul>
+<li>None verified.
+</li></ul>
+<h3 id="patterns-from-these-sources">Patterns (from these sources)</h3>
+<ul>
+<li>A recipe panel that can be dismissed by default and closed for good. Users asked for an option to turn it off entirely.
+</li>
+<li>Shift-click to move a full stack into a crafting grid, and a grid that accepts a recipe regardless of where its ingredients sit.
+</li>
+<li>Controller players need a non-drag fill path; dragging into each slot is slow.
+</li></ul>
+<h2 id="4-jei-and-rei-mod-ecosystem">4. JEI and REI (mod ecosystem)</h2>
+<p>No official JEI or REI documentation was fetched. Everything here is from search snippets (modpack index pages, mod listings). UNVERIFIED.</p>
+<h3 id="patterns-snippet">Patterns [snippet]</h3>
+<ul>
+<li>JEI: clicking an item shows its crafting recipe; the usage view answers "what can I make with this." Shortcut keys: R or left-click for recipes, U or right-click for uses. The "+" button next to a recipe moves ingredients from the inventory into the grid. Search by name, mod, tag, or tooltip text.
+</li>
+<li>JEI Transform: when materials are short, the transfer pulls the shortfall from nearby containers.
+</li>
+<li>JEI Crafting Insight: presses "A" to pin items to the left side of the screen and track missing materials. Recipe slots are coloured green for held, red for missing.
+</li>
+<li>JackItToMe (JEI/REI/EMI): colours slots by stock. Red means missing with no AE2/RS pattern to craft it; green means missing but craftable on the network.
+</li>
+<li>Tom's Simple Storage NBT fix: damaged tools in storage showed red in the transfer preview even though the transfer succeeded. This is a preview-accuracy bug: the highlight must match what the click does.
+</li></ul>
+<h2 id="5-vintage-story">5. Vintage Story</h2>
+<h3 id="praise">Praise</h3>
+<ul>
+<li>None found in user sources. The fetched material is the game's own wiki.
+</li></ul>
+<h3 id="handbook-and-grid-fetched-from-wiki-vintagestory-at-crafting-page">Handbook and grid (fetched from wiki.vintagestory.at, Crafting page)</h3>
+<ul>
+<li>"The Handbook is your best friend! Press the H key at any time to open it."
+</li>
+<li>"If you do not know the shape to use, press H to check the Handbook!"
+</li>
+<li>"Right-click and drag to quickly spread items in the grid."
+</li></ul>
+<p>Note: a search summary claimed the page carries an "outdated" notice. The fetched page had no such note. The summary also described the drag shortcut as dropping exactly one item per square; the fetched wording is "quickly spread items." Treat the one-per-square detail as UNVERIFIED.</p>
+<h3 id="community">Community</h3>
+<ul>
+<li>Improved Handbook Recipe Helper (mods.vintagestory.at/show/mod/47215) <strong>[snippet]</strong>: adds auto-fill buttons and mouse-wheel scrolling through recipe variants. Listed as supporting 1.22.0 to 1.22.7.
+</li></ul>
+<h3 id="patterns">Patterns</h3>
+<ul>
+<li>In-game handbook is reachable with one key from any screen, and it shows the recipe shape. That is the reference the other games lack.
+</li>
+<li>Recipe variants (any wood, any planks) are scrolled through in place, not shown as separate entries.
+</li></ul>
+<h2 id="6-satisfactory">6. Satisfactory</h2>
+<h3 id="complaints-fetched-steam-discussions">Complaints (fetched, Steam discussions)</h3>
+<ul>
+<li>Spogg, 20 Sep 2024, Steam discussion 4845399746424677958 (Hard Drive list) <strong>[fetched]</strong>: "I scanned to many hard drives, now I can't select or reroll them because theres no scroll bar or anything"
+</li>
+<li>Khaylain, same thread <strong>[fetched]</strong>: "Yeah, it's a poorly implemented UI."
+</li>
+<li>WinterSolstice, same thread <strong>[fetched]</strong>: "It was an oversight I believe and easily fixed because the code is there already"
+</li>
+<li>x0Z3ro0x, 27 Jan 2024, Steam discussion 4147320315759001824 (codex search) <strong>[fetched]</strong>, replying to a proposal for search-by-name that shows recipes: "This would require knowing what you've unlocked which defeats what the OP is trying to do."
+</li>
+<li>Clumsy, same thread, 27 Jan 2024 <strong>[fetched]</strong>: "The only thing required to know is the item. Not the recipe."
+</li>
+<li>Fenix, same thread, 27 Jan 2024 <strong>[fetched]</strong>: "N = Search for it by typing the name, and it will open codex straight at that item"
+</li></ul>
+<h3 id="build-menu-workflow-fetched">Build-menu workflow (fetched)</h3>
+<ul>
+<li>scrooge34, 3 Jan 2022, Steam discussion 3203747834755864032 <strong>[fetched]</strong>: asked for a way to select a building by clicking it, "so much faster than selecting from the build panel."
+</li>
+<li>Vectorspace, 4 Jan 2022, same thread <strong>[fetched, paraphrased]</strong>: press F for the dismantle gun, then middle-click a building to make it the active build selection.
+</li>
+<li>scrooge34, 13 Jan 2022, same thread <strong>[fetched]</strong>: confirms "F" and Middle click is "exactly, what I was looking for."
+</li>
+<li>flannan, same thread <strong>[fetched]</strong>: "10 build panels" and recommends tailoring them to specific workflows.
+</li>
+<li>nhatanh0475, same thread <strong>[fetched, paraphrased]</strong>: binding buildings to the hotbar and cycling a category with E to swap belt tiers.
+</li></ul>
+<h3 id="praise">Praise</h3>
+<ul>
+<li>scrooge34's "exactly, what I was looking for" on F + middle-click is the only praise I fetched. It praises a workaround, not the menu.
+</li></ul>
+<h3 id="patterns">Patterns</h3>
+<ul>
+<li>Copy-the-thing-you-are-pointing-at (F + middle-click, recipe-to-pick) beats browsing a menu. Two players asked for it independently.
+</li>
+<li>Hotbar binding of buildings with a cycle key for tiers. The request is that the player bind a building and cycle tiers with one key.
+</li>
+<li>Search by typed name that opens the item. The objection (x0Z3ro0x) is about revealing locked recipes: search must not expose unknown items.
+</li></ul>
+<h3 id="hard-drives-and-alternate-recipes-snippet-unverified">Hard Drives and alternate recipes [snippet, UNVERIFIED]</h3>
+<ul>
+<li>Guides conflict on reroll rules. One says a drive offers two alternate recipes and can be re-rolled once. Another says a reroll consumes the drive. One says alternate recipes are usable only in factory buildings, not the handheld Craft Bench. Check the wiki or in-game before relying on any of these.
+</li></ul>
+<h2 id="7-sons-of-the-forest">7. Sons of the Forest</h2>
+<p>Every Steam discussion page I opened returned no thread body (403 or only a content warning). The points below are from search-result snippets only, UNVERIFIED.</p>
+<h3 id="complaints-snippet-unverified">Complaints [snippet, UNVERIFIED]</h3>
+<ul>
+<li>Blueprints: ghost-image placement works for platforms and ramps, but walls and doorways can't use it. Players place logs one at a time with aim-based snapping. Dec 2024.
+</li>
+<li>Two building books: the right book is a build tutorial, the left holds placeable blueprints. Players must switch between them. Mar 2023.
+</li>
+<li>Crafting max: crafting a stack needs the inventory closed and reopened for the last one. A "craft max" option was suggested. Dec 2023.
+</li>
+<li>Full inventory: crafting and combining fail when items are held at maximum quantity. Jan 2024.
+</li></ul>
+<h3 id="patterns-from-these-snippets">Patterns from these snippets</h3>
+<ul>
+<li>A single-place building book, a visible craft-max, and snapping that works for walls and doorways.
+</li></ul>
+<h2 id="8-green-hell">8. Green Hell</h2>
+<p>Every Green Hell thread is from search snippets only (no thread body fetched). UNVERIFIED.</p>
+<h3 id="complaints-snippet-unverified">Complaints [snippet, UNVERIFIED]</h3>
+<ul>
+<li>New blueprints do not appear in the notebook for some saves. Reloading sometimes fixes it.
+</li>
+<li>Blueprint unlock conditions are unclear: one 2022 thread asks how to get new recipes; answers say picking up a bamboo stick unlocks the blowgun blueprint, and crafting the blowgun unlocks the frog stretcher.
+</li>
+<li>Placement on a blueprint ghost fails; one player reports a fireplace that stayed as a blueprint.
+</li>
+<li>Floating save button in the shelter was missed; the tutorial does not explain how to research.
+</li></ul>
+<h3 id="patterns">Patterns</h3>
+<ul>
+<li>The notebook should show, next to each locked blueprint, the action that unlocks it.
+</li></ul>
+<h2 id="9-grounded">9. Grounded</h2>
+<p>No Grounded thread body was fetched. The Windows Central changelog returned truncated text without the 0.7.0 entries.</p>
+<h3 id="snippet-only-unverified">Snippet-only (UNVERIFIED)</h3>
+<ul>
+<li>Grounded 0.7.0 (Feb 2021): non-grid buildings can be relocated without being destroyed; crafting draws ingredients from nearby storage.
+</li>
+<li>Placement stopped working while zipping, gliding, or fighting (0.7.0 notes).
+</li></ul>
+<h2 id="10-enshrouded">10. Enshrouded</h2>
+<h3 id="complaints-fetched-steam">Complaints (fetched, Steam)</h3>
+<ul>
+<li>Traumacare, 24 Jan 2024, Steam discussion 4142816460193592893 <strong>[fetched]</strong>: "WTF, what is up with these tiny tiny foundation blocks?"
+</li>
+<li>Dead Goat, same thread, 24 Jan 2024 <strong>[fetched]</strong>: "Yea I remember building being fun in the demo but this... this was painful"
+</li>
+<li>Gunther Wolfgang, same thread, 24 Jan 2024 <strong>[fetched]</strong>: "does anyone else have problems with the building menu when scrolling?"
+</li>
+<li>LuckyHaans, 16 Feb 2024, Steam discussion 7599331177366914867 <strong>[fetched]</strong>: "once I put building mats away in a chest I wasn't able to build without taking them back out."
+</li>
+<li>Jollykitty, 17 Feb 2024, same thread <strong>[fetched]</strong>: asks for "an option to take stuff from magic chest when you are BUILDING."
+</li></ul>
+<h3 id="patterns-fetched">Patterns (fetched)</h3>
+<ul>
+<li>Size switching inside the build menu: Blaise, same thread, 24 Jan 2024 <strong>[fetched]</strong>: "you can switch between 1x1, 2x2 or 4x4, peruse around the building menu to find it." X-C0brA-X: "You can hold ALT and choose bigger blocks." The discoverability problem is the same as Valheim's tab problem.
+</li>
+<li>Magic chests feed crafting from anywhere in the base (xitooner, same thread, <strong>[fetched]</strong>: "The items stored here can be used for crafting purposes from anywhere in the base."). The gap: they don't feed placement. Placement is the complaint.
+</li></ul>
+<h3 id="snippet-only-unverified">Snippet-only (UNVERIFIED)</h3>
+<ul>
+<li>Multi-block placement hotkeys with the building hammer: Tab changes shape, Alt+scroll changes rows, Ctrl+scroll changes material (Steam thread 4-1 to 4-5). Not fetched.
+</li>
+<li>Feature Upvote suggestion 712562: build furniture and decorations from the build menu so placement can be previewed before crafting. The page returned HTTP 403.
+</li></ul>
+<h2 id="patterns-worth-adopting">Patterns worth adopting</h2>
+<p>Each pattern is tied to a source above. Keyboard/mouse and controller are listed separately. Where a pattern is only snippet-sourced, it is marked.</p>
+<h3 id="keyboard-and-mouse">Keyboard and mouse</h3>
+<ol>
+<li><strong>Can-build / missing filter as a first-class tab or filter.</strong> Source: AAA Build Menu (Azumatt, fetched). Filter by Can Craft, Missing, Favorites, Recent.
+</li>
+<li><strong>Pin recipes or build pieces and show the remaining shortfall in a HUD tracker.</strong> Source: Recipe Pinner (KadrioS, fetched). Real-time missing-material list.
+</li>
+<li><strong>Right-click a build or craft entry to pull its shortfall from nearby containers within a radius.</strong> Source: HammerCraftingMaterials (DrummerCraig, fetched; default 10 m). Show the radius in the UI.
+</li>
+<li><strong>Type-to-filter across all categories</strong>, with a global toggle. Source: AAA Build Menu (fetched).
+</li>
+<li><strong>Pick a building from the world, not the menu.</strong> F + middle-click to make a placed building the active build. Source: Satisfactory thread 3203747834755864032 (fetched).
+</li>
+<li><strong>Single-key handbook.</strong> Vintage Story's H opens the reference from anywhere (fetched). Show the recipe shape, not only a name.
+</li>
+<li><strong>Size or variant switch inside the build menu</strong> (1x1/2x2/4x4 in Enshrouded; Alt to choose a bigger block). Source: Enshrouded thread (fetched). Show the active size in the menu.
+</li>
+<li><strong>Shared-storage feed for placement, not only crafting.</strong> Gap found in Enshrouded (fetched): magic chests feed crafting but not placement. Valheim's HammerCraftingMaterials mod fills this gap for placement (fetched). The Sons of the Forest equivalent is not verified.
+</li>
+<li><strong>Preview that matches the click.</strong> Tom's Simple Storage NBT fix [snippet]: a red highlight that does not match what the transfer does destroys trust. The preview must use the same rules as the action.
+</li>
+<li><strong>Show the unlock action next to a locked entry.</strong> Green Hell and Valheim complaints are both about items hidden behind unlocks with no explanation [fetched for Valheim, snippet for Green Hell].
+</li>
+<li><strong>Do not reveal unknown recipes via search.</strong> Satisfactory: search by name is fine, but it must not expose a recipe the player has not unlocked (x0Z3ro0x, fetched). Show "unknown" rather than the answer.
+</li>
+<li><strong>Snap to a grid with an off switch.</strong> Subnautica 2 (Rasea, 2026, fetched): snapping on by default, toggle to disable.
+</li>
+<li><strong>Menu that stays open during placement.</strong> Subnautica 2 (Rasea, fetched): "the fabricator menu never disappears." Subnautica (2018) complaint: right-click closes the menu (atroxpaulsen, fetched).
+</li></ol>
+<h3 id="controller">Controller</h3>
+<ol>
+<li><strong>Queue crafting.</strong> Valheim thread (Rhapsody, fetched): queuing "could probably be useful for players with controllers or some kind of accessibility issues." Queueing removes the need to repeat a long action.
+</li>
+<li><strong>Fill-the-grid action without dragging.</strong> Minecraft controller complaint [snippet]: dragging items slot by slot is slow. A one-press "fill from storage" is the pattern; shift-click-equivalent is the keyboard analogue.
+</li>
+<li><strong>Hotbar binding for buildings and tier-cycle on one button.</strong> Satisfactory (nhatanh0475, fetched): bind a building to the hotbar and cycle its variant with E.
+</li>
+<li><strong>Keep the same number of build panels as there are workflows.</strong> Satisfactory (flannan, fetched): "10 build panels" is a problem; tailor to workflows and bind them.
+</li>
+<li><strong>Controller remap in-game, not via Steam.</strong> Valheim controller binds are only changeable in Steam (BisectHosting guide, snippet). Expose remapping in the game's own settings.
+</li>
+<li><strong>Avoid the hard-to-reach category.</strong> Valheim: the build menu is scrolled slowly; players move frequently used items to the hotbar (Satisfactory thread, snippet).
+</li></ol>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li><strong>Reddit threads.</strong> None reachable through search in this session. No Reddit claim is in the report.
+</li>
+<li><strong>Minecraft feedback.minecraft.net pages and Mojira MC-259107.</strong> WebFetch returned HTTP 403 or no content. All Minecraft complaint claims are snippet-only.
+</li>
+<li><strong>Sons of the Forest Steam threads.</strong> Two fetched pages returned no body. All SotF claims are snippet-only.
+</li>
+<li><strong>Green Hell.</strong> No thread body fetched. All claims are snippet-only.
+</li>
+<li><strong>Grounded.</strong> Windows Central changelog truncated before the 0.7.0 entries. Grounded claims are snippet-only.
+</li>
+<li><strong>Enshrouded Feature Upvote 712562 and Steam thread 4298194451986230064.</strong> 403 or not fetched.
+</li>
+<li><strong>Enshrouded multi-block hotkeys.</strong> Snippet-only.
+</li>
+<li><strong>Satisfactory Hard Drive reroll rules.</strong> Guides conflict. Not resolved.
+</li>
+<li><strong>Ingredient substitution display.</strong> No source found in any game. Not covered.
+</li>
+<li><strong>Placement preview with validity colour, icon and text.</strong> No source found that describes this in a surveyed game. The Subnautica 2 grid snap and Enshrouded size switch are the closest found, and neither describes a validity colour.
+</li>
+<li><strong>Reverse lookup ("what can I make with this").</strong> Found only for JEI (usage view, U key), snippet-only.
+</li>
+<li><strong>Craft-N / craft-max as a UI pattern.</strong> Found only as a Sons of the Forest complaint (snippet). No game's craft-max implementation was verified.
+</li>
+<li><strong>Accessibility reviews.</strong> No accessibility review from a major outlet or a formal audit was found. The Valheim controller discussion turned up only guides and a Game Revolution article (partial controller support, DualSense issues, reliance on the mouse for drop/repair), not an accessibility audit.
+</li>
+<li><strong>Official JEI or REI documentation.</strong> Not fetched. REI controls are not described in any source I opened.
+</li>
+<li><strong>Vintage Story "outdated" note and one-per-square drag.</strong> Contradicted by the fetched page; see section 5.
+</li>
+<li><strong>Subnautica 2 Keengamer guide claims</strong> (Habitat Builder recipe, PDA equip issue). Snippet-only.
+</li>
+<li><strong>Valheim 1.0 Can Build tab and filter wording</strong> comes from a model-rendered extraction of a mod page; check the mod's own text before quoting.
+</li></ul>
+</main>
+</body>
+</html>

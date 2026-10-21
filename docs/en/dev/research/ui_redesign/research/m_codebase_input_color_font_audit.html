@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codebase audit: input, color and font systems</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="codebase-audit-input-color-and-font-systems">Codebase audit: input, color and font systems</h1>
+<p>Scope: read-only audit of <code>/home/richard/Projects/Cataclysm-BN-3D</code> on branch <code>feat/ui-overhaul</code>. Method: static reading of source with <code>rg</code>/<code>sed</code>. Nothing was built or run, so runtime behaviour is inferred from code unless stated otherwise. Line numbers refer to the working tree at audit time.</p>
+<p>Paths used throughout:</p>
+<ul>
+<li>Input: <code>src/input.h</code>, <code>src/input.cpp</code>, <code>src/action.h</code>, <code>src/action.cpp</code>, <code>src/handle_action.cpp</code>, <code>src/sdltiles.cpp</code> (SDL event loop), <code>src/r3d.cpp</code>, <code>src/r3d.h</code>, <code>src/popup.cpp</code>, <code>src/path_info.cpp</code>
+</li>
+<li>Keybinding data: <code>data/raw/keybindings/*.json</code> (four files: <code>keybindings.json</code>, <code>vehicle.json</code>, <code>messages.json</code>, <code>edit_creature_effects.json</code>)
+</li>
+<li>Color: <code>src/color.h</code>, <code>src/color.cpp</code>, <code>src/color_loader.h</code>, <code>src/sdl_utils.cpp</code>, <code>src/hsv_color.cpp</code>, <code>src/ncurses_def.cpp</code>, <code>data/raw/colors.json</code>
+</li>
+<li>Font: <code>src/sdl_font.h</code>, <code>src/sdl_font.cpp</code>, <code>src/font_loader.h</code>, <code>src/font_loader.cpp</code>, <code>data/raw/fonts.json</code>, <code>data/font/</code>
+</li></ul>
+<hr>
+<h2 id="a-input-system">A. Input system</h2>
+<h3 id="a-1-event-types">A.1 Event types</h3>
+<p><code>input_event_t</code> (input.h:91-97) has five values: <code>error</code>, <code>timeout</code>, <code>keyboard</code>, <code>gamepad</code>, <code>mouse</code>.</p>
+<pre><code>enum class input_event_t : int  {
+    error,
+    timeout,
+    keyboard,
+    gamepad,
+    mouse
+};</code></pre>
+<p><code>struct input_event</code> (input.h:107) carries:</p>
+<ul>
+<li><code>type</code> (input.h:108)
+</li>
+<li><code>modifiers</code> (input.h:110): a <code>std::vector&lt;int&gt;</code>. <strong>Nothing in the tree ever writes to it.</strong> It is only read (input.cpp:787, input.cpp:960, copy/compare at input.h:154 and input.h:177-181).
+</li>
+<li><code>sequence</code> (input.h:114): a <code>std::vector&lt;int&gt;</code> of key codes. It is filled only when loading JSON (input.cpp:248, input.cpp:258) or by the single-value constructor (input.h:136-138). Every event that SDL produces has a sequence of length 1.
+</li>
+<li><code>mouse_pos</code> (input.h:117): a <code>point</code>.
+</li>
+<li><code>text</code> / <code>edit</code> / <code>edit_refresh</code>: UTF-8 text and IME composition state.
+</li></ul>
+<p>Equality (input.h:163-166) compares <code>type</code> first, then <code>sequence</code> and <code>modifiers</code>. Because of that, a <code>keyboard</code> event never equals a <code>gamepad</code> event, even when the integer value is the same.</p>
+<p>Mouse and gamepad codes are plain integers (input.h:89, input.h:206-222):</p>
+<pre><code>enum mouse_buttons { MOUSE_BUTTON_LEFT = 1, MOUSE_BUTTON_RIGHT, SCROLLWHEEL_UP, SCROLLWHEEL_DOWN, MOUSE_MOVE };
+#define JOY_0        0          // ... JOY_7 = 7
+#define JOY_LEFT        (256 + 1)   // JOY_RIGHT, JOY_UP, JOY_DOWN, JOY_RIGHTUP, JOY_RIGHTDOWN,
+                                    // JOY_LEFTUP, JOY_LEFTDOWN follow as 256+2 .. 256+8</code></pre>
+<p>Name tables: keyboard names via <code>init_keycode_mapping</code> (input.cpp:374-449). Mouse names are fixed at input.cpp:444-447 (<code>MOUSE_LEFT</code>, <code>MOUSE_RIGHT</code>, <code>SCROLL_UP</code>, <code>SCROLL_DOWN</code>, <code>MOUSE_MOVE</code>). Gamepad names are at input.cpp:426-442 (<code>JOY_LEFT</code> .. <code>JOY_7</code>).</p>
+<h3 id="a-2-how-input-context-registers-actions-and-resolves-keys">A.2 How input_context registers actions and resolves keys</h3>
+<ul>
+<li><code>input_manager</code> (singleton <code>inp_mngr</code>, input.h:232, 388-ish) owns <code>action_contexts</code>, a <code>map&lt;category, map&lt;action_id, action_attributes&gt;&gt;</code>. Each action holds a list of <code>input_event</code>s (input.h:232-ish, <code>t_action_contexts</code> in the private section).
+</li>
+<li>Loading: <code>input_manager::init()</code> (input.cpp:119) loads every <code>.json</code> under the keybindings dir (input.cpp:127-133), then the user file (input.cpp:136-141). <code>load()</code> (input.cpp:190) reads each object's <code>id</code>, <code>category</code> (default <code>&quot;default&quot;</code>, input.cpp:207), and <code>bindings[]</code> with <code>input_method</code> (keyboard | gamepad | mouse) and <code>key</code> (string or array).
+</li>
+<li>Registration: <code>input_context</code> constructor takes an optional category string (input.h:415-418). <code>register_action()</code> (input.cpp:733-751) appends to <code>registered_actions</code>. Two special IDs set flags: <code>&quot;ANY_INPUT&quot;</code> (sets <code>registered_any_input</code>) and <code>&quot;COORDINATE&quot;</code> (sets <code>handling_coordinate_input</code>).
+</li>
+<li>Resolution: <code>handle_input()</code> (input.cpp:1018-1093) loops on <code>inp_mngr.get_input_event()</code> and calls <code>input_to_action()</code> (input.cpp:693-709). That function walks <code>registered_actions</code> in registration order and returns the first action whose bindings in <code>category</code> contain the event. If nothing matches it returns <code>&quot;ERROR&quot;</code> (<code>CATA_ERROR</code>). With <code>ANY_INPUT</code> registered it returns <code>&quot;ANY_INPUT&quot;</code>.
+</li></ul>
+<p>Lookup and fallback (input.cpp:536-571):</p>
+<pre><code>// get_action_attributes(): try the named category, then &quot;default&quot;
+if( context != default_context_id ) {
+    // ... if found and !is_deleted, return it (even if its bindings list is empty)
+}
+// otherwise fall back to the default context</code></pre>
+<p>Consequence: a category entry for an action overrides the default entry entirely. It does not merge with it. An empty list in the category masks the default binding. This follows from the code as written.</p>
+<p>Actions are identified by string IDs. <code>input_context</code> accepts any string, not only <code>action_id</code>. The <code>action_id</code> enum (action.h:19, about 168 <code>ACTION_*</code> enumerators per grep) is a separate, game-level layer. <code>action_ident()</code> (action.cpp:264) maps enum to string. <code>look_up_action()</code> (action.cpp:692) maps back. Many contexts register raw strings such as <code>&quot;UP&quot;</code>, <code>&quot;LEFT&quot;</code>, <code>&quot;REMOVE&quot;</code> and <code>&quot;HELP_KEYBINDINGS&quot;</code>, which have no <code>action_id</code>.</p>
+<p>Special handling inside <code>handle_input()</code>:</p>
+<ul>
+<li><code>&quot;HELP_KEYBINDINGS&quot;</code> opens <code>display_menu()</code> (input.cpp:1050-1056).
+</li>
+<li>Unbound keys in the <code>DEFAULTMODE</code> category are first passed to <code>r3d_key_action()</code> (input.cpp:957-1016, see A.8).
+</li>
+<li>Mouse events that match no action are dropped unless the context registered <code>COORDINATE</code> (input.cpp:1065-1072).
+</li></ul>
+<h3 id="a-3-categories-and-conflicts">A.3 Categories and conflicts</h3>
+<ul>
+<li>Category is a free string from the JSON <code>category</code> field. The <code>default</code> category is the global fallback. The category set is what the code requests; there is no central list.
+</li>
+<li>Counts by <code>category</code> in <code>data/raw/keybindings/keybindings.json</code> (grep counts of lines): <code>DEFAULTMODE</code> 132, <code>ADVANCED_INVENTORY</code> 36, <code>VEH_INTERACT</code> 24, <code>INVENTORY_ITEM</code> 24, <code>OVERMAP</code> 21, <code>CRAFTING</code> 15, <code>NPC_TRADE</code> 14, <code>TARGET</code> 13 and about 60 more. <code>vehicle.json</code> adds <code>VEHICLE</code> (42). <code>messages.json</code> adds <code>MESSAGE_LOG</code> (4). <code>edit_creature_effects.json</code> uses its own category (7 entries). Total entries with a <code>category</code> field: 513 in the main file.
+</li>
+<li>Conflict checks are scoped to the current context. <code>get_conflicts()</code> (input.cpp:655-661) lists only the <code>registered_actions</code> of this context that already use the event. <code>clear_conflicting_keybindings()</code> (input.cpp:663-691) removes the key from those same actions, in both <code>default</code> and the current category. Two different contexts can therefore bind the same key without any warning.
+</li>
+<li><code>input_context::get_available_single_char_hotkeys()</code> (input.cpp:779-810) returns printable characters that have no conflicting use in the registered actions.
+</li></ul>
+<p>Layering and inheritance:</p>
+<ul>
+<li>Two levels only: a named category, then <code>default</code>. There is no stack of bindings.
+</li>
+<li><code>input_context::input_context_stack</code> (input.h:403, defined input.cpp:709) is a stack of live contexts. It is used only for <code>get_active_category()</code> (input.cpp:946-955) and by the touch quick-shortcut code (sdltiles.cpp:3001-3002). It does not affect key resolution.
+</li>
+<li>Contexts are not merged. The <code>display_menu()</code> help context (input.cpp:1209-1230) is a separate, throwaway <code>input_context( &quot;HELP_KEYBINDINGS&quot; )</code>.
+</li></ul>
+<h3 id="a-4-keybinding-editor-input-context-display-menu">A.4 Keybinding editor (<code>input_context::display_menu</code>)</h3>
+<p>The in-game editor is <code>input_context::display_menu()</code> (input.cpp:1206-1557). It is the screen opened by the <code>HELP_KEYBINDINGS</code> action (input.cpp:1050-1056) and by the <code>EXECUTE</code> path from <code>handle_action.cpp:2029</code>. A separate <code>help::display_help()</code> (help.cpp:143) is the in-game help text and is not the keybinding editor.</p>
+<p>What it can do:</p>
+<ul>
+<li>Lists the registered actions of the current context and their bindings, colour-coded: unbound (<code>c_light_red</code>), local to this screen (<code>c_light_green</code>), global (<code>c_light_gray</code>) (input.cpp:1295-1301).
+</li>
+<li>Add a local binding (<code>+</code> or <code>ADD_LOCAL</code>), add a global one (<code>=</code> or <code>ADD_GLOBAL</code>), remove (<code>-</code> or <code>REMOVE</code>), and execute an action if permitted (<code>.</code> or <code>EXECUTE</code>). The hard-coded keys are in <code>fallback_keys</code> (input.cpp:1199-1204). Hotkey letters come from <code>display_help_hotkeys</code> (input.cpp:1187-1188).
+</li>
+<li>Scrolling and paging (<code>UP</code>, <code>DOWN</code>, <code>PAGE_UP</code>, <code>PAGE_DOWN</code>).
+</li>
+<li>Capture of a new key uses <code>query_popup().allow_anykey( true )</code> (input.cpp:1499-1501). In that mode the popup accepts any event except mouse movement and empty keyboard events (popup.cpp:303-309). So a keyboard key, mouse button, mouse wheel or gamepad event can all be recorded, one at a time.
+</li>
+<li>Conflicts prompt to clear the other binding, with a yes/no question (input.cpp:1499-1530 region).
+</li>
+<li>On exit, if anything changed, it asks "Save changes?" and calls <code>inp_mngr.save()</code> (input.cpp:1543). <code>save()</code> (input.cpp:302-357) writes the user file (<code>PATH_INFO::user_keybindings()</code>, path_info.cpp:323). <code>user_keybindings()</code> is <code>config_dir + &quot;keybindings.json&quot;</code>.
+</li></ul>
+<p>What it cannot do (from the code):</p>
+<ul>
+<li>Build or edit a <strong>modifier</strong> combination. <code>modifiers</code> is never set. Ctrl+letter is folded into the control code (sdltiles.cpp:2086-2089), and Shift+Tab becomes <code>KEY_BTAB</code>. Those are fixed keysym translations, not configurable bindings.
+</li>
+<li>Record a <strong>multi-key sequence</strong>. The capture takes one event, so <code>sequence</code> has length 1.
+</li>
+<li>Bind the <strong>middle mouse button</strong>. <code>mouse_buttons</code> has no middle entry (input.h:89), and the SDL loop never emits an input event for it (see A.5).
+</li>
+<li>Bind a <strong>gamepad button</strong> in a useful way. A physical joystick button arrives as a keyboard-typed event (see A.6), so capturing a button records a keyboard code instead.
+</li>
+<li>Show or edit camera or 3D-specific bindings differently from other bindings. The <code>r3d_*</code> actions are ordinary entries in <code>keybindings.json</code> (for example keybindings.json:4046-4064).
+</li></ul>
+<h3 id="a-5-mouse-handling-sdl-build">A.5 Mouse handling (SDL build)</h3>
+<p>All mouse handling is in <code>CheckMessages()</code> (sdltiles.cpp:2963). Each event in the drain loop <code>while( SDL_PollEvent )</code> (sdltiles.cpp:3290) is handled as follows.</p>
+<ul>
+<li><strong>Motion</strong> (sdltiles.cpp:3511-3540):
+<ul>
+<li>When the 3D view is active and not dragging, the hovered tile is picked (3512-3521). The event coordinates are divided by the scaling factor first.
+</li>
+<li>While the middle button is held (<code>r3d_dragging</code>), motion goes to the camera (3524-3529, see A.8).
+</li>
+<li><code>MOUSE_MOVE</code> is emitted only when <code>HIDE_CURSOR</code> is <code>&quot;show&quot;</code> or <code>&quot;hidekb&quot;</code> (3530-3538). With any other <code>HIDE_CURSOR</code> value, motion produces no input event.
+</li></ul>
+</li>
+<li><strong>Button down</strong> (3506-3510): only the middle button does anything (it starts camera drag).
+</li>
+<li><strong>Button up</strong> (3541-3555):
+<ul>
+<li>Middle: ends drag and camera glance (3542-3546).
+</li>
+<li><code>SDL_BUTTON_LEFT</code> → <code>input_event(MOUSE_BUTTON_LEFT, mouse)</code>; <code>SDL_BUTTON_RIGHT</code> → <code>MOUSE_BUTTON_RIGHT</code>.
+</li>
+<li>Other buttons (X1, X2) produce nothing.
+</li></ul>
+</li>
+<li><strong>Wheel</strong> (3557-3564): <code>wheel.y &gt; 0</code> → <code>SCROLLWHEEL_UP</code>, <code>&lt; 0</code> → <code>SCROLLWHEEL_DOWN</code>. Horizontal wheel is ignored.
+</li></ul>
+<p>Coordinates:</p>
+<ul>
+<li><code>get_input_event()</code> (sdltiles.cpp:4105, mouse block at 4155-4160) sets <code>mouse_pos</code> from <code>SDL_GetMouseState()</code> at the time the event is consumed. It does not use the event's own x/y. The value is in <strong>window pixels</strong>.
+</li>
+<li><code>input_context::get_coordinates()</code> (sdltiles.cpp:4282-) converts that pixel point to a <code>tripoint_bub_ms</code> using the window's pixel position and font size (<code>get_window_dimensions</code>, sdltiles.cpp:4200-4235). The window pixel position uses unscaled <code>fontwidth</code>/<code>fontheight</code> (sdltiles.cpp:4225-4226), while the size uses the scaled font size (4212, 4228-4229). See "Uncertain" below.
+</li>
+<li>The non-tiles version of <code>get_coordinates</code> is in input.cpp:1596-1618, inside <code>#if !(TILES||_WIN32)</code>.
+</li></ul>
+<p>Click-to-action: <code>ctxt.get_coordinates(w_terrain)</code> is used in game.cpp:3539 and game.cpp:10372, and handle_action.cpp:2051.</p>
+<p>Keybindings can name mouse inputs (<code>&quot;input_method&quot;: &quot;mouse&quot;</code>, keys <code>MOUSE_LEFT</code>, <code>MOUSE_RIGHT</code>, <code>SCROLL_UP</code>, <code>SCROLL_DOWN</code>). keybindings.json:1-8 binds <code>SCROLL_UP</code>/<code>SCROLL_DOWN</code> in <code>UILIST</code>.</p>
+<h3 id="a-6-gamepad-and-joystick-current-state">A.6 Gamepad and joystick (current state)</h3>
+<ul>
+<li>SDL subsystem: <code>SDL_InitSubSystem( SDL_INIT_JOYSTICK )</code> only (sdltiles.cpp:184). **No <code>SDL_INIT_GAMEPAD</code>**, and no <code>SDL_Gamepad*</code> or <code>SDL_EVENT_GAMEPAD_*</code> call exists anywhere in <code>src/</code>. The code uses the legacy SDL_Joystick API (<code>SDL_GetJoysticks</code>, <code>SDL_OpenJoystick</code>, <code>SDL_GetJoystickHat</code>, <code>SDL_EVENT_JOYSTICK_BUTTON_DOWN</code>, <code>SDL_EVENT_JOYSTICK_AXIS_MOTION</code>).
+</li>
+<li>Startup (sdltiles.cpp:373-390): if <code>ENABLE_JOYSTICK</code> is true and at least one device exists, the <strong>first</strong> device is opened and a warning is logged if there are several. The option is at options.cpp:2158-2161 (default <code>true</code>, <code>COPT_CURSES_HIDE</code>). It is read only at startup.
+</li>
+<li>Hot-plug: no <code>SDL_EVENT_JOYSTICK_ADDED</code> or <code>_REMOVED</code> handling exists (grep: none).
+</li>
+<li><code>gamepad_available()</code> returns <code>joystick != nullptr</code> (sdltiles.cpp:4175-4178). It is used only to decide whether gamepad hints are shown (input.cpp:833, input.cpp:881).
+</li></ul>
+<p>Event paths:</p>
+<ul>
+<li><strong>D-pad (hat)</strong>: <code>HandleDPad()</code> (sdltiles.cpp:1869-1935) runs at the start of <code>CheckMessages()</code> (2969). It maps the hat to <code>JOY_LEFT</code>, <code>JOY_UP</code>, <code>JOY_RIGHTUP</code> and so on, as <code>gamepad</code>-typed events. A 100 ms delay (dpad_delay, sdltiles.cpp:142-143) lets diagonals form. Continuous repeat is 200 ms for the first step and 60 ms after that (sdltiles.cpp:1897-1921). This path produces the intended gamepad event type.
+</li>
+<li><strong>Buttons</strong>: <code>SDL_EVENT_JOYSTICK_BUTTON_DOWN</code> → <code>input_event( ev.jbutton.button, input_event_t::keyboard )</code> (sdltiles.cpp:3499-3500). The button index is therefore sent as a <strong>keyboard</strong> code, not a gamepad code. The <code>JOY_0</code> binding in <code>GOT_IT</code> (keybindings.json:4140-4147) is typed <code>gamepad</code>, and <code>operator==</code> compares type first (input.h:163-166). So from the code it looks like <code>JOY_0</code> <strong>cannot match</strong> a real button press. This is an inference from reading the code and was not run.
+</li>
+<li><strong>Sticks</strong>: <code>SDL_EVENT_JOYSTICK_AXIS_MOTION</code> is received and discarded (sdltiles.cpp:3502-3504, "TODO: somehow get the digipad values").
+</li>
+<li>Virtual joystick (<code>ANDROID_*</code> options, options.cpp:3519-3569; <code>draw_virtual_joystick</code> sdltiles.cpp:2759) exists only for Android. It is not part of the desktop gamepad path.
+</li></ul>
+<p>Summary of gamepad state: the d-pad path is wired and uses <code>gamepad</code> events. Face buttons are wired in a way that likely does not match their <code>JOY_n</code> bindings. The sticks are not used. Nothing has been run on hardware.</p>
+<h3 id="a-7-key-repeat-hold-vs-toggle-text-and-modifiers">A.7 Key repeat, hold vs toggle, text, and modifiers</h3>
+<ul>
+<li><strong>Auto-repeat</strong>: <code>SDL_EVENT_KEY_DOWN</code> carries <code>ev.key.repeat</code> (sdltiles.cpp:3356). That flag is used only to skip the text-refresh path (sdltiles.cpp:3731). Repeated key events therefore produce repeated input events. Repeat rate is whatever the OS/SDL sends. The game does not set its own rate.
+</li>
+<li><strong>Key down/up</strong>: <code>KEY_DOWN</code> converts the keysym with <code>sdl_keysym_to_curses()</code> (sdltiles.cpp:2020 onward; the call is at 3368). <code>KEY_UP</code> only handles Alt-codes (sdltiles.cpp:3427-3451).
+</li>
+<li><strong>Text</strong>: <code>SDL_EVENT_TEXT_INPUT</code> (sdltiles.cpp:3452-3480) produces a keyboard event with the UTF-8 code point. For a printable key both KEY_DOWN and TEXT_INPUT fire, and the later one wins.
+</li>
+<li><strong>Single slot</strong>: <code>last_input</code> is one variable. It is reset once per drain batch (sdltiles.cpp:3277) and overwritten by every event that sets it. Inputs that arrive in the same batch therefore collapse to the last one. There is no <code>break</code> on the first input found inside the loop at sdltiles.cpp:3290 (checked by reading; not exhaustive).
+</li>
+<li><strong>Diagonal keys</strong>: with <code>DIAG_MOVE_WITH_MODIFIERS_MODE</code> (options.cpp:1950-1990), Shift/Ctrl+arrow is turned into diagonal action IDs (sdltiles.cpp:2029-2080). Mode 3 was not read.
+</li>
+<li><strong>Hold vs toggle</strong>: there is no toggle abstraction for keys. Hold-style behaviour appears in three places:
+<ol>
+<li>The 3D WASD diagonal, which reads <code>SDL_GetKeyboardState</code> at the moment of the event (input.cpp:980-993).
+</li>
+<li>The arrow-key diagonal in DEFAULTMODE, which reads the arrow state (sdltiles.cpp:3380-3394).
+</li>
+<li>The middle mouse drag and the first-person glance, which last until the button is released (A.8).
+</li></ol>
+</li></ul>
+<p>On Android, a finger hold repeats input on a timer (sdltiles.cpp:3233-3250).</p>
+<h3 id="a-8-3d-camera-src-r3d-input">A.8 3D camera (<code>src/r3d_*</code>) input</h3>
+<p>Mouse (all in <code>sdltiles.cpp</code>, state at 2962 <code>namespace { auto r3d_dragging = false; }</code>):</p>
+<ul>
+<li>Middle-button down inside the terrain view starts a drag if <code>r3d::contains()</code> is true (sdltiles.cpp:3506-3509; <code>contains</code> at r3d.cpp:1990-1994). Other buttons are not used for the camera.
+</li>
+<li>Motion while dragging (sdltiles.cpp:3524-3529):
+<ul>
+<li><code>SHIFT</code> held → <code>r3d::drag_pan( xrel, yrel )</code>.
+</li>
+<li>Otherwise → <code>r3d::drag_orbit( xrel, yrel )</code>.
+</li>
+<li>Sets <code>camera_changed</code>. The redraw is deferred to once per batch (sdltiles.cpp:3757-3760).
+</li></ul>
+</li>
+<li><code>drag_orbit</code> (r3d.cpp:2006-2026): yaw changes by <code>dx * 0.008</code> and pitch by <code>dy * 0.006</code>, clamped to <code>camera::min_pitch</code> and <code>camera::max_pitch</code>. In first-person mode it sets a temporary glance angle instead (<code>max_glance_yaw</code> 2.4 rad).
+</li>
+<li><code>drag_pan</code> (r3d.cpp:2028-2044): pans in ground coordinates, scaled by camera distance, and clamped to ±48 tiles. It is ignored in first-person.
+</li>
+<li>Button up of the middle button calls <code>r3d::end_glance()</code> (r3d.cpp:1907) and clears the drag (sdltiles.cpp:3542-3546).
+</li></ul>
+<p>Keyboard (<code>r3d_key_action</code>, input.cpp:957-1016):</p>
+<ul>
+<li>Active only when category is <code>DEFAULTMODE</code>, there are no modifiers, and <code>r3d::wasd_controls()</code> is true (r3d.cpp:1892-1893; option <code>R3D_WASD</code>, options.cpp:2667).
+</li>
+<li>WASD and arrow keys are remapped to the movement actions and the <code>r3d_rotate_*</code> / <code>r3d_pitch_*</code> actions. <code>q</code>/<code>e</code> rotate unless a vehicle is being controlled. Diagonals are picked from held W/A/S/D state.
+</li></ul>
+<p>Mouse wheel: <code>SCROLLWHEEL_*</code> events are not consumed by any r3d code (grep shows only sdltiles.cpp:3559-3561 and input.cpp:496-498). 3D zoom is keyboard-driven (<code>ACTION_R3D_ZOOM_IN</code>/<code>OUT</code>, handle_action.cpp:3277-3282).</p>
+<h3 id="a-9-input-related-options">A.9 Input-related options</h3>
+<table><thead><tr><th>Option</th><th>Where</th><th>Effect</th></tr></thead><tbody><tr><td><code>ENABLE_JOYSTICK</code></td><td>options.cpp:2158-2161</td><td>Opens first joystick at startup only</td></tr><tr><td><code>HIDE_CURSOR</code></td><td>options.cpp:2163</td><td>Controls whether <code>MOUSE_MOVE</code> events are emitted (sdltiles.cpp:3530-3538) and whether the cursor is hidden on keypress (3360-3366)</td></tr><tr><td><code>QUERY_KEYBIND_REMOVAL</code></td><td>options.cpp:1914</td><td>Asks before clearing bindings in the editor (input.cpp:1483)</td></tr><tr><td><code>DIAG_MOVE_WITH_MODIFIERS_MODE</code></td><td>options.cpp:1950-1990</td><td>Diagonal modes via Ctrl/Shift arrows (sdltiles.cpp:2029-2080)</td></tr><tr><td><code>R3D_WASD</code></td><td>options.cpp:2667-2672</td><td>WASD and arrow remap in 3D (input.cpp:960-993)</td></tr><tr><td><code>ANDROID_*</code> joystick/finger options</td><td>options.cpp:3519-3569</td><td>Android only</td></tr></tbody></table>
+<hr>
+<h2 id="b-color-system">B. Color system</h2>
+<h3 id="b-1-representation">B.1 Representation</h3>
+<ul>
+<li><code>nc_color</code> (color.h:346-392) wraps a single <code>int attribute_value</code>. It is a curses attribute: a colour pair index plus the bold/blink bits (<code>bold()</code>, <code>blink()</code>, color.h:346-372). It is not an RGB value.
+</li></ul>
+<pre><code>class nc_color {
+    private:
+        int attribute_value;   // curses attribute (pair index + bold/blink bits)
+    ...
+    static nc_color from_color_pair_index( int index );
+    int to_color_pair_index() const;</code></pre>
+<ul>
+<li><code>color_id</code> (color.h:170-326) is an enum of <strong>145 entries</strong> (<code>def_</code> names). Each one is backed by an <code>add_color()</code> call in <code>color_manager::load_default()</code> (color.cpp:219-~400, 145 calls). Families:
+<ul>
+<li><code>def_c_*</code>: 16 base colours (<code>black</code> .. <code>yellow</code>).
+</li>
+<li><code>def_h_*</code>: 16 highlight variants, used as the blue-background hilite (color.cpp:242; <code>hilite()</code> at color.cpp:509-513).
+</li>
+<li><code>def_i_*</code>: 16 inverted variants (color.cpp:259).
+</li>
+<li><code>def_c_unset</code>: sentinel.
+</li>
+<li>About 96 two-colour pairs named <code>c_&lt;fg&gt;_&lt;bg&gt;</code> (for example <code>c_black_red</code> at color.cpp:276).
+</li></ul>
+</li>
+<li>Names are stored in <code>name_map</code> (color.h:418) and resolved by <code>name_to_color()</code> (color.cpp:102-108).
+</li>
+<li><code>color_manager::get()</code> returns <code>entry.custom</code> when set, otherwise <code>entry.color</code> (color.cpp:149-159). <code>name_to_color()</code> does the same (color.cpp:102-108).
+</li></ul>
+<h3 id="b-2-mapping-colours-to-rgb-tiles">B.2 Mapping colours to RGB (tiles)</h3>
+<p>The palette is 16 RGB entries, not per-colour RGB.</p>
+<ul>
+<li>Source: <code>data/raw/colors.json</code> (21 lines). Entries: <code>BLACK</code>, <code>RED</code>, <code>GREEN</code>, <code>BROWN</code>, <code>BLUE</code>, <code>MAGENTA</code>, <code>CYAN</code>, <code>GRAY</code>, <code>DGRAY</code>, <code>LRED</code>, <code>LGREEN</code>, <code>YELLOW</code>, <code>LBLUE</code>, <code>LMAGENTA</code>, <code>LCYAN</code>, <code>WHITE</code>, each as <code>[r,g,b]</code>.
+</li>
+<li>Loader: <code>color_loader&lt;T&gt;::load()</code> (color_loader.h:60-85). It copies <code>colors.json</code> to the user file <code>base_colors.json</code> if that does not exist (path <code>PATH_INFO::base_colors()</code>, path_info.cpp:176-178), and then reads the user file. On a JSON error it reports and falls back to the default file. The 16 values go into <code>windowsPalette</code>.
+</li>
+<li>SDL tiles: <code>windowsPalette</code> is loaded at sdltiles.cpp:3992. <code>FontFallbackList</code> and the font objects receive that palette (sdltiles.cpp:3999-4006; <code>palette_array</code> at sdl_font.h:23).
+</li>
+<li>Pair to RGB: <code>curses_color_to_SDL()</code> (sdl_utils.cpp:195-207):
+</li></ul>
+<pre><code>int palette_index = pair.FG != 0 ? pair.FG : pair.BG;
+if( color.is_bold() ) {
+    palette_index += color_loader&lt;SDL_Color&gt;::COLOR_NAMES_COUNT / 2;   // +8
+}
+return windowsPalette[palette_index];</code></pre>
+<p>So bold selects the bright half of the 16-entry palette. The curses build does the same (<code>ncurses::color_to_RGB</code>, ncurses_def.cpp:51-62).</p>
+<ul>
+<li>Wrappers used by tiles: <code>curses_color_to_RGB()</code> (hsv_color.cpp:96-103), <code>color_as_sdl()</code> (sdltiles.cpp:428-431), and the font's <code>palette[color]</code> lookup (sdl_font.cpp:97).
+</li>
+<li>Tileset tint: colour names in tileset JSON go through <code>colors.name_to_color()</code> and then <code>curses_color_to_RGB()</code> (cata_tiles.cpp:2470-2477).
+</li>
+<li>Direct palette access that bypasses the helper: cata_tiles.cpp:3406 uses <code>windowsPalette[catacurses::green]</code>.
+</li></ul>
+<h3 id="b-3-how-json-refers-to-colours">B.3 How JSON refers to colours</h3>
+<ul>
+<li><code>nc_color::deserialize()</code> (color.cpp:30-43) accepts an <strong>integer</strong> (legacy id) or a <strong>string</strong>.
+</li>
+<li>Strings go through <code>color_from_string()</code> (color.cpp:562-595). It prepends <code>c_</code> if the second character is not <code>_</code>, so <code>&quot;light_red&quot;</code> becomes <code>c_light_red</code>. It also rewrites the deprecated <code>lt</code>/<code>dk</code> suffixes to <code>light_</code>/<code>dark_</code> and logs a <code>debugmsg</code>. Unknown names return <code>c_unset</code> and raise an error in <code>deserialize</code>.
+</li>
+<li>Plain names such as <code>&quot;red&quot;</code> therefore resolve to <code>c_red</code>. Bright variants are <code>light_red</code> etc.
+</li></ul>
+<h3 id="b-4-existing-theme-and-colour-blind-support">B.4 Existing theme and colour-blind support</h3>
+<ul>
+<li><strong>Colour-blind</strong>: none found. Grep for <code>colorblind</code>, <code>colour blind</code>, <code>deuter</code>, <code>protan</code>, <code>tritan</code>, <code>high contrast</code>, <code>palette</code> (as a user option) and <code>theme</code> gives no colour-related hits.
+</li>
+<li><strong>Theme</strong>: the only user-facing theme-like hooks are two files in the config directory.
+<ol>
+<li><code>base_colors.json</code>: edit the 16 RGB values. This changes the whole palette, for both tiles and curses, with no code change.
+</li>
+<li><code>custom_colors.json</code> (path_info.cpp:196-199): remaps a colour <strong>name</strong> to another colour name. <code>color_manager::serialize</code>/<code>save_custom</code>/<code>load_custom</code> (color.cpp:1029-1067). The editor is opened by <code>ACTION_COLOR</code> → <code>all_colors.show_gui()</code> (handle_action.cpp:3045-3046; <code>show_gui</code> at color.cpp:744). Because <code>get()</code> honours <code>entry.custom</code>, the remap applies everywhere a colour name is resolved.
+</li></ol>
+</li></ul>
+<h3 id="b-5-colour-as-the-only-carrier-of-meaning-samples">B.5 Colour as the only carrier of meaning (samples)</h3>
+<ul>
+<li><strong>Hunger/thirst/fatigue</strong> (sidebar): text and colour together. <code>get_hunger_description()</code> returns a word such as "Hungry" or "Starving" with a colour (character.cpp:5431-5461). The sidebar prints both (panels.cpp:1279-1288). The word alone carries the state. Colour is redundant but present.
+</li>
+<li><strong>Morale</strong>: colour is set only at the extremes (<code>&gt;=10</code> green, <code>&lt;=-10</code> red; panels.cpp:641-651). The emotion face glyph chosen by <code>morale_emotion()</code> (panels.cpp:837-...) carries the finer state.
+</li>
+<li><strong>Stat values</strong> (STR, DEX and so on): <code>value_color()</code> (panels.cpp:625-638) buckets the value into four colours (&gt;=75 green, &gt;=50 yellow, &gt;=25 red, else magenta). This is the only encoding of the bucket itself. The number is also shown (exact line not checked).
+</li>
+<li><strong>Item condition</strong>: <code>damage_color()</code> (item.cpp:7303-) and <code>damage_symbol()</code> (item.cpp:7332-) give both a colour and a glyph (<code>++</code>, <code>||</code>, <code>|\</code>, <code>|.</code>, ...). Shape and colour together.
+</li>
+<li><strong>Hit chance / aim confidence</strong>: no dedicated colour for "hit chance" was found in melee. The ranged aim UI defines <code>confidence_rating</code> with a symbol, a label and a colour (ranged.cpp:2019-2024; configs at ranged.cpp:2296-2301: <code>*</code> "Great" green, <code>+</code> "Normal" light_gray, <code>|</code> "Graze" magenta). The percentage is printed (ranged.cpp:2199, 2214). Colour, symbol and label all carry the meaning.
+</li>
+<li><strong>Keybinding editor</strong>: state colours (unbound/local/global) are shown with a legend (input.cpp:1277-1290). The legend text names the states, so colour is not the sole carrier.
+</li></ul>
+<p>Net: in the samples checked, colour is almost always paired with text or a glyph. The exception is the stat bucket colours.</p>
+<h3 id="b-6-how-hard-is-a-palette-remap-layer">B.6 How hard is a palette remap layer?</h3>
+<p>What already exists:</p>
+<ul>
+<li>A 16-entry RGB palette, user-editable (<code>base_colors.json</code>). This is a palette swap, but it applies to the whole palette at once. It can be used to make a colour-blind-friendlier palette today without code changes.
+</li>
+<li>A per-name remap (<code>custom_colors.json</code>) that maps one colour name to another (B.4).
+</li></ul>
+<p>Where a new layer would hook in:</p>
+<ol>
+<li><code>windowsPalette</code> load (sdltiles.cpp:3992; <code>color_loader::load</code> at color_loader.h:60-85). A transform applied here reaches all font drawing and the tile palette lookups.
+</li>
+<li><code>curses_color_to_SDL()</code> (sdl_utils.cpp:195) and <code>ncurses::color_to_RGB()</code> (ncurses_def.cpp:51). These are the single points for pair-to-RGB conversion.
+</li>
+<li>Direct <code>windowsPalette[...]</code> reads that bypass (2) (for example cata_tiles.cpp:3406).
+</li></ol>
+<p>Assessment (from reading only): <strong>moderate</strong>. The 16-entry palette and the two conversion helpers make it small in principle. The risks are: any direct <code>windowsPalette[...]</code> read; the r3d renderer, which uses its own colour values (not audited in detail); and the fact that a palette change cannot separate hues that are already close unless the mapping is per-name rather than per-palette-index. A per-name mapping already exists through <code>custom_colors.json</code>.</p>
+<hr>
+<h2 id="c-font-and-text-rendering-sdl-tiles-build">C. Font and text rendering (SDL/tiles build)</h2>
+<h3 id="c-1-engines">C.1 Engines</h3>
+<ul>
+<li>Two engines, both in <code>src/sdl_font.cpp</code>:
+<ol>
+<li><strong>TrueType/OpenType via SDL3_ttf</strong>: <code>CachedTTFFont</code> (sdl_font.cpp:233). It opens fonts with <code>TTF_OpenFontWithProperties</code> (sdl_font.cpp:11-20). Glyphs are rendered on demand and cached as textures (<code>create_glyph</code>, sdl_font.cpp:332). Coverage is checked with <code>TTF_FontHasGlyph</code> (sdl_font.cpp:372-375). Font blending is passed in (<code>fontblending</code>, sdl_font.cpp:237-239, 650-655).
+</li>
+<li><strong>Bitmap sheet</strong>: <code>BitmapFont</code> (sdl_font.cpp:407-). It reads a PNG/BMP and assumes a 16×16 grid (<code>glyphs-&gt;w / 16</code>, sdl_font.cpp:418-419).
+</li></ol>
+</li>
+<li>Engine choice is by file suffix in <code>Font::load_font()</code> (sdl_font.cpp:51-87): <code>.bmp</code>/<code>.png</code> tries bitmap first (user font dir, then the font dir), otherwise TTF. Failure returns <code>nullptr</code>.
+</li>
+<li><code>.fon</code> files are treated as TTF, with a face test (<code>test_face_size</code>, sdl_font.cpp:25-44; applied at sdl_font.cpp:322-324) to work around SDL_ttf sizing issues.
+</li></ul>
+<h3 id="c-2-configuration-and-fallback">C.2 Configuration and fallback</h3>
+<ul>
+<li>Config file: <code>data/raw/fonts.json</code>. It lists <code>typeface</code>, <code>map_typeface</code> and <code>overmap_typeface</code> as arrays of paths. It currently lists <code>data/font/Terminus.ttf</code> then <code>data/font/unifont.ttf</code> for all three.
+</li>
+<li>Override: <code>user_fontconfig()</code> = <code>config_dir/fonts.json</code> (path_info.cpp:224-226). If the user file does not exist it is copied from the default (font_loader.cpp:44-59). If the user file fails to parse, the loader falls back to the default file (font_loader.cpp:60-70). If the default fails, the game aborts (font_loader.cpp:70).
+</li>
+<li>Fallback order: the list is ordered. <code>FontFallbackList::OutputChar()</code> (sdl_font.cpp:671-687) uses the first font whose <code>isGlyphProvided()</code> returns true. The last font in the list is used for any glyph none of them provide. The per-glyph choice is cached in <code>glyph_font</code> (sdl_font.h:167, sdl_font.cpp:675-683).
+</li>
+<li><code>unifont.ttf</code> is always appended as the last resort (<code>ensure_unifont_loaded</code>, font_loader.cpp:5-10; called from <code>load_throws</code>, font_loader.cpp:12-41).
+</li>
+<li>Typeface search: <code>CachedTTFFont</code> tries the typeface as given and with the user font dir, the font dir, and system directories (<code>/usr/share/fonts/</code>, <code>/usr/local/share/fonts/</code>, <code>$HOME/.fonts/</code> on POSIX, sdl_font.cpp:240-300) by adding suffixes <code>.ttf</code>, <code>.otf</code>, <code>.ttc</code>, <code>.fon</code>.
+</li></ul>
+<h3 id="c-3-sizes-and-whether-they-are-global">C.3 Sizes and whether they are global</h3>
+<p>Options (options.cpp:2304-2321, in the tiles-only block, <code>COPT_CURSES_HIDE</code>):</p>
+<table><thead><tr><th>Option</th><th>Range</th><th>Default</th><th>Note</th></tr></thead><tbody><tr><td><code>FONT_BLENDING</code></td><td>bool</td><td>false</td><td>Passed to TTF glyph creation</td></tr><tr><td><code>FONT_WIDTH</code></td><td>8..100</td><td>8</td><td>Cell width, main terminal</td></tr><tr><td><code>FONT_HEIGHT</code></td><td>8..100</td><td>16</td><td>Cell height, main terminal</td></tr><tr><td><code>FONT_SIZE</code></td><td>8..100</td><td>16</td><td>TTF point size (<code>&lt;=0</code> means height-1, sdl_font.cpp:318-320)</td></tr><tr><td><code>MAP_FONT_WIDTH/HEIGHT/SIZE</code></td><td>8..100</td><td>8/16/16</td><td>Map window, separate font object</td></tr><tr><td><code>OVERMAP_FONT_WIDTH/HEIGHT/SIZE</code></td><td>8..100</td><td>8/16/16</td><td>Overmap window, separate font object</td></tr></tbody></table>
+<p>All of these say "Requires restart".</p>
+<ul>
+<li>Wiring: <code>font_loader</code> gets the values at sdltiles.cpp:3933-3943. The main terminal's width and height are copied into the globals <code>::fontwidth</code> and <code>::fontheight</code> (sdltiles.cpp:147-148, 3944-3945). Those globals are used for window sizing and cell-to-pixel maths across the file (for example sdltiles.cpp:217-218, 654-656, 856).
+</li>
+<li>So <strong>the main terminal cell size is global</strong>. The map and overmap windows each have their own font object, and <code>get_window_dimensions()</code> picks the right one per window (sdltiles.cpp:4196-4215).
+</li>
+<li>Three font objects are created once in <code>WinCreate</code> (sdltiles.cpp:3999-4006) and released at shutdown (sdltiles.cpp:4067-4069). Nothing rebuilds them later.
+</li></ul>
+<h3 id="c-4-runtime-change">C.4 Runtime change</h3>
+<ul>
+<li><strong>Font size: no runtime change.</strong> No code path re-creates fonts after startup. The only creation sites are sdltiles.cpp:3999-4006.
+</li>
+<li><strong>Tileset zoom: yes, tiles only.</strong> <code>ACTION_ZOOM_IN</code> / <code>ACTION_ZOOM_OUT</code> (handle_action.cpp:3252-3259) call <code>game::zoom_in()</code> / <code>zoom_out()</code>. Zoom steps are computed by <code>calc_next_zoom()</code> using <code>ZOOM_STEP_COUNT</code> (game.cpp:10565-10577; option at options.cpp:2488-2489). The result goes to <code>rescale_tileset()</code> (sdltiles.cpp:4180-4183), which calls <code>tilecontext-&gt;set_draw_scale()</code>. Only the tile art is scaled. The ASCII cell size and the other windows are not.
+</li>
+<li><strong>Display scale</strong>: <code>SCALING_FACTOR</code> (options.cpp:2749-2755; values 1, 2, 4; requires restart) multiplies the window size (sdltiles.cpp:217-218, 2185-2186) and sets SDL logical presentation (sdltiles.cpp:1414-1416, 1654-1656).
+</li></ul>
+<h3 id="c-5-other-points">C.5 Other points</h3>
+<ul>
+<li>ASCII line drawing: <code>USE_DRAW_ASCII_LINES_ROUTINE</code> (option text "SDL ASCII lines", options.cpp ~2300) selects <code>draw_ascii_lines()</code> (sdl_font.cpp:92-) instead of font glyphs for box-drawing characters. Colour comes from the palette (sdl_font.cpp:97).
+</li>
+<li>Font colour: each glyph is drawn with the 16-entry palette index, so text colour follows the palette (C.6, sdl_font.h:23).
+</li>
+<li>The Windows GDI path is separate (<code>wincurse.cpp:601-637</code>, <code>CreateFontW</code> with <code>fontheight</code>/<code>fontwidth</code>). It is not part of the SDL build.
+</li></ul>
+<h3 id="c-6-bundled-font-files">C.6 Bundled font files</h3>
+<ul>
+<li><code>data/font/Terminus.ttf</code> and <code>data/font/unifont.ttf</code>: used by <code>data/raw/fonts.json</code>.
+</li>
+<li><code>data/font/terminus.fon</code>: present, but no JSON in the repo references it. It is reachable only through a user <code>fonts.json</code>.
+</li>
+<li><code>data/font/map_font_LARWICK.png</code>: present, but no JSON in the repo references it. It would be loaded as a <code>BitmapFont</code>, which expects a 16×16 grid.
+</li></ul>
+<hr>
+<h2 id="not-found-uncertain">Not found / uncertain</h2>
+<p><strong>Not found (searched, absent):</strong></p>
+<ul>
+<li><code>src/input_context*</code> files. <code>input_context</code> lives in <code>src/input.h</code> and <code>src/input.cpp</code>.
+</li>
+<li><code>data/raw/keybindings.json</code>. The file is <code>data/raw/keybindings/keybindings.json</code>.
+</li>
+<li><code>fontdata.json</code>. The font config is <code>data/raw/fonts.json</code> (path_info.cpp:220-222).
+</li>
+<li>Any <code>SDL_Gamepad</code>, <code>SDL_INIT_GAMEPAD</code>, <code>SDL_EVENT_GAMEPAD_*</code> or <code>SDL_CONTROLLER</code> use. Only the legacy <code>SDL_Joystick</code> API is used.
+</li>
+<li><code>SDL_EVENT_JOYSTICK_ADDED</code> / <code>_REMOVED</code> handling (hot-plug).
+</li>
+<li>Writes to <code>input_event::modifiers</code> (only reads exist).
+</li>
+<li>Any mouse middle-button binding or event (only the camera uses it).
+</li>
+<li>Any colour-blind mode, colour-blind palette option, or named theme option.
+</li>
+<li>Any runtime font re-creation or runtime font-size option.
+</li>
+<li>Use of <code>SCROLLWHEEL_*</code> events by the 3D renderer.
+</li>
+<li><code>display_help</code> as a keybinding editor. The keybinding editor is <code>input_context::display_menu</code> (input.cpp:1206). <code>help::display_help</code> (help.cpp:143) is the in-game help.
+</li></ul>
+<p><strong>Uncertain (code reading only, not run):</strong></p>
+<ul>
+<li>Whether a physical joystick button can ever match a <code>JOY_n</code> binding. The code analysis says no (A.6), but this should be confirmed on hardware. Also unknown: what the raw button index maps to in <code>get_keyname</code> for keyboard codes (for example button 10 → Enter).
+</li>
+<li>The click coordinate path when <code>SCALING_FACTOR &gt; 1</code>. <code>window_pos_pixel</code> is computed from unscaled <code>fontwidth</code> (sdltiles.cpp:4225-4226) while the size uses the scaled font size (4212). The r3d motion path divides by <code>scaling_factor</code> (sdltiles.cpp:3508, 3512-3516), but <code>get_coordinates()</code> passes the raw click point to <code>r3d::pick()</code> (sdltiles.cpp:4300-4310 region). Whether these are consistent at scale 2 or 4 has not been checked.
+</li>
+<li>Whether events are lost in practice when several arrive in one drain batch (single-slot <code>last_input</code>, sdltiles.cpp:3277 and 3290 loop). The code suggests yes.
+</li>
+<li>DIAG mode 3 (L/R tilt) behaviour (options.cpp:1950-1990; not read).
+</li>
+<li>Exact count of <code>ACTION_*</code> enumerators (grep gives about 168; not verified by compile).
+</li>
+<li>Whether <code>base_colors.json</code> edits are picked up without restart (the palette is loaded once at startup, sdltiles.cpp:3992, so probably not). Not verified.
+</li>
+<li>Whether the r3d renderer takes its colours from <code>nc_color</code>/palette or from its own values. Not audited.
+</li>
+<li>Stat-value number placement in the sidebar (panels.cpp:625-638 gives only the colour function).
+</li></ul>
+<p><strong>Not searched:</strong> complex-script shaping or ligatures in TTF text; IME handling beyond <code>edit</code>/<code>edit_refresh</code>; Android-specific input beyond the virtual joystick lookup; runtime behaviour of any of the above.</p>
+</main>
+</body>
+</html>

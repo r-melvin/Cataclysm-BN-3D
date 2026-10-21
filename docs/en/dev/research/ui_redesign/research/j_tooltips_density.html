@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tooltips, item comparison and information density in games</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="tooltips-item-comparison-and-information-density-in-games">Tooltips, item comparison and information density in games</h1>
+<p>Research note for the UI redesign. Scope: how games with complex items present tooltips, comparisons and stat density, with sourced quotes where I could fetch the text.</p>
+<p>Verification legend: <strong>[F]</strong> = fetched page, quote checked against page text. <strong>[S]</strong> = appears only in search-result snippet, not fetched; treat as unverified wording. <strong>UNVERIFIED</strong> = memory or a search summary with no source text checked.</p>
+<p>Coverage caveat: the search tool returned mostly secondary coverage and few primary forum threads. Reddit was not reachable through the tools used. Many games in scope have no sourced finding below; see "Could not verify".</p>
+<hr>
+<h2 id="per-game-notes">Per-game notes</h2>
+<h3 id="diablo-4">Diablo 4</h3>
+<ul>
+<li>Setting: "Advanced Tooltip Compare" in the Gameplay tab. Shift (PC) / Y (Xbox) / Triangle (PS) while an unequipped item is selected. [F] Den of Geek (2023-06-06) says the setting lets you "compare every stat and bonus on a piece of gear", used "while you have an unequipped item selected".
+</li>
+<li>Separate "Advanced Tooltip Info" setting exposes roll ranges (low/average/max). [S] Icy Veins snippet; the page returned 403 on fetch, so the wording is unverified.
+</li>
+<li>Colour coding: the search summary says gains are green and losses red. The fetched Den of Geek article does <strong>not</strong> mention colours. Treat green/red as <strong>UNVERIFIED</strong>.
+</li>
+<li>Delta arrows: no source found. <strong>UNVERIFIED / not found.</strong>
+</li></ul>
+<h3 id="path-of-exile-poe-1-and-poe-2">Path of Exile (PoE 1 and PoE 2)</h3>
+<ul>
+<li>PoE 1 official help page: holding Alt over an inventory item shows it against equipped gear, and also explains complex or obscure terms. [F] poedb mirror of the official Helpful Tips page.
+</li>
+<li>PoE 2: Alt (or R3) reveals descriptions for underlined keywords; clicking pins the box so further terms can be hovered. [S] Steam discussion 596260925367969924 (snippet only).
+</li>
+<li>PoE 2 bugs: Alt-hover tooltip chaining stops after the second layer after the Third Edict patch. [S] official forum bug report, snippet only.
+</li>
+<li>Player complaint: holding Alt during Chaos rolling now shows modifier detail, disrupting crafting, and players want that detail moved to another key. [S] forum thread (March 2026, per snippet).
+</li></ul>
+<h3 id="world-of-warcraft-pawn-addon-and-native-tooltips">World of Warcraft (Pawn addon and native tooltips)</h3>
+<ul>
+<li>Pawn computes a numeric score from user-set stat weights, ships with Wowhead-derived defaults, and shows an arrow on the icon and tooltip when an item is an upgrade. [S] Pawn CurseForge changelog and an external article, both as snippets.
+</li>
+<li>Recent breakage: CurseForge changelog notes that Pawn 2.13.2 disabled item-level upgrade features, 2.13.3 ignored "currently equipped" tooltips because they triggered tooltip bugs under WoW 12.0 combat-addon restrictions, and 2.13.9 (dated 2026-04-21) restored scores on equipped tooltips. [S] Snippet-level summary; not fetched.
+</li>
+<li>Lesson: a comparison addon that depends on tooltip hooks is fragile when the host restricts tooltip access.
+</li></ul>
+<h3 id="baldur-s-gate-3-and-divinity">Baldur's Gate 3 and Divinity</h3>
+<ul>
+<li>No sourced finding on equipment comparison or shift-to-compare behaviour. A community "Better Tooltips" mod adds item category labels and readable lore text. [S] PCGamesN article snippet.
+</li>
+<li>An expanded-tooltip mode (Alt, inventory only) is described by Alcasthq. [S] snippet.
+</li>
+<li>Spell save type appears in the tooltip only after the spell is learnt, not during level-up choices. [S] Steam discussion snippet.
+</li></ul>
+<h3 id="escape-from-tarkov">Escape from Tarkov</h3>
+<ul>
+<li>No sourced finding on the inspect window or stat bars. Search returned only third-party tools (RatScanner, Tarkov Companion). <strong>Could not verify.</strong>
+</li></ul>
+<h3 id="monster-hunter-wilds">Monster Hunter (Wilds)</h3>
+<ul>
+<li>No sourced finding on an equipment comparison grid. The closest complaint found is about the split between weapon and armour skills. [S] Steam thread snippet: the division is called "one of the worst gimmicks in the whole series". This is a skill-design complaint, not a UI complaint.
+</li></ul>
+<h3 id="dark-souls-elden-ring">Dark Souls / Elden Ring</h3>
+<ul>
+<li>No sourced finding on stat-delta arrows on the equip screen. A 2022 Steam thread [S] says you can compare items in the inventory but not in shops. Players complained that status icons are never explained (Reddit, via an Italian news article, snippet only).
+</li>
+<li>Green/red arrows are described in a non-souls game (Brighter Shores) and a 2011 FFXIV forum proposal, both as snippets. Not evidence for Elden Ring.
+</li></ul>
+<h3 id="stardew-valley-terraria">Stardew Valley / Terraria</h3>
+<ul>
+<li>Not searched in this pass. <strong>Could not verify.</strong>
+</li></ul>
+<h3 id="factorio">Factorio</h3>
+<ul>
+<li>Dev blog Friday Facts #318 (2019-10-25), "New Tooltips" [F]:
+<ul>
+<li>Root category: "Properties that are directly related to the selected entity type are placed in the "root" category that has no name."
+</li>
+<li>Rationale: "This is to avoid having pointless categories like "Inserter" and "Transport belt"."
+</li>
+<li>"The place where the categorization really shines is in the tooltips of power generating entities."
+</li></ul>
+</li>
+<li>Player reaction [S] forum: one reply likes the cleaned-up information; another suggests linking tooltips into an in-game encyclopedia.
+</li>
+<li>Criticism [S]: in the 1.1.46 UI update, content is cropped at higher UI scale; players point to the Expand Tooltip mod.
+</li>
+<li>Note: the search found no outside design-critic piece praising Factorio density. The praise here is the developer's own account.
+</li></ul>
+<h3 id="dwarf-fortress-steam-release">Dwarf Fortress (Steam release)</h3>
+<ul>
+<li>PCGamesN preview (2020-08-14) [F]:
+<ul>
+<li>Old: "the old menus, which look like classic DOS file system readouts"
+</li>
+<li>New: "the new menus, which are still a bit information-dense but now have scrollbars and clickable tabs and buttons"
+</li></ul>
+</li>
+<li>Reading: the density was kept deliberately; the change was in navigation affordances (scroll, click), not in cutting content.
+</li>
+<li>PCGamer review snippet [S]: the new UI is "rather plain" but "a large step up for veterans".
+</li></ul>
+<h3 id="caves-of-qud">Caves of Qud</h3>
+<ul>
+<li>Not searched in this pass. <strong>Could not verify.</strong>
+</li></ul>
+<h3 id="cataclysm-dark-days-ahead-item-info">Cataclysm: Dark Days Ahead (item info)</h3>
+<ul>
+<li>Searches found no player complaint or praise about the item info window in CDDA. The CleverRaven/Cataclysm-DDA GitHub issue tracker was reachable but the search result showed only label names. <strong>Could not verify.</strong> A direct search of the tracker for "item info" or "info window" is the next step.
+</li></ul>
+<h3 id="rimworld">RimWorld</h3>
+<ul>
+<li>Steam discussion, 2018 [S]: "Too much options in the architect menu. Need UI mod!" The poster says that once mods added options, the panel no longer had room to show info about the selected item.
+</li>
+<li>Steam comment on the Relevant Stats mod, 1.6 [S]: "Hiding it made more sense before 1.6, but now it actually displays useful information that doesn't make sense to hide away by default."
+</li>
+<li>RimWorld Wiki [S]: the inspect pane appears when the player selects a pawn, item or structure and shows details about that object.
+</li></ul>
+<hr>
+<h2 id="concrete-rules-with-sources">Concrete rules (with sources)</h2>
+<ol>
+<li>Compare on demand, not by default. D4 hides comparison behind a held key [F, Den of Geek]. PoE hides it behind Alt [F, poedb].
+</li>
+<li>Comparison should name the slot or the equipped counterpart. PoE [F]: "display it against what you have equipped". Pawn [S] attaches an upgrade arrow to the item itself.
+</li>
+<li>Hide complex term definitions behind a modifier, and offer a pinned or persistent mode if the text must be read across multiple terms. PoE 2 [S] pins the box on click.
+</li>
+<li>Progressive disclosure: "Progressive disclosure defers advanced or rarely used features to a secondary screen" [F, NN/g, page dated 2006-12-03]. "If the user clicks the advanced options button, the system discloses the additional features." [F, same page].
+<ul>
+<li>Conflict: a search summary cited Nielsen introducing the idea in 1983 or 1995. The fetched NN/g page is dated 2006. Not resolved.
+</li></ul>
+</li>
+<li>Group properties by relevance: Factorio's root-category rule removes redundant headers [F].
+</li>
+<li>Density is acceptable when navigation is good: DF kept density and added scroll and clickable tabs [F].
+</li>
+<li>Do not let an addon depend on fragile tooltip hooks. Pawn's breakage [S] shows the cost.
+</li>
+<li>Keep the equipped-item tooltip reachable; Pawn's bug fix pulled equipped-item scoring back in [S].
+</li>
+<li>Expose roll ranges as an optional layer (D4 "Advanced Tooltip Info") [S].
+</li>
+<li>Scaling needs testing: Factorio tooltips were cropped at higher UI scale [S].
+</li></ol>
+<hr>
+<h2 id="quotes-verbatim-with-source-date">Quotes (verbatim, with source, date)</h2>
+<p>Fetched and checked [F]:</p>
+<ol>
+<li>"compare every stat and bonus on a piece of gear" - Den of Geek, "Diablo 4's Best Hidden Setting Lets You Automatically Compare Gear", <a href="https://www.denofgeek.com/games/diablo-4-best-hidden-setting-compare-gear">https://www.denofgeek.com/games/diablo-4-best-hidden-setting-compare-gear</a> , 2023-06-06
+</li>
+<li>"while you have an unequipped item selected" - same page, same date
+</li>
+<li>"Progressive disclosure defers advanced or rarely used features to a secondary screen" - Nielsen Norman Group, "Progressive Disclosure", <a href="https://www.nngroup.com/articles/progressive-disclosure/">https://www.nngroup.com/articles/progressive-disclosure/</a> , 2006-12-03
+</li>
+<li>"If the user clicks the advanced options button, the system discloses the additional features." - same page, same date
+</li>
+<li>"Holding Alt while hovering over an item in your inventory will display it against what you have equipped." - PoE official Helpful Tips (mirror), <a href="https://poedb.tw/us/HelpfulTips">https://poedb.tw/us/HelpfulTips</a> , undated
+</li>
+<li>"Hold Alt while viewing items in your inventory to compare them with their equipped counterpart." - same page
+</li>
+<li>"This is to avoid having pointless categories like "Inserter" and "Transport belt"." - Factorio, "Friday Facts #318 - New Tooltips", <a href="https://cf-www.factorio.com/blog/post/fff-318">https://cf-www.factorio.com/blog/post/fff-318</a> , 2019-10-25
+</li>
+<li>"The place where the categorization really shines is in the tooltips of power generating entities." - same post, same date
+</li>
+<li>"the old menus, which look like classic DOS file system readouts" - PCGamesN, "Dwarf Fortress has a much better UI on Steam", <a href="https://www.pcgamesn.com/dwarf-fortress/menus">https://www.pcgamesn.com/dwarf-fortress/menus</a> , 2020-08-14
+</li>
+<li>"the new menus, which are still a bit information-dense but now have scrollbars and clickable tabs and buttons" - same page, same date
+</li></ol>
+<p>Search snippet only [S], not fetched (wording not verified against page):</p>
+<ol>
+<li value="11">"Too much options in the architect menu. Need UI mod!" - RimWorld, Steam discussion, <a href="https://steamcommunity.com/app/294100/discussions/0/1736594593597361468">https://steamcommunity.com/app/294100/discussions/0/1736594593597361468</a> , 2018 (per snippet summary)
+</li>
+<li>"Hiding it made more sense before 1.6, but now it actually displays useful information that doesn't make sense to hide away by default." - Steam Workshop comment, Relevant Stats mod, <a href="https://steamcommunity.com/workshop/filedetails/discussion/2573728367/4737210531931346994">https://steamcommunity.com/workshop/filedetails/discussion/2573728367/4737210531931346994</a> , date not confirmed
+</li>
+<li>"one of the worst gimmicks in the whole series" - Monster Hunter Wilds Steam thread, <a href="https://steamcommunity.com/app/2246340/discussions/0/596270875262654304">https://steamcommunity.com/app/2246340/discussions/0/596270875262654304</a> , date not confirmed (about skill split)
+</li>
+<li>"a large step up for veterans" - PC Gamer review, "The new Dwarf Fortress UI looks so much better", <a href="https://pcgamer.com/the-new-dwarf-fortress-ui-looks-so-much-better">https://pcgamer.com/the-new-dwarf-fortress-ui-looks-so-much-better</a> , date not confirmed (wording from search summary, not checked)
+</li>
+<li>"Im unable to open close my architect tab after trying to use only these mods." - RimWorld Steam comment, Vehicle Framework mod, <a href="https://steamcommunity.com/sharedfiles/filedetails/comments/2692669482">https://steamcommunity.com/sharedfiles/filedetails/comments/2692669482</a> , 2026 per snippet
+</li>
+<li>"Advanced Tooltip Compare" / advanced tooltip info descriptions - Icy Veins, <a href="https://www.icy-veins.com/d4/news/how-to-make-diablo-4-even-better-7-hidden-things-you-should-do/">https://www.icy-veins.com/d4/news/how-to-make-diablo-4-even-better-7-hidden-things-you-should-do/</a> , page returned 403 on fetch; wording not verified
+</li></ol>
+<p>Only 10 quotes are fetched and checked. The target of 15 verbatim quotes is not met. Items 11-16 are snippet-level and should be re-checked before quoting in any document.</p>
+<hr>
+<h2 id="patterns-worth-adopting">Patterns worth adopting</h2>
+<ul>
+<li>Modifier-held comparison against the equipped item in the same slot (PoE, D4). Show the equipped item named in the comparison.
+</li>
+<li>Keep the default tooltip short; put full stat and term detail behind a hold key (D4, PoE). Offer a pin for long text (PoE 2).
+</li>
+<li>Group stat rows by category, and drop headers that repeat the item name (Factorio root category).
+</li>
+<li>Use an explicit "advanced" layer for roll ranges and numeric breakdowns (D4 Advanced Tooltip Info, unverified).
+</li>
+<li>Use a scoring layer only as an optional overlay (Pawn). Do not make the base tooltip depend on it.
+</li>
+<li>Make dense panels scrollable and tabbed rather than cutting content (Dwarf Fortress).
+</li>
+<li>Test tooltips at high UI scale and with mod-extended lists (Factorio cropping, RimWorld architect overflow).
+</li>
+<li>Reserve bars or colour for deltas only if colour-blind-safe and paired with sign or arrow. This is a design principle; no game source checked.
+</li></ul>
+<hr>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li>Diablo 4 delta arrows and green/red colour coding (search summary only; fetched article silent).
+</li>
+<li>Diablo 2 and Diablo 3 compare behaviour (not searched in this pass).
+</li>
+<li>Elden Ring or Dark Souls equip-screen stat-delta arrows.
+</li>
+<li>Monster Hunter equipment comparison grid UI.
+</li>
+<li>Escape from Tarkov inspect window and stat bars.
+</li>
+<li>BG3 and Divinity shift-to-compare behaviour.
+</li>
+<li>Stardew Valley, Terraria, Caves of Qud tooltips (not searched).
+</li>
+<li>Cataclysm: Dark Days Ahead item info complaints or praise.
+</li>
+<li>Celia Hodent GDC talk on inventory or information density: search found only general talks. The Gamer's Brain (book) may cover it; unverified.
+</li>
+<li>Gamedeveloper.com and GDC Vault articles on inventory UX: not found in this pass.
+</li>
+<li>Reddit threads on any of the above: Reddit was not reachable via search results.
+</li>
+<li>Nielsen Norman Group date of the progressive disclosure article: fetched page says 2006-12-03; a search summary cited 1983 or 1995 for the idea. Unresolved.
+</li>
+<li>Pawn version history beyond the snippet-level changelog.
+</li>
+<li>"Tooltip hell" as a named term in games UX literature: not confirmed with a source.
+</li></ul>
+</main>
+</body>
+</html>

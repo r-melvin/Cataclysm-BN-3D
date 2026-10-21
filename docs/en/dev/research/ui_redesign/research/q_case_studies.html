@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Case studies: moving a C/C++ game or simulation onto a general-purpose engine</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="case-studies-moving-a-c-c-game-or-simulation-onto-a-general-purpose-engine">Case studies: moving a C/C++ game or simulation onto a general-purpose engine</h1>
+<p>Research date: 2026-10-21. Labels: <strong>VERIFIED</strong> (page fetched and quoted, or primary source text read), <strong>SNIPPET</strong> (only seen in search-result text, not fetched), <strong>NOT VERIFIED</strong> (no source found in this session, or claim comes from memory).</p>
+<p><strong>Session limit:</strong> the WebSearch budget ran out partway through (shared 200-call session limit). Sections below are therefore incomplete. Remaining gaps are listed under "Could not verify".</p>
+<hr>
+<h2 id="1-open-source-indie-projects-embedding-an-existing-c-c-core-in-godot-or-unity-unreal">1. Open-source / indie projects embedding an existing C/C++ core in Godot (or Unity/Unreal)</h2>
+<ul>
+<li><strong>Cataclysm: DDA / Cataclysm-BN as a Godot frontend.</strong> No Godot frontend found. A search returned only unrelated Godot projects. <strong>NOT FOUND.</strong> Search: <a href="https://www.google.com">https://www.google.com</a> (no URL; WebSearch result list only).
+</li>
+<li><strong>Godot GDExtension for a custom simulation (racing sim).</strong> GodotCon Amsterdam 2026 talk "Godot at the limit of grip!" (Marcel Offermans): a C++ GDExtension runs a custom physics engine (Project Chrono) at 1000 Hz, with GDScript for the dashboard. The abstract promises a lessons-learned section; the content was not read. <strong>SNIPPET.</strong> <a href="https://talks.godotengine.org/godotcon-ams-2026/talk/GAWZDR.ics">https://talks.godotengine.org/godotcon-ams-2026/talk/GAWZDR.ics</a>
+</li>
+<li><strong>Godot's own guidance on GDExtension.</strong> The docs say GDExtension does not require compiling the engine, that godot-cpp only requires compiling your own library, and that GDExtension is experimental and has less access than static modules. <strong>SNIPPET</strong> (search result text from docs.godotengine.org translations; the English page was not fetched). <a href="https://docs.godotengine.org/fr/4.x/_sources/tutorials/scripting/cpp/about_godot_cpp.rst.txt">https://docs.godotengine.org/fr/4.x/_sources/tutorials/scripting/cpp/about_godot_cpp.rst.txt</a>
+</li>
+<li><strong>Dwarf Fortress (Steam, 2022).</strong> Not an engine product in the sense of Unity/Godot. The GamingOnLinux article reports the game was upgraded "from the ancient SDL to SDL 2, along with many optimisations" and that SDL 2 is a "stepping stone to ports". <strong>VERIFIED.</strong> <a href="https://www.gamingonlinux.com/2023/06/dwarf-fortress-getting-close-to-a-linux-release-on-steam/">https://www.gamingonlinux.com/2023/06/dwarf-fortress-getting-close-to-a-linux-release-on-steam/</a> . <strong>NOT VERIFIED:</strong> that it is "its own engine, not Unity" (the article does not mention Unity or the engine architecture).
+</li>
+<li><strong>Caves of Qud (Freehold Games).</strong> Brian Bucklew said in an RPG Site interview that he built a component-based roguelike engine in C# ("let me try to build one of these component-based engines in this new language C#"). <strong>SNIPPET.</strong> <a href="https://www.rpgsite.net/interview/20000-brian-bucklew-caves-of-qud-interview-expansions-switch-port-unity-controller-support-coffee">https://www.rpgsite.net/interview/20000-brian-bucklew-caves-of-qud-interview-expansions-switch-port-unity-controller-support-coffee</a> . Unity Systems-driven design article exists (unity.com/resources/systems-driven-design-in-caves-of-qud): <strong>SNIPPET</strong>, content not read. The claim "Unity only for the UI" comes from a secondhand GOG forum post: <strong>NOT VERIFIED.</strong>
+</li>
+<li><strong>Caves of Qud Godot port test (2023).</strong> Article: Bucklew "decided to see just how much work would be involved to port Caves of Qud from Unity to Godot". The article reports he "logged about 16 hours total to get Caves of Qud booting under Godot", but that figure is the author's paraphrase, not a Bucklew quote. The quote for the motive: "Unity's pricing scheme spits in the face of a community that has invested a truly unfathomable amount of time". <strong>VERIFIED</strong> (quotes and paraphrase distinguished). <a href="https://fullcleared.com/news/caves-of-qud-developer-live-tweets-porting-game-to-godot">https://fullcleared.com/news/caves-of-qud-developer-live-tweets-porting-game-to-godot</a> . Note: this is a booting test, not a finished migration. The "full port likely around 1.0" line is the article's claim, not confirmed.
+</li>
+<li><strong>Vintage Story, Factorio, RimWorld, Zomboid, Songs of Syx, Stoneshard, Vintage Story:</strong> engine claims NOT VERIFIED (no sources fetched).
+</li></ul>
+<h2 id="2-native-plugin-ports-of-c-games-into-unity-and-unreal-ports">2. Native-plugin ports of C++ games into Unity, and Unreal ports</h2>
+<ul>
+<li><strong>Unity native plugin model.</strong> Native plug-ins are unmanaged libraries called from C#; IL2CPP generates P/Invoke wrappers in C++. <strong>SNIPPET.</strong> <a href="https://docs.unity.com/en-us/engine/6000.7/manual/programming-environment/plug-ins/native.md">https://docs.unity.com/en-us/engine/6000.7/manual/programming-environment/plug-ins/native.md</a> ; <a href="https://unity.com/de/blog/engine-platform/il2cpp-internals-pinvoke-wrappers">https://unity.com/de/blog/engine-platform/il2cpp-internals-pinvoke-wrappers</a>
+</li>
+<li><strong>Reported pain points (Unity C++ plugins).</strong> Jackson Dunstan: C++ call stacks do not show in the Unity profiler; C++ crashes can take down the editor; C# glue code and per-platform setup needed. <strong>SNIPPET</strong> (search text). <a href="https://www.jacksondunstan.com/articles/3938">https://www.jacksondunstan.com/articles/3938</a>
+</li>
+<li><strong>Exceptions must not cross managed/unmanaged boundary; native plug-ins are not unloaded, which hinders iteration.</strong> Attributed to an Audiokinetic talk. <strong>SNIPPET.</strong> Source URL not fetched.
+</li>
+<li><strong>Marshalling structs/arrays and 64-bit requirement for the Editor.</strong> From a minimal GitHub example (cschladetsch/MinimalUnity3dCppPlugin). <strong>SNIPPET.</strong> <a href="https://github.com/cschladetsch/MinimalUnity3dCppPlugin">https://github.com/cschladetsch/MinimalUnity3dCppPlugin</a>
+</li>
+<li><strong>OpenRA, Wesnoth Unity ports.</strong> No source found. <strong>NOT FOUND.</strong>
+</li>
+<li><strong>Unreal ports of C++ codebases, pain points.</strong> Not searched in depth. <strong>NOT VERIFIED.</strong>
+</li>
+<li><strong>Third-party TTS plugins for Unreal/Unity (ReadSpeaker).</strong> Vendor marketing claim that it adds screen narration. <strong>SNIPPET, vendor claim, not verified in shipped games.</strong> <a href="https://www.readspeaker.com/resources/unity/">https://www.readspeaker.com/resources/unity/</a>
+</li></ul>
+<h2 id="3-roguelikes-and-turn-based-games-with-screen-reader-support">3. Roguelikes and turn-based games with screen-reader support</h2>
+<ul>
+<li><strong>Caves of Qud.</strong> No screen reader found. Official-looking devlog sidebar tags: "Configurable controls" and "High-contrast". <strong>VERIFIED</strong> (tags only; the Feature Friday posts for July 2024 mention no screen reader). <a href="https://freeholdgames.itch.io/cavesofqud/devlog/764265/feature-friday-july-12-2024">https://freeholdgames.itch.io/cavesofqud/devlog/764265/feature-friday-july-12-2024</a> . Steam page fetch gave no accessibility feature list. <strong>VERIFIED</strong> (absence in fetched text only).
+</li>
+<li><strong>Shattered Pixel Dungeon (libGDX).</strong> Itch.io accessibility tag "Configurable controls" in search result text only. No screen-reader support found. Engine libGDX from a linuxphoneapps listing. <strong>SNIPPET.</strong> <a href="https://linuxphoneapps.org/apps/com.shatteredpixeldungeon/">https://linuxphoneapps.org/apps/com.shatteredpixeldungeon/</a> . The official site fetch failed (DNS error), so the official site was not checked.
+</li>
+<li><strong>Dwarf Fortress.</strong> No documented screen reader support found. A Steam community thread asks whether it is playable blind; a commenter says the UI is accessible (anecdote). <strong>SNIPPET / NOT VERIFIED</strong> as a feature.
+</li>
+<li><strong>Cogmind.</strong> No information found. <strong>NOT FOUND.</strong>
+</li>
+<li><strong>Jupiter Hell, Brogue.</strong> Not searched. <strong>NOT VERIFIED.</strong>
+</li>
+<li><strong>Academic approach for ASCII roguelikes.</strong> A 2020 gamnlp paper (aclanthology 2020.gamnlp-1.9) generates text descriptions of game events for screen readers to read aloud. <strong>SNIPPET.</strong> <a href="https://aclanthology.org/2020.gamnlp-1.9">https://aclanthology.org/2020.gamnlp-1.9</a>
+</li></ul>
+<h2 id="4-effort-numbers-and-reasons-for-abandoning-migrations">4. Effort numbers and reasons for abandoning migrations</h2>
+<ul>
+<li><strong>Caves of Qud Godot booting test: about 16 hours</strong> (author paraphrase, see section 1). Not a full migration. <strong>VERIFIED as reported; NOT VERIFIED as a precise figure.</strong>
+</li>
+<li><strong>RollerCoaster Tycoon Classic:</strong> a forum post quoting the original developer says porting from machine code to C++ took much longer than the original writing. <strong>SNIPPET, NOT VERIFIED</strong> (no fetched source).
+</li>
+<li><strong>Reasons for leaving an engine:</strong> the only reason found is Unity's pricing change, cited by Bucklew (see section 1). <strong>VERIFIED.</strong>
+</li>
+<li><strong>Other reasons, timelines for Unity/Godot migrations:</strong> NOT FOUND in this session. No postmortem with weeks/months of effort was located.
+</li>
+<li><strong>Cyberix3D rewrite (C++ with Ogre):</strong> a shipped rewrite whose main constraint was backward compatibility of user-made content. <strong>SNIPPET.</strong> <a href="https://gamedev.net/news/game-highlight-cyberix3d-r5113/">https://gamedev.net/news/game-highlight-cyberix3d-r5113/</a>
+</li></ul>
+<h2 id="5-accessibility-outcomes-did-engine-choice-deliver-screen-reader-support">5. Accessibility outcomes: did engine choice deliver screen-reader support?</h2>
+<p><strong>Engine-level facts:</strong></p>
+<ul>
+<li><strong>Godot 4.5</strong> adds screen-reader support through AccessKit to Control nodes; experimental; editor support limited to Project Manager, standard UI nodes and the inspector; follow-ups promised. <strong>VERIFIED.</strong> <a href="https://godotengine.org/releases/4.5/">https://godotengine.org/releases/4.5/</a>
+</li>
+<li><strong>Unreal Engine</strong> ships Text To Speech, Screen Reader and Slate Screen Reader plugins; the TTS plugin supports English only on all platforms. <strong>VERIFIED.</strong> <a href="https://dev.epicgames.com/documentation/en-us/unreal-engine/blind-accessibility-features-overview-in-unreal-engine">https://dev.epicgames.com/documentation/en-us/unreal-engine/blind-accessibility-features-overview-in-unreal-engine</a>
+</li>
+<li><strong>Unreal and Godot before 4.3 "do not do this out of the box" (claim about Unity too).</strong> Snippet from a search result; no fetched support. <strong>NOT VERIFIED.</strong>
+</li>
+<li><strong>Godot NVDA Integration GDExtension</strong> exists in the Godot asset library (sends text to NVDA, falls back to TTS). <strong>SNIPPET.</strong> <a href="https://godotengine.org/asset-library/asset/edit/10637">https://godotengine.org/asset-library/asset/edit/10637</a> (the link is an edit page, not the asset page).
+</li></ul>
+<p><strong>Shipped narrated games (verified where stated):</strong></p>
+<table><thead><tr><th>Game</th><th>Engine</th><th>Built-in narration / screen reader</th><th>Status</th><th>Source</th></tr></thead><tbody><tr><td>The Last of Us Part II</td><td>NOT VERIFIED (not identified in session)</td><td>Menus and on-screen text voiced via Text-To-Speech; auto-enabled when language is English and console TTS is on; available in all languages except Thai</td><td><strong>VERIFIED</strong> (PlayStation page)</td><td><a href="https://playstation.com/en-th/games/the-last-of-us-part-ii/accessibility">https://playstation.com/en-th/games/the-last-of-us-part-ii/accessibility</a></td></tr><tr><td>Diablo IV</td><td>NOT VERIFIED (custom engine claim not checked)</td><td>Built-in screen reader, supports JAWS and NVDA; reads in-game menu text; voice type, speed, volume configurable</td><td><strong>VERIFIED</strong> (Blizzard news)</td><td><a href="https://news.blizzard.com/diablo4/23954932">https://news.blizzard.com/diablo4/23954932</a></td></tr><tr><td>Sea of Thieves</td><td>Unreal Engine 4</td><td>"Let Games Read to Me" narrates cosmetic chests, Shop menus, Pirate Log, barrel contents, etc.; Xbox screen reader for menus; toast narration</td><td>Narration <strong>VERIFIED</strong> (caniplaythat, 2021); engine <strong>SNIPPET</strong> (Wikipedia/search text)</td><td><a href="https://caniplaythat.com/2021/06/22/sea-of-thieves-season-3s-first-accessibility-features-revealed/">https://caniplaythat.com/2021/06/22/sea-of-thieves-season-3s-first-accessibility-features-revealed/</a> ; <a href="https://en.wikipedia.org/wiki/Sea_of_Thieves">https://en.wikipedia.org/wiki/Sea_of_Thieves</a></td></tr><tr><td>Mortal Kombat 1</td><td>Unreal Engine 4 (customized, per NetherRealm/Ed Boon via press)</td><td>Screen reader narrates menus; per Inverse, reads any on-screen text; Descriptive Audio</td><td>Engine <strong>SNIPPET</strong>; narration <strong>SNIPPET</strong> (support page returned HTTP 403, so not fetched)</td><td><a href="https://www.inverse.com/gaming/mortal-kombat-1-accessibility">https://www.inverse.com/gaming/mortal-kombat-1-accessibility</a> ; <a href="https://multiplayer.it/notizie/mortal-kombat-1-non-gira-unreal-engine-5-ed-boon-non-esclude-injustice-3-in-futuro.html">https://multiplayer.it/notizie/mortal-kombat-1-non-gira-unreal-engine-5-ed-boon-non-esclude-injustice-3-in-futuro.html</a></td></tr><tr><td>Fortnite</td><td>Unreal (NOT VERIFIED in session)</td><td>Epic help page: chat text-to-speech ("Read Messages Aloud"), English only. No full menu screen reader found</td><td>Chat TTS <strong>SNIPPET</strong>; full screen reader <strong>NOT VERIFIED / not found</strong></td><td><a href="https://www.epicgames.com/help/epic-games-store-c-202300000001639/launcher-support-c-202300000001735/how-do-i-enable-text-to-speech-tts-a202300000083792">https://www.epicgames.com/help/epic-games-store-c-202300000001639/launcher-support-c-202300000001735/how-do-i-enable-text-to-speech-tts-a202300000083792</a></td></tr><tr><td>Hearthstone, Stardew Valley, Minecraft</td><td>NOT VERIFIED</td><td>NOT VERIFIED</td><td>NOT VERIFIED</td><td>none</td></tr><tr><td>Any shipped Godot game with narration</td><td>Godot</td><td>none found</td><td><strong>NOT FOUND</strong> (Steam search for "Godot + narrated menus" not completed)</td><td>none</td></tr><tr><td>Caves of Qud, Dwarf Fortress, Shattered Pixel Dungeon, Cogmind</td><td>C#/custom, SDL, libGDX, NOT VERIFIED</td><td>No screen reader found</td><td><strong>NOT FOUND</strong> (see section 3)</td><td>see section 3</td></tr></tbody></table>
+<p><strong>Conclusion (verified part only):</strong> the three shipped titles with confirmed narration are on custom or Unreal stacks, not Godot. Engine choice did not by itself deliver narration: the narration in Sea of Thieves and MK1 is per-game work (each screen's reading order, per the Inverse article for MK1), and Godot's own support is experimental and Control-node only.</p>
+<hr>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li>Cataclysm-DDA / Cataclysm-BN Godot frontend: none found.
+</li>
+<li>Caves of Qud accessibility roadmap and any screen reader: no source; Freehold devlogs checked only.
+</li>
+<li>Shattered Pixel Dungeon and Cogmind accessibility details; official sites not reached (DNS error for shattered-pixel.com).
+</li>
+<li>Unity and Unreal ports of named C++ games (OpenRA, Wesnoth): not found.
+</li>
+<li>Effort numbers (weeks/months) for engine migrations of shipped games: not found beyond the 16-hour Caves of Qud booting test (author paraphrase).
+</li>
+<li>Engines and narration for Hearthstone, Stardew, Minecraft, Forza, Fortnite menus, Factorio, RimWorld, Vintage Story, Songs of Syx, Stoneshard, Zomboid, Brogue, Jupiter Hell: not searched or not found.
+</li>
+<li>Mortal Kombat 1 support page content (HTTP 403 on fetch).
+</li>
+<li>Dwarf Fortress "own engine, not Unity" claim: the fetched article does not address it.
+</li>
+<li>Godot 4.3+ NVDA/Braille/third-party screen reader assets: only a snippet.
+</li>
+<li>The GodotCon 2026 talk lessons-learned content: abstract only, recording not found.
+</li>
+<li>All SNIPPET-labelled items above need a fetch before being cited as fact.
+</li></ul>
+</main>
+</body>
+</html>

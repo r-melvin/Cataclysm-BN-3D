@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-labelledby="t-ctx">
+<title id="t-ctx">Input contexts after the redesign: twelve contexts in a parent chain, with the shared menu context supplying navigation to every screen, instead of 61 contexts each with its own keys.</title>
+<g font-size="13">
+  <rect x="400" y="20" width="160" height="40" rx="6" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="480" y="38" text-anchor="middle" class="d-text" font-weight="600">global</text>
+  <text x="480" y="53" text-anchor="middle" class="d-text-3">pause, status report, palette</text>
+
+  <g class="d-line">
+    <path d="M480,60 V80"/>
+    <path d="M120,80 H840"/>
+    <path d="M120,80 V100"/><path d="M300,80 V100"/><path d="M480,80 V100"/><path d="M660,80 V100"/><path d="M840,80 V100"/>
+  </g>
+
+  <rect x="50" y="100" width="140" height="40" rx="6" class="d-box"/>
+  <text x="120" y="118" text-anchor="middle" class="d-text" font-weight="600">play</text>
+  <text x="120" y="133" text-anchor="middle" class="d-text-3">32 keyboard / 14 pad defaults</text>
+
+  <rect x="230" y="100" width="140" height="40" rx="6" class="d-box"/>
+  <text x="300" y="118" text-anchor="middle" class="d-text" font-weight="600">cursor</text>
+  <text x="300" y="133" text-anchor="middle" class="d-text-3">look, target, throw, list</text>
+
+  <rect x="410" y="100" width="140" height="40" rx="6" class="d-box d-stroke-s2" stroke-width="2"/>
+  <text x="480" y="118" text-anchor="middle" class="d-text" font-weight="600">menu</text>
+  <text x="480" y="133" text-anchor="middle" class="d-text-3">18 navigation actions, bound once</text>
+
+  <rect x="590" y="100" width="140" height="40" rx="6" class="d-box"/>
+  <text x="660" y="118" text-anchor="middle" class="d-text" font-weight="600">text</text>
+  <text x="660" y="133" text-anchor="middle" class="d-text-3">entry fields, on-screen keyboard</text>
+
+  <rect x="770" y="100" width="140" height="40" rx="6" class="d-box"/>
+  <text x="840" y="118" text-anchor="middle" class="d-text" font-weight="600">debug</text>
+  <text x="840" y="133" text-anchor="middle" class="d-text-3">debug menu, Lua console</text>
+
+  <g class="d-line">
+    <path d="M480,140 V165"/>
+    <path d="M110,165 H850"/>
+    <path d="M110,165 V185"/><path d="M258,165 V185"/><path d="M406,165 V185"/><path d="M554,165 V185"/><path d="M702,165 V185"/><path d="M850,165 V185"/>
+  </g>
+  <g>
+    <rect x="50" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="110" y="208" text-anchor="middle" class="d-text">inventory</text>
+    <rect x="198" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="258" y="208" text-anchor="middle" class="d-text">craft</text>
+    <rect x="346" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="406" y="208" text-anchor="middle" class="d-text">build</text>
+    <rect x="494" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="554" y="208" text-anchor="middle" class="d-text">map</text>
+    <rect x="642" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="702" y="208" text-anchor="middle" class="d-text">vehicle</text>
+    <rect x="790" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="850" y="208" text-anchor="middle" class="d-text">dialogue</text>
+  </g>
+  <text x="480" y="250" text-anchor="middle" class="d-text-2">Screen contexts register only their own verbs; navigation is inherited from menu.</text>
+  <text x="480" y="270" text-anchor="middle" class="d-text-3">Before: 585 actions in 61 contexts (DEFAULTMODE 132, ADVANCED_INVENTORY 36, VEH_INTERACT 24, ...), per-screen navigation keys, conflicts checked within one context only.</text>
+</g>
+</svg>

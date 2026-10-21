@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H. Screen reader and self-voicing TTS for games</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="h-screen-reader-and-self-voicing-tts-for-games">H. Screen reader and self-voicing TTS for games</h1>
+<p>Research date: 2026-10-21. Scope: libraries and OS APIs for speech output and accessibility trees, per-game implementation notes, blind-player UX requests, and a recommendation for a C++ SDL3 game.</p>
+<p>Verification legend: <strong>[V]</strong> verified on a fetched page or search snippet this session. <strong>UNVERIFIED</strong> = from memory or from an unfetched source; check before relying on it. Where a source was a search snippet rather than a fetched page, it is noted.</p>
+<h2 id="1-summary">1. Summary</h2>
+<ol>
+<li>Two different things are being compared: (a) <strong>self-voicing</strong>, where the game speaks its own UI through a TTS engine, and (b) <strong>exposing an accessibility tree</strong>, where a screen reader reads the game's UI through an OS API. Most shipped games do both or pick one.
+</li>
+<li>Tolk (LGPL-3.0) is a Windows-only DLL that wraps JAWS, NVDA, SuperNova, ZoomText, Window-Eyes, System Access and SAPI. Its README says <strong>"this project is not currently being developed"</strong> [V].
+</li>
+<li>NVDA Controller Client is a Windows DLL under <strong>LGPL-2.1</strong> [V]. It only works when NVDA is running.
+</li>
+<li>Speech Dispatcher is the standard Linux TTS daemon. <code>libspeechd</code> (C client) is <strong>LGPL-2.1-or-later</strong> [V]. It needs a running daemon, not a screen reader.
+</li>
+<li>AccessKit (Rust, C and Python bindings) is <strong>Apache-2.0 or MIT</strong> [V] and has adapters for UIA (Windows), NSAccessibility (macOS), AT-SPI (Unix), Android and iOS [V]. Bevy, egui, Freya, Slint and Xilem use it, per the AccessKit site [V]. <strong>Godot</strong> uses it, but Godot's own release page calls the integration <strong>experimental</strong> [V]. A Godot forum user reports TalkBack on Android does not work [V, user report].
+</li>
+<li>SDL3 has <strong>no</strong> speech or accessibility API as far as I could find. Searches turned up only 2012–2015 SDL forum threads proposing one, with no shipped result [V, search snippets]. A fetch of the libsdl-org issue search returned three accessibility issues, none proposing a speech API (see section 6).
+</li>
+<li>Unreal Engine 5 ships a "Slate Screen Reader" plugin and third-party reader support on Windows and iOS (VoiceOver), marked <strong>Experimental</strong> [V]. Unity has a third-party UI Accessibility Plugin (Apache-2.0 with LGPL NVDA controller bundled) [V, search snippet].
+</li>
+<li>Recommended approach for a C++ SDL3 game: a small in-house speech abstraction with a per-OS backend (Tolk or NVDA+SAPI on Windows, AVSpeechSynthesizer on macOS, speech-dispatcher on Linux), used for self-voicing and announcements. Add an accessibility tree (AccessKit C API) later if the game needs real screen-reader navigation. See section 7.
+</li></ol>
+<h2 id="2-comparison-table-libraries-and-apis">2. Comparison table: libraries and APIs</h2>
+<table><thead><tr><th>Library / API</th><th>Platform</th><th>Licence</th><th>How it speaks</th><th>Needs a screen reader running?</th><th>Maintained?</th><th>C/C++ usable?</th></tr></thead><tbody><tr><td><strong>Tolk</strong> (dkager/tolk)</td><td>Windows only (x86/x64 DLL)</td><td>LGPL-3.0 [V]</td><td>Forwards text to the active screen reader (JAWS, NVDA, SuperNova, ZoomText, Window-Eyes, System Access) or SAPI [V]</td><td>Not strictly. Falls back to SAPI when no reader is found, per the README's auto-detection order [V]</td><td><strong>No</strong>: README says "this project is not currently being developed" [V]. 161 commits, 104 stars [V]</td><td>Yes, C-style DLL API; built with MSVC and Windows SDK [V]</td></tr><tr><td><strong>NVDA Controller Client</strong> (<code>nvdaControllerClient.dll</code>)</td><td>Windows</td><td>LGPL-2.1 [V]</td><td><code>nvdaController_speakText</code> and similar calls, sent to NVDA</td><td><strong>Yes</strong>. Returns an error if NVDA is not running [V, error code note]</td><td>Repo page shows new functions added in NVDA 2024.1 and 2026.3 [V]; maintenance beyond that UNVERIFIED</td><td>Yes. C header <code>nvdaController.h</code>; examples in C, C#, Python, Rust [V]</td></tr><tr><td><strong>JAWS API</strong></td><td>Windows</td><td>Proprietary (Freedom Scientific)</td><td>JAWS scripting language (JSL) runs <em>inside</em> JAWS per application; third parties ship scripts for specific apps [V, search snippet]</td><td><strong>Yes</strong> (JAWS)</td><td>Vendor-maintained</td><td>Not as a C library. Integration is via JAWS scripts or via Tolk/UIA [V]</td></tr><tr><td><strong>SAPI 5</strong> (<code>ISpVoice</code>)</td><td>Windows</td><td>OS API (no licence concern)</td><td>Direct TTS through installed voices</td><td>No</td><td>Legacy but still shipped</td><td>Yes, via COM (<code>sapi.h</code>) [UNVERIFIED for API details and "legacy" status; my fetch of the docs page returned the wrong page]</td></tr><tr><td><strong>WinRT SpeechSynthesizer</strong> (<code>Windows.Media.SpeechSynthesis</code>)</td><td>Windows 10+</td><td>OS API</td><td>Synthesizes to a stream, plays through <code>MediaElement</code>. Only Microsoft-signed voices [V]</td><td>No</td><td>Current</td><td>Needs C++/WinRT or C++/CX. Designed around XAML/UWP media playback [V]</td></tr><tr><td><strong>UI Automation (UIA)</strong></td><td>Windows</td><td>OS API</td><td>Screen reader queries a provider tree (names, control types, patterns, events)</td><td>Yes, the consumer is the reader</td><td>Current Windows accessibility API [V, via AccessKit page]</td><td>Yes, via COM. Heavy to implement directly</td></tr><tr><td><strong>NSSpeechSynthesizer</strong></td><td>macOS</td><td>OS API</td><td>Old AppKit TTS</td><td>No</td><td><strong>Obsoleted in macOS 14.0</strong>; message says use <code>AVSpeechSynthesizer</code> [V, via .NET API catalog snippet]</td><td>Objective-C/Swift only</td></tr><tr><td><strong>AVSpeechSynthesizer</strong> (AVFoundation)</td><td>macOS 10.14+, iOS</td><td>OS API</td><td>Speaks text with <code>AVSpeechSynthesisVoice</code> voices [V, snippet]</td><td>No</td><td>Current</td><td>Objective-C/Swift. Needs a small ObjC++ bridge from C++ [UNVERIFIED that Apple's current docs match; Apple page fetch failed]</td></tr><tr><td><strong>NSAccessibility / VoiceOver</strong></td><td>macOS</td><td>OS API (AppKit protocol)</td><td>Exposes elements; VoiceOver reads them. Apps post notifications on UI change [UNVERIFIED: Apple page fetch returned only the title]</td><td>Yes (VoiceOver), but VoiceOver is always present on macOS</td><td>Current</td><td>Objective-C/Swift. AccessKit has a macOS adapter [V]</td></tr><tr><td><strong>speech-dispatcher / libspeechd</strong></td><td>Linux (also BSD)</td><td>Server: GPL-2.0 (mixed). C client <code>libspeechd</code>: LGPL-2.1-or-later [V]</td><td>Daemon queues messages and sends to eSpeak-NG, Festival, Piper, Mimic3 and others [V]</td><td><strong>No</strong>. The daemon is the TTS service; Orca uses it too [V]</td><td>Repo active (4,204 commits, copyright 2018–2026) [V]. No release version visible</td><td>Yes, C library (<code>libspeechd</code>) [V]</td></tr><tr><td><strong>Orca</strong> (GNOME screen reader)</td><td>Linux</td><td>GPL (UNVERIFIED version)</td><td>Uses speech-dispatcher by default [V]</td><td>N/A (it is a reader)</td><td>Active</td><td>Not a library</td></tr><tr><td><strong>AT-SPI2</strong> (atspi, ATK)</td><td>Linux (D-Bus)</td><td>LGPL for libatspi (UNVERIFIED)</td><td>Apps expose a widget tree over D-Bus; Orca reads it [V]</td><td>Yes (Orca or other AT client)</td><td>Current</td><td>C client library <code>libatspi</code> exists [V]. Server side for a custom app means implementing the D-Bus interfaces yourself [V, Ubuntu docs]</td></tr><tr><td><strong>AccessKit</strong></td><td>Windows (UIA), macOS (NSAccessibility), Unix (AT-SPI over zbus), Android, iOS (planned web) [V]</td><td>Apache-2.0 or MIT [V]</td><td>Not a speech library. Provides an accessibility tree to the OS, which then reaches the screen reader</td><td>Yes, a screen reader is needed to hear it</td><td>Active (717 commits, 46 open issues on the repo page). No release date visible [V]</td><td><strong>C API</strong> (<code>cbindgen</code> header) and Python (PyO3) [V]</td></tr><tr><td><strong>Godot 4.5 AccessKit integration</strong></td><td>Desktop, Android (partial)</td><td>MIT (Godot; UNVERIFIED)</td><td>Built on AccessKit; Control nodes plus "screen reader bindings" for any Node</td><td>Yes</td><td>Experimental [V]</td><td>GDScript/C# API</td></tr><tr><td><strong>Unreal Slate Screen Reader</strong></td><td>Windows, iOS (VoiceOver)</td><td>Epic engine</td><td>Experimental plugin with third-party reader support for listed UMG widgets [V]</td><td>Yes for third-party readers; Text To Speech plugin is English-only [V]</td><td>Shipped with UE5</td><td>C++ via <code>SWidget::CreateAccessibleWidget()</code> [V]</td></tr><tr><td><strong>Unity UI Accessibility Plugin (UAP)</strong></td><td>Windows (SAPI, NVDA), Android, iOS, Mac, WebGL [V]</td><td>Apache-2.0 (examples excluded) [V]</td><td>Bundles NVDA controller client (LGPL-2.1) and SAPI fallback [V]</td><td>Optional (SAPI fallback)</td><td>Unknown</td><td>C#</td></tr><tr><td><strong>SDL3</strong></td><td>n/a</td><td>zlib</td><td><strong>No speech or accessibility API</strong> found [V, search only]</td><td>n/a</td><td>n/a</td><td>n/a</td></tr></tbody></table>
+<h2 id="3-library-notes">3. Library notes</h2>
+<h3 id="tolk">Tolk</h3>
+<ul>
+<li>Windows-only DLL. README says it lets "Windows applications" output text, in 32- and 64-bit [V].
+</li>
+<li>Supported screen readers listed in the README: JAWS, Window-Eyes, NVDA, SuperNova, System Access, ZoomText and SAPI. SuperNova "does not have a 64-bit compatible API" [V].
+</li>
+<li>Licence: LGPL-3.0 [V]. Dynamic linking is the usual way to satisfy LGPL.
+</li>
+<li>Maintenance: explicitly not developed [V]. Forks may exist; I did not check.
+</li></ul>
+<h3 id="nvda-controller-client">NVDA Controller Client</h3>
+<ul>
+<li>LGPL-2.1, Windows DLL, x86/x64/arm64 builds [V].
+</li>
+<li>Functions named on the page: <code>nvdaController_speakText</code>, <code>nvdaController_isSpeaking</code> (NVDA 2026.3), <code>nvdaController_getProcessId</code> and <code>nvdaController_speakSsml</code> (NVDA 2024.1). Full list is in <code>nvdaController.h</code> [V].
+</li>
+<li>Returns non-zero on failure. Older NVDA versions return error 1717 for the newer functions [V].
+</li>
+<li>Only useful when NVDA runs. Tolk handles this for you by also covering JAWS and SAPI.
+</li></ul>
+<h3 id="speech-dispatcher-libspeechd">speech-dispatcher / libspeechd</h3>
+<ul>
+<li>README calls it a "high-level device independent layer for access to speech synthesis" [V].
+</li>
+<li>Licence split: server mostly GPLv2; C API client <code>libspeechd</code> is LGPL-2.1-or-later [V].
+</li>
+<li>Orca uses it by default [V]. Red Hat docs say it stops messages from other apps from interrupting Orca's messages [V].
+</li>
+<li><strong>Steam Deck / Flatpak: not verified.</strong> My search found nothing on SteamOS or Flatpak access to the host speech-dispatcher socket. The Arch bug report suggests the actual dependency is <code>espeak-ng</code> [V, bug report]. Treat Flatpak and SteamOS support as <strong>UNVERIFIED</strong>. Speech-dispatcher is a host daemon, so a sandboxed Flatpak needs the socket exposed or a fallback.
+</li></ul>
+<h3 id="accesskit">AccessKit</h3>
+<ul>
+<li>Apache-2.0 or MIT at your option [V]. Note the repo sidebar says "BSD-3-Clause and 2 other licenses" because parts are derived from Chromium [V].
+</li>
+<li>Adapters: <code>accesskit_windows</code> (UIA), <code>accesskit_macos</code> (NSAccessibility), <code>accesskit_unix</code> (AT-SPI over zbus), <code>accesskit_android</code>, iOS [V].
+</li>
+<li>Caveat from the page: adapters "don't yet support all types of UI elements or all of the properties in the schema" [V].
+</li>
+<li>C API is generated with cbindgen, Python via PyO3 [V].
+</li>
+<li>AccessKit does <strong>not</strong> speak. It exposes a tree. A screen reader must be running.
+</li></ul>
+<h3 id="sdl3">SDL3</h3>
+<ul>
+<li>I found no SDL3 speech, TTS or accessibility API [V, negative search].
+</li>
+<li>The only design discussion I found is "Outputting text to accessibility tools" (2014–2015, SDL Discourse). It proposed SAPI and Speech Dispatcher as first backends. The discussion did not produce an API [V, snippet; the thread was not fetched in full].
+</li>
+<li>A 2012 mailing-list reply said SDL does not handle accessibility and suggested a separate library [V, snippet].
+</li>
+<li>Implication: a C++ SDL3 game must write its own speech layer, or use a library such as Tolk, NVDA controller client, speech-dispatcher or AccessKit, alongside SDL's window handle.
+</li></ul>
+<h3 id="godot-4-5">Godot 4.5</h3>
+<ul>
+<li>Official release page: "Thanks to AccessKit, we added screen reader support to Control nodes." The integration is "still in its experimental phase." Editor support is incomplete [V].
+</li>
+<li>Android: a forum user reports it does not work with TalkBack, and another user switched to an Android TTS plugin [V, forum reports, not official].
+</li></ul>
+<h3 id="unreal-engine">Unreal Engine</h3>
+<ul>
+<li>Three plugins: Text To Speech (English only), Screen Reader and Slate Screen Reader [V].
+</li>
+<li>Third-party readers supported on Windows and VoiceOver on iOS. Enable with <code>Accessibility.Enable=1</code>. Supported widgets include Text Block, Editable Text Box, Slider, Button and Checkbox [V].
+</li>
+<li>Custom Slate widgets: override <code>SWidget::CreateAccessibleWidget()</code> and return an <code>FSlateAccessibleWidget</code> subclass. Disabling <code>bCompileWithAccessibilitySupport</code> removes it [V].
+</li>
+<li>Labelled <strong>Experimental</strong> [V]. The docs do not say whether the Windows path uses UIA. UIA is likely but UNVERIFIED.
+</li></ul>
+<h3 id="unity">Unity</h3>
+<ul>
+<li>UAP (mikrima/UnityAccessibilityPlugin): Windows (SAPI, NVDA), Android, iOS, Mac, WebGL [V]. Bundles NVDA controller client under LGPL-2.1 [V].
+</li>
+<li>UnityAccessibilityLib (NuGet): .NET library, uses active reader or SAPI fallback, names NVDA and JAWS [V].
+</li></ul>
+<h3 id="windows-sapi-and-winrt">Windows SAPI and WinRT</h3>
+<ul>
+<li>WinRT <code>SpeechSynthesizer</code> is for voices installed on the system, Microsoft-signed only. It synthesizes to a stream and plays via MediaElement [V]. This is awkward from a plain Win32 C++ game. SAPI 5 COM (<code>ISpVoice</code>) is the simpler path for Win32 [UNVERIFIED; the fetch returned the wrong page].
+</li></ul>
+<h3 id="macos">macOS</h3>
+<ul>
+<li>NSSpeechSynthesizer: obsoleted in macOS 14.0; use AVSpeechSynthesizer [V, API catalog snippet].
+</li>
+<li>AVSpeechSynthesizer: available macOS 10.14+ [V, Lazarus wiki snippet]. A Mozilla bug reports <code>AVSpeechSynthesisVoice(language:)</code> can return the wrong default voice [V, bug snippet, unconfirmed].
+</li>
+<li>NSAccessibility and VoiceOver: I could not read Apple's page. Apple's post-notification API is UNVERIFIED.
+</li></ul>
+<h2 id="4-per-game-implementation-notes">4. Per-game implementation notes</h2>
+<p>Each note is labelled with its source. <strong>Memory-only</strong> items are UNVERIFIED.</p>
+<h3 id="hearthstone-hearthstoneaccess-mod">Hearthstone (HearthstoneAccess mod)</h3>
+<ul>
+<li>Third-party mod by Guide Dev that makes Hearthstone accessible to blind players [V, hearthstoneaccess.com fetch].
+</li>
+<li>"Runs custom code inside the game"; players launch normally and use hotkeys [V, search snippet].
+</li>
+<li>Says most popular screen readers should work; developed and tested with NVDA. Falls back to Microsoft's Speech API if the reader is not detected [V, search snippet of project description]. Tolk is <strong>not</strong> mentioned in any source I found; whether the mod uses Tolk is UNVERIFIED.
+</li>
+<li>Windows only; requires English Hearthstone, preferably American English [V, snippet].
+</li>
+<li>Original developer stopped; community took over; Blizzard said it was improving native accessibility [V, snippet and fetch].
+</li>
+<li>Mercenaries mode has no planned accessibility work; tutorial, practice and solo adventures covered [V, hearthstoneaccess.com fetch].
+</li></ul>
+<h3 id="stardew-valley-stardew-access-mod">Stardew Valley (Stardew Access mod)</h3>
+<ul>
+<li>Requires SMAPI. Required dependencies, per the setup guide, include Kokoro and Project Fluent [V, search snippet; the README defers to a setup page].
+</li>
+<li>README: makes the game playable for blind users on Windows, Linux and macOS. Narrates menus, dialogue and the world; includes an object tracker, tile viewer and grid movement [V].
+</li>
+<li>Speech backends named in the README: <strong>Tolk</strong> on Windows, <code>libspeechdwrapper</code> on Linux, <code>libspeak</code> on macOS [V]. This answers the Tolk question for this game: yes, it uses Tolk on Windows.
+</li>
+<li>Licence: GPL-3.0, plus LGPL-2.1 and LGPL-3.0 files; LICENSE-NVDA and LICENSE-TOLK are included [V].
+</li>
+<li>~121 open issues, 1,406 commits on the dev branch, translations as separate mods [V].
+</li>
+<li>Hooks SMAPI: UNVERIFIED (I did not read the source).
+</li></ul>
+<h3 id="minecraft-java-and-bedrock">Minecraft (Java and Bedrock)</h3>
+<ul>
+<li>Java narrator arrived in snapshot 17w13a (1.12). Mode options came in 17w15a. Later: hovered buttons (1.14), command suggestions (1.15), Narrator Hotkey option (1.20.2), volume tied to the Voice category (1.21.5) [V, Minecraft Wiki fetch].
+</li>
+<li>Modes: Off, All, Chat, System [V].
+</li>
+<li>Toggle: Ctrl+B (Cmd+B on Mac). Can be disabled in accessibility settings [V].
+</li>
+<li>Language is set by the host OS; Windows users can force a language via the registry [V].
+</li>
+<li>Narrator reads "chat messages and other text elements in the user interface, such as titles and selected buttons" [V].
+</li>
+<li>Bedrock: called "Text to speech"; added in Preview 1.21.100.23 [V, wiki fetch].
+</li>
+<li>How it reads UI internally: UNVERIFIED (Java source not checked). The wiki does not say.
+</li></ul>
+<h3 id="civilization-vi">Civilization VI</h3>
+<ul>
+<li>No official Firaxis screen reader update found in 2025 searches [V, negative].
+</li>
+<li>Community NVDA-based accessibility mod discussed on AppleVis in Sept 2026. The poster's own account says it was ChatGPT-written, so treat it as unverified [V, search snippet]. Claims coverage of base game, Rise and Fall, Gathering Storm and scenarios.
+</li>
+<li>Civ V has a community layer (Civ-V-Access on GitHub) [V, snippet].
+</li>
+<li>Civ VII: CivFanatics thread asks for accessibility; no official answer [V, snippet].
+</li></ul>
+<h3 id="the-last-of-us-part-ii">The Last of Us Part II</h3>
+<ul>
+<li>Official PlayStation accessibility page: on-screen text, including menus, can be voiced by Text-To-Speech. Turns on automatically with English and console TTS enabled [V, search snippet].
+</li>
+<li>Over 60 accessibility settings. Three presets for vision, hearing and motor [V].
+</li>
+<li>Vision preset enables TTS, High Contrast Display and Enhanced Listen Mode [V, snippet].
+</li>
+<li>Enhanced Listen Mode works like sonar for enemies [V, NPR/KUOW snippet].
+</li>
+<li>Design lead Emilia Schatz framed it as "can a player who is blind play this game" [V, snippet; exact wording not verified in full].
+</li></ul>
+<h3 id="forza-horizon-5">Forza Horizon 5</h3>
+<ul>
+<li>In-game screen reader: Settings &gt; Accessibility &gt; Screen Reader, Default/On/Off. Xbox system Narrator is separate [V, Forza support page snippet].
+</li>
+<li>Reads text, buttons and elements; separate Voice Chat TTS/STT [V, Xbox announcement snippet].
+</li>
+<li>CanIPlayThat rated it 9/10 for accessibility but described screen reader support as "iffy" [V, snippet].
+</li>
+<li>Voice, speed and verbosity controls: not found.
+</li></ul>
+<h3 id="diablo-iv">Diablo IV</h3>
+<ul>
+<li>Built-in screen reader, works with JAWS and NVDA; volume, speed and voice type adjustable [V, CanIPlayThat snippet].
+</li>
+<li>Reader speaks in-game menus per mmorpg.gg [V, snippet].
+</li>
+<li>Audio cues for hovered items and ground loot, configurable by rarity [V, snippet].
+</li>
+<li>Blind reviewer (rossminor.com) said gear, notifications and menus still need TTS and dungeon navigation help [V, snippet].
+</li>
+<li>Sources date from 2023 launch; not checked against current patches.
+</li></ul>
+<h3 id="mortal-kombat-1">Mortal Kombat 1</h3>
+<ul>
+<li>Screen reader covers menu items and any on-screen text. Developers reportedly sequenced reading order per screen [V, snippet; "reportedly" in source].
+</li>
+<li>Set in Accessibility tab; volume adjustable; first launch prompt [V, snippet of support article].
+</li>
+<li>Reported bug: stays active even when set to Off. Not verified as fixed [V, one site report].
+</li></ul>
+<h3 id="sea-of-thieves">Sea of Thieves</h3>
+<ul>
+<li>Uses Xbox Narrator for menus. "Let Games Read to Me" extended to cosmetic chests, Shop UI, Pirate Log, Trading Company menus in Season 3 [V, CanIPlayThat snippet].
+</li>
+<li>Update 2.0.15.1 added "Narrate Toast Messages" and "Toast Message Duration" [V, snippet].
+</li>
+<li>Text-to-speech for chat is US-only per Family Gaming Database [V, third-party].
+</li></ul>
+<h3 id="fortnite">Fortnite</h3>
+<ul>
+<li><strong>Could not verify</strong> a built-in screen reader or menu narration. Family Gaming Database lists subtitles and large text, not narration [V, third-party database]. Treat as unknown.
+</li></ul>
+<h3 id="brogue-nethack-dcss">Brogue, NetHack, DCSS</h3>
+<ul>
+<li><strong>Brogue</strong>: a MetaFilter commenter mentions "Brogue-SPEAK" with no detail [V, snippet]. Not verified.
+</li>
+<li><strong>NetHack</strong>: a 2010 mailing-list post says it was playable blind in the 1990s DOS builds, with display problems [V, snippet]. The NetHack Guidebook is at man.archlinux.org; I did not read its accessibility options.
+</li>
+<li><strong>Dungeon Crawl Stone Soup</strong>: only a 2021 Orca list post asking how to run it with a console reader [V, snippet]. The DCSS blind-play wiki page returned 404 (UNVERIFIED that it exists under that URL).
+</li>
+<li>Common ASCII-roguelike complaint: map is hard to parse. An audiogames.net post says some developers pair the map with a text description of nearby tiles [V, snippet].
+</li></ul>
+<h3 id="a-hero-s-call-audio-game">A Hero's Call (audio game)</h3>
+<ul>
+<li>Developed by Out of Sight Games for blind players; turn-based RPG with quests; free version exists [V, Perkins and inviocean snippets].
+</li>
+<li>AccessWorld review by Aaron Preece exists but was not retrieved [V, reference only].
+</li>
+<li>Its UI design: UNVERIFIED (not played or read).
+</li></ul>
+<h3 id="fortnite-sea-of-thieves-mk1-diablo-iv-fh5-tlou2-minecraft-hearthstone-stardew">Fortnite, Sea of Thieves, MK1, Diablo IV, FH5, TLOU2, Minecraft, Hearthstone, Stardew</h3>
+<h2 id="5-ux-rules-blind-players-ask-for-with-sources">5. UX rules blind players ask for (with sources)</h2>
+<p>Sources marked "search snippet" were not fetched in full. The audiogames.net forum fetches returned 403, so those posts are cited from snippets only.</p>
+<ol>
+<li><strong>Menus should not wrap, or should let you choose.</strong> Singular Sound feature request: "there should definitely be an option to disable menu wrapping." Source: <a href="https://forum.singularsound.com/t/feature-requests-for-visually-impaired-users/173">https://forum.singularsound.com/t/feature-requests-for-visually-impaired-users/173</a> [V, fetched]. Same thread asks for "a command to jump to the top of the menu."
+</li>
+<li><strong>Give the first letter or instant letter shortcuts in menus.</strong> frastlin's audiogames.net convention list: arrow keys and Enter for menus, with letter shortcuts or first-letter navigation. Source: <a href="https://forum.audiogames.net/post/309150/">https://forum.audiogames.net/post/309150/</a> [V, search snippet; 403 on fetch].
+</li>
+<li><strong>Give a volume and feedback path without sight.</strong> AppleVis game-developer thread: suggestions include "swipe up to increase volume by 5% or 10%, with spoken confirmation" and a two-second hold gesture for the pause menu. Source: <a href="https://applevis.com/comment/53604">https://applevis.com/comment/53604</a> and siblings [V, search snippet; 403 on fetch]. Treat as a discussion, not a consensus.
+</li>
+<li><strong>Audio cues should be configurable.</strong> Diablo IV lets players choose which item rarities trigger cues [V, CanIPlayThat snippet].
+</li>
+<li><strong>Speech should not be interrupted by other apps.</strong> Red Hat docs describe speech-dispatcher's role in stopping other apps from interrupting Orca messages [V, snippet]. Applies to any game speech queue.
+</li>
+<li><strong>Reading order must be designed per screen.</strong> MK1 developers reportedly "programmed the order in which text is read aloud" for every screen [V, snippet; "reportedly"]. Treat this as a requirement for self-voicing too.
+</li>
+<li><strong>Menu narration must be toggleable and have a separate volume.</strong> Minecraft: modes Off/All/Chat/System, plus a hotkey that can be disabled [V]. MK1: Screen Reader volume in Accessibility [V, snippet]. FH5: Default/On/Off [V].
+</li>
+<li><strong>Tutorials and onboarding must be readable.</strong> AppleVis commenter: a pause-menu gesture "is somehow being explained at some point", perhaps in help or a tutorial [V, snippet].
+</li>
+<li><strong>Make the TTS language follow the OS</strong>, not the game. Minecraft does this and forces a registry edit to override [V].
+</li>
+<li><strong>Chat and notifications need their own toggles.</strong> Sea of Thieves: "Narrate Toast Messages" and a "Toast Message Duration" setting [V, snippet].
+</li>
+<li><strong>Ask for feedback and report bugs to the vendor.</strong> Blizzard asks for accessibility feedback at accessibility@blizzard.com [V, rossminor.com snippet].
+</li>
+<li><strong>"Where am I" and verbosity keys</strong>: <strong>Could not verify</strong> from a source this session. The audiogames.net post that might cover it returned 403.
+</li></ol>
+<h2 id="6-could-not-verify">6. Could not verify</h2>
+<ul>
+<li>SDL3 GitHub issues about speech or TTS. The issue search returned three unrelated accessibility issues (#14450 mobile input boxes, opened 2025-11-12, open; #8944 keyboard hook for JAWS, opened 2024-01-28, open; #7463 screen reader feature request, closed 2023-11-08). None was a TTS API proposal [V, fetched page; status from page wording].
+</li>
+<li>Apple NSAccessibility and AVSpeechSynthesizer official pages (fetch returned 404 or title only). NSSpeechSynthesizer deprecation version: confirmed only through an API catalog snippet.
+</li>
+<li>Microsoft SAPI 5 overview (fetch returned an unrelated page). WinRT is verified; SAPI details are UNVERIFIED.
+</li>
+<li>JAWS developer/scripting API reference. Only third-party vendor pages were found.
+</li>
+<li>Speech-dispatcher on Steam Deck (SteamOS) and inside Flatpak.
+</li>
+<li>Unreal Slate Screen Reader: whether the Windows path uses UIA.
+</li>
+<li>Whether Tolk has forks maintained after the "not currently being developed" notice.
+</li>
+<li>Whether AccessKit has a release in 2026 (no date visible on the repo page).
+</li>
+<li>Godot AccessKit on macOS and Windows beyond what the release notes say.
+</li>
+<li>Civilization VI community mod: name, repo, licence, and status (only an AppleVis snippet; the poster said it was ChatGPT-written).
+</li>
+<li>Fortnite menu narration.
+</li>
+<li>Brogue-SPEAK details, DCSS blind-play wiki contents, NetHack accessibility options.
+</li>
+<li>The Last of Us Part II Emilia Schatz quote, exact wording.
+</li>
+<li>Minecraft Java internal mechanism for reading UI.
+</li>
+<li>Stardew Access's SMAPI hooking method (source not read).
+</li>
+<li>Hearthstone Access: whether Tolk is used (only a Microsoft Speech API fallback is mentioned).
+</li>
+<li>Audiogames.net opinions on "where am I" keys, verbosity levels and speech interruption. The relevant audiogames.net posts returned 403 or were not reached.
+</li>
+<li>AT-SPI server implementation details for SDL specifically. No SDL-specific guidance found.
+</li>
+<li>Any claim about screen reader support in Sea of Thieves beyond the snippets.
+</li></ul>
+<h2 id="7-recommended-approach-for-a-c-sdl3-game-linux-macos-windows">7. Recommended approach for a C++ SDL3 game (Linux, macOS, Windows)</h2>
+<p>Assumptions: the game is a single-player SDL3 app with a custom UI (not GTK/Qt/Win32 controls), so the OS does not see its widgets. Pick the lowest-cost option that gives a blind player the UI.</p>
+<p><strong>Phase 1: self-voicing through a small speech layer.</strong> Works with or without a screen reader.</p>
+<ul>
+<li>Define one interface, for example <code>speech::say( text, interrupt )</code>, with one backend per OS, selected at compile time or at runtime.
+</li>
+<li><strong>Windows</strong>: call Tolk if the DLL is present (it covers NVDA, JAWS, SAPI fallback). Tolk is LGPL-3.0, so link dynamically and ship the DLL under its licence. Tolk is unmaintained, so budget to fork or replace it. Alternatively, call NVDA controller client (LGPL-2.1) with SAPI 5 as fallback. Do not use WinRT from a Win32 game unless you already need it.
+</li>
+<li><strong>macOS</strong>: <code>AVSpeechSynthesizer</code> via a small Objective-C++ file. Do not use NSSpeechSynthesizer (obsoleted in macOS 14). VoiceOver ignores the game's speech, so decide whether to speak only when VoiceOver is off.
+</li>
+<li><strong>Linux</strong>: <code>libspeechd</code> (LGPL-2.1-or-later) with <code>dlopen</code> so the build works without it. The daemon must be running. Flatpak and SteamOS need separate testing (UNVERIFIED).
+</li>
+<li>Keep the queue and interrupt rules in the game layer: a focus change interrupts, a log message does not, with separate volume and verbosity settings (see section 5).
+</li></ul>
+<p><strong>Phase 2: real accessibility tree, only if the game needs screen-reader navigation.</strong></p>
+<ul>
+<li>AccessKit (Apache-2.0 or MIT) exposes one tree to UIA, NSAccessibility and AT-SPI. Use its C API. It is the only option in this table that covers all three desktops from one codebase.
+</li>
+<li>Costs: you must build the tree yourself from the UI layer, and the AccessKit schema does not yet cover all element types (page caveat). Godot's experience shows the integration is still young (experimental) [V].
+</li>
+<li>Do not implement UIA, NSAccessibility or AT-SPI by hand unless AccessKit is unusable.
+</li></ul>
+<p><strong>Do not</strong> rely on SDL3 for any of this. It has no speech or accessibility API [V].</p>
+<p><strong>Rule of thumb:</strong> Phase 1 gives a blind player a playable UI quickly. Phase 2 is the larger investment and should wait until the self-voiced UI works. The dependency licences (LGPL/Apache/MIT) are compatible with a GPL game through dynamic linking, but check the game's own licence before shipping.</p>
+<h2 id="sources">Sources</h2>
+<ul>
+<li>Tolk README: <a href="https://github.com/dkager/tolk">https://github.com/dkager/tolk</a> [V, fetched]
+</li>
+<li>AccessKit site: <a href="https://accesskit.dev/">https://accesskit.dev/</a> [V, fetched]
+</li>
+<li>AccessKit repo: <a href="https://github.com/AccessKit/accesskit">https://github.com/AccessKit/accesskit</a> [V, fetched]
+</li>
+<li>Godot 4.5 release notes: <a href="https://godotengine.org/releases/4.5/">https://godotengine.org/releases/4.5/</a> [V, fetched]
+</li>
+<li>Godot 4.5 coverage (search snippet): <a href="https://itsfoss.com/news/godot-4-5-release/">https://itsfoss.com/news/godot-4-5-release/</a>
+</li>
+<li>Godot Android TalkBack forum (user report): <a href="https://forum.godotengine.org/t/question-about-accessibility-on-android/122578">https://forum.godotengine.org/t/question-about-accessibility-on-android/122578</a> [V, snippet]
+</li>
+<li>NVDA Controller Client readme: <a href="https://github.com/nvaccess/nvda/blob/master/extras/controllerClient/readme.md">https://github.com/nvaccess/nvda/blob/master/extras/controllerClient/readme.md</a> [V, fetched]
+</li>
+<li>Speech Dispatcher repo: <a href="https://github.com/brailcom/speechd">https://github.com/brailcom/speechd</a> [V, fetched]
+</li>
+<li>Orca (search snippet): <a href="https://github.com/GNOME/orca">https://github.com/GNOME/orca</a> [V, snippet]
+</li>
+<li>Microsoft WinRT SpeechSynthesizer: <a href="https://learn.microsoft.com/en-us/uwp/api/windows.media.speechsynthesis.speechsynthesizer">https://learn.microsoft.com/en-us/uwp/api/windows.media.speechsynthesis.speechsynthesizer</a> [V, fetched]
+</li>
+<li>SDL forum thread (2014–2015): <a href="https://discourse.libsdl.org/t/outputting-text-to-accessibility-tools/21113">https://discourse.libsdl.org/t/outputting-text-to-accessibility-tools/21113</a> [V, snippet]
+</li>
+<li>SDL forum 2012 reply (search snippet): <a href="https://discourse.libsdl.org/t/compatibility-with-screen-readers/34831">https://discourse.libsdl.org/t/compatibility-with-screen-readers/34831</a> [V, snippet]
+</li>
+<li>SDL issue list: <a href="https://github.com/libsdl-org/SDL/issues?q=accessibility%20screen%20reader">https://github.com/libsdl-org/SDL/issues?q=accessibility%20screen%20reader</a> [V, fetched]
+</li>
+<li>NSSpeechSynthesizer obsoletion (API catalog snippet): <a href="https://catalog.apireview.net/catalog/3959fbb0ddcec599e727e0c72d29bb4a">https://catalog.apireview.net/catalog/3959fbb0ddcec599e727e0c72d29bb4a</a> [V, snippet]
+</li>
+<li>AVSpeechSynthesizer availability (Lazarus wiki snippet): <a href="https://wiki.lazarus.freepascal.org/macOS_Text-To-Speech">https://wiki.lazarus.freepascal.org/macOS_Text-To-Speech</a> [V, snippet]
+</li>
+<li>Unreal screen reader docs: <a href="https://dev.epicgames.com/documentation/en-us/unreal-engine/supporting-screen-readers-in-unreal-engine">https://dev.epicgames.com/documentation/en-us/unreal-engine/supporting-screen-readers-in-unreal-engine</a> [V, fetched]
+</li>
+<li>Unreal accessibility overview: <a href="https://dev.epicgames.com/documentation/en-us/unreal-engine/blind-accessibility-features-overview-in-unreal-engine">https://dev.epicgames.com/documentation/en-us/unreal-engine/blind-accessibility-features-overview-in-unreal-engine</a> [V, snippet]
+</li>
+<li>Unity UAP: <a href="https://github.com/mikrima/UnityAccessibilityPlugin">https://github.com/mikrima/UnityAccessibilityPlugin</a> [V, snippet]
+</li>
+<li>AT-SPI2 wiki: <a href="https://wiki.freedesktop.org/www/Accessibility/AT-SPI2/">https://wiki.freedesktop.org/www/Accessibility/AT-SPI2/</a> [V, snippet]
+</li>
+<li>Ubuntu accessibility stack: <a href="https://ubuntu.com/desktop/docs/en/24.04/explanation/accessibility-stack/">https://ubuntu.com/desktop/docs/en/24.04/explanation/accessibility-stack/</a> [V, snippet]
+</li>
+<li>Red Hat accessibility docs: <a href="https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_the_gnome_desktop_environment/enabling-accessibility-for-visually-impaired-users">https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/using_the_gnome_desktop_environment/enabling-accessibility-for-visually-impaired-users</a> [V, snippet]
+</li>
+<li>Arch Linux Orca bug report: <a href="https://bugs.archlinux.org/task/76335">https://bugs.archlinux.org/task/76335</a> [V, snippet]
+</li>
+<li>JAWS scripting (TPGi): <a href="https://www.tpgi.com/accessibility-solutions/jaws-scripting">https://www.tpgi.com/accessibility-solutions/jaws-scripting</a> [V, snippet]
+</li>
+<li>HearthstoneAccess site: <a href="https://www.hearthstoneaccess.com/">https://www.hearthstoneaccess.com/</a> [V, fetched]
+</li>
+<li>HearthstoneAccess announcement (search snippet): <a href="https://caniplaythat.com/2022/11/12/hearthstone-accessibility-to-be-improved-as-mod-support-ends/">https://caniplaythat.com/2022/11/12/hearthstone-accessibility-to-be-improved-as-mod-support-ends/</a> [V, snippet]
+</li>
+<li>Stardew Access README: <a href="https://github.com/stardew-access/stardew-access">https://github.com/stardew-access/stardew-access</a> [V, fetched]
+</li>
+<li>Accessible Stardew Setup: <a href="https://github.com/ParadoxiKat/AccessibleStardewSetup">https://github.com/ParadoxiKat/AccessibleStardewSetup</a> [V, snippet]
+</li>
+<li>Stardew forum (early beta): <a href="https://forums.stardewvalley.net/threads/mod-for-screen-reader-accessibility.8793">https://forums.stardewvalley.net/threads/mod-for-screen-reader-accessibility.8793</a> [V, snippet]
+</li>
+<li>Minecraft Wiki Narrator: <a href="https://minecraft.wiki/w/Narrator">https://minecraft.wiki/w/Narrator</a> [V, fetched]
+</li>
+<li>Civilization 6 AppleVis thread: <a href="https://www.applevis.com/forum/windows/civilization-6-pc-fully-accessible">https://www.applevis.com/forum/windows/civilization-6-pc-fully-accessible</a> [V, snippet; poster said ChatGPT-written]
+</li>
+<li>Civ-V-Access (search snippet): see Civ VI search results [V, snippet]
+</li>
+<li>The Last of Us Part II PlayStation accessibility: <a href="https://www.playstation.com/en-vn/games/the-last-of-us-part-ii/accessibility/">https://www.playstation.com/en-vn/games/the-last-of-us-part-ii/accessibility/</a> [V, snippet]
+</li>
+<li>The Last of Us Part II NPR: <a href="https://www.npr.org/transcripts/889820512">https://www.npr.org/transcripts/889820512</a> [V, snippet]
+</li>
+<li>Forza Horizon 5 screen reader support: <a href="https://support.forza.net/hc/en-us/articles/11380343742227-Screen-Reader-Narrator">https://support.forza.net/hc/en-us/articles/11380343742227-Screen-Reader-Narrator</a> [V, snippet]
+</li>
+<li>Forza Horizon 5 CanIPlayThat review: <a href="https://caniplaythat.com/2021/11/04/forza-horizon-5-accessibility-review-can-i-play-that/">https://caniplaythat.com/2021/11/04/forza-horizon-5-accessibility-review-can-i-play-that/</a> [V, snippet]
+</li>
+<li>Diablo IV CanIPlayThat: <a href="https://caniplaythat.com/2023/07/18/diablo-iv-accessibility-review/">https://caniplaythat.com/2023/07/18/diablo-iv-accessibility-review/</a> [V, snippet]
+</li>
+<li>Diablo IV blind review: <a href="https://rossminor.com/2023/06/08/diablo-iv-blind-accessibility-review/">https://rossminor.com/2023/06/08/diablo-iv-blind-accessibility-review/</a> [V, snippet]
+</li>
+<li>Diablo IV mmorpg.gg: <a href="https://mmorpg.gg/blizzard-entertainment-announces-enhanced-accessibility-features-for-diablo-iv/">https://mmorpg.gg/blizzard-entertainment-announces-enhanced-accessibility-features-for-diablo-iv/</a> [V, snippet]
+</li>
+<li>Mortal Kombat 1 support: <a href="https://mortalkombatgamessupport.wbgames.com/hc/articles/19435787154963">https://mortalkombatgamessupport.wbgames.com/hc/articles/19435787154963</a> [V, snippet]
+</li>
+<li>Mortal Kombat 1 CanIPlayThat: <a href="https://caniplaythat.com/2023/09/13/mortal-kombat-1-accessibility-details-released/">https://caniplaythat.com/2023/09/13/mortal-kombat-1-accessibility-details-released/</a> [V, snippet]
+</li>
+<li>Sea of Thieves CanIPlayThat (Season 3): <a href="https://caniplaythat.com/2021/06/22/sea-of-thieves-season-3s-first-accessibility-features-revealed/">https://caniplaythat.com/2021/06/22/sea-of-thieves-season-3s-first-accessibility-features-revealed/</a> [V, snippet]
+</li>
+<li>Sea of Thieves update 2.0.15.1: <a href="https://seaofthieves.wiki.gg/wiki/2.0.15.1">https://seaofthieves.wiki.gg/wiki/2.0.15.1</a> [V, snippet]
+</li>
+<li>Family Gaming Database (Fortnite): <a href="https://www.familygamingdatabase.com/accessibility/Fortnite">https://www.familygamingdatabase.com/accessibility/Fortnite</a> [V, snippet, third-party]
+</li>
+<li>Singular Sound forum feature requests: <a href="https://forum.singularsound.com/t/feature-requests-for-visually-impaired-users/173">https://forum.singularsound.com/t/feature-requests-for-visually-impaired-users/173</a> [V, fetched]
+</li>
+<li>audiogames.net convention post: <a href="https://forum.audiogames.net/post/309150/">https://forum.audiogames.net/post/309150/</a> [V, snippet; 403 on fetch]
+</li>
+<li>AppleVis game-developer thread: <a href="https://applevis.com/comment/53604">https://applevis.com/comment/53604</a> [V, snippet; 403 on fetch]
+</li>
+<li>Perkins audio games list: <a href="https://www.perkins.org/resource/audio-games-for-blind-low-vision-gamers/">https://www.perkins.org/resource/audio-games-for-blind-low-vision-gamers/</a> [V, snippet]
+</li>
+<li>A Hero's Call (inviocean): <a href="https://inviocean.com/?p=975">https://inviocean.com/?p=975</a> [V, snippet]
+</li>
+<li>AccessWorld (A Hero's Call review reference): <a href="https://afb.org/aw/22/12/17800">https://afb.org/aw/22/12/17800</a> [V, snippet, not read]
+</li></ul>
+</main>
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI library evaluation for an SDL3 + SDL_GPU game (C/C++)</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="ui-library-evaluation-for-an-sdl3-sdl-gpu-game-c-c">UI library evaluation for an SDL3 + SDL_GPU game (C/C++)</h1>
+<p>Research date: 2026-10-21. Scope: data-driven/themable layout, gamepad navigation, text scaling, accessibility tree for screen readers, permissive licensing, SDL3 + SDL_GPU compatibility (with an SDL_Renderer 2D overlay as an option).</p>
+<p>Evidence labels: <strong>VERIFIED</strong> = read from a fetched page, the GitHub API, or a search snippet that names the URL. <strong>UNVERIFIED</strong> = memory or unconfirmed. <strong>NOT FOUND</strong> = searched, no evidence either way.</p>
+<p>Release and push dates come from the GitHub REST API (<code>gh api</code>) on 2026-10-21 unless noted. "Last push" is the last commit to the default branch, not a release.</p>
+<h2 id="1-comparison-table">1. Comparison table</h2>
+<table><thead><tr><th>Library</th><th>Licence</th><th>SDL3 integration</th><th>GPU path</th><th>Text / scaling</th><th>Gamepad / keyboard nav</th><th>Screen-reader / a11y tree</th><th>Last release (GitHub)</th><th>Last push</th><th>Integration cost (for this game)</th></tr></thead><tbody><tr><td><strong>RmlUi</strong> 6.3</td><td>MIT (VERIFIED)</td><td>SDL backends for SDL2 and SDL3 (<code>Backends/RmlUi_Platform_SDL.cpp</code>)</td><td><strong>SDL_GPU backend shipped</strong> (<code>Backends/RmlUi_Backend_SDL_GPU.cpp</code>, <code>RmlUi_Renderer_SDL_GPU.cpp</code>); also GL2/GL3/VK/DX11/DX12</td><td>Not checked in depth; RCSS/HTML-like styling, fonts via a font engine (UNVERIFIED which)</td><td>Not verified in fetched pages</td><td>None mentioned (VERIFIED: fetched page does not mention it)</td><td>6.3 on 2026-08-22</td><td>2026-10-17</td><td>Medium. Retained-mode, data-driven markup and CSS-like styling fit the stated requirement best. Renderer is ready-made; you still wire input and layout.</td></tr><tr><td><strong>Dear ImGui</strong> v1.93.0</td><td>MIT (VERIFIED)</td><td><code>imgui_impl_sdl3.cpp</code> and <code>imgui_impl_sdlgpu3.cpp</code> both exist (VERIFIED: <code>backends/</code> listing)</td><td>SDL_GPU backend <code>sdlgpu3/</code> + <code>imgui_impl_sdlgpu3.cpp</code>; SDL_Renderer3 backend also exists; page says "Prefer using SDL_GPU!"</td><td>Font atlas; FAQ: "Since 1.92 (June 2025) fonts may be dynamically used at any size." Style values "not easily scalable dynamically"; FAQ recommends <code>style.ScaleAllSizes(factor)</code> (VERIFIED)</td><td>`io.ConfigFlags</td><td>= ImGuiConfigFlags_NavEnableGamepad` with a supporting backend (VERIFIED, FAQ). Keyboard tab nav works (issue #4122 comment says tab cycles all items since 1.89.4)</td><td><strong>None.</strong> FAQ does not mention accessibility. Issue #7131 closed: maintainer said accessibility systems "typically don't work with dear imgui output" (VERIFIED). Issue #4122 open.</td><td>1.93.0 on 2026-10-14</td><td>2026-10-16</td><td>Low to medium. Immediate mode, easy to bolt onto an existing SDL_GPU frame. Poor fit for end-user menus that need themes and accessibility.</td></tr><tr><td><strong>Clay</strong> (layout)</td><td>Zlib (VERIFIED)</td><td>SDL3 renderer exists in <code>renderers/SDL3</code>, SDL3 example exists in <code>examples/SDL3-simple-demo</code> (VERIFIED: GitHub contents listing). Renderer shown in search snippet: borders/rounded borders added.</td><td>None. Layout only; you draw the output list yourself.</td><td>Not applicable; you supply text measurement callbacks (UNVERIFIED detail)</td><td>Not provided</td><td>None; layout only</td><td>v0.14 on 2025-06-06 (no release since)</td><td>2026-05-20</td><td>Low for layout, but you still build the input, rendering, and any focus model yourself. Single C header.</td></tr><tr><td><strong>Nuklear</strong></td><td>Public domain <strong>or</strong> MIT, per README (VERIFIED). GitHub reports NOASSERTION.</td><td>Demo folder lists GLFW, SDL, X11, GDI, D3D, Vulkan "and more" (VERIFIED). SDL_Renderer/SDL_GPU not confirmed.</td><td>Not confirmed for SDL_GPU</td><td>Font baking via its own font API (UNVERIFIED detail)</td><td>Not verified</td><td>None mentioned</td><td>v4.13.3 on 2026-05-05</td><td>2026-10-17</td><td>Medium; you write the SDL_GPU backend. Immediate mode, C, very small.</td></tr><tr><td><strong>microui</strong> (rxi)</td><td>MIT (VERIFIED)</td><td>None mentioned (VERIFIED: page does not mention SDL)</td><td>Renderer-agnostic; does no drawing</td><td>None</td><td>Not verified</td><td>None</td><td>No release tag</td><td>2024-08-13 (stale)</td><td>Low for tiny tool UIs; not a full toolkit. Reference only.</td></tr><tr><td><strong>NanoGUI</strong></td><td>BSD-style (VERIFIED)</td><td>No SDL; GLFW + OpenGL 3.x + NanoVG (VERIFIED)</td><td>OpenGL 3.x only</td><td>NanoVG-drawn</td><td>Not verified</td><td>None</td><td>No release tag</td><td>2023-04-28</td><td>High. Maintenance-only per README (VERIFIED). Not usable with SDL_GPU. Not recommended.</td></tr><tr><td><strong>NanoVG</strong></td><td>Not checked in this pass</td><td>Not checked</td><td>OpenGL-based</td><td>Not checked</td><td>N/A</td><td>N/A</td><td>Not checked</td><td>Not checked</td><td>Not recommended. Drawing library, not a UI toolkit.</td></tr><tr><td><strong>LVGL</strong> v9.6.0</td><td>MIT (VERIFIED)</td><td>SDL display driver exists in <code>src/drivers/sdl/</code> (VERIFIED: GitHub contents; also "SDL as a desktop simulator option" in fetched page)</td><td>Software/SDL texture/OpenGL ES drivers (<code>lv_sdl_sw.c</code>, <code>lv_sdl_texture.c</code>, <code>lv_sdl_egl.c</code>); no SDL_GPU driver seen</td><td>Built-in fonts, scalable via config (UNVERIFIED detail)</td><td>Keypad/encoder input groups exist in LVGL (UNVERIFIED detail)</td><td><strong>None mentioned</strong> (VERIFIED: fetched page silent). Search returned nothing for LVGL a11y.</td><td>2026-09-16</td><td>2026-10-20</td><td>Medium-high. Built for embedded; its own widget and style system is C and not data-driven markup.</td></tr><tr><td><strong>AccessKit</strong></td><td>BSD-3-Clause per GitHub; README says Apache-2.0 or MIT, at your option (VERIFIED, note the discrepancy in GitHub metadata)</td><td>N/A: this is an accessibility bridge, not a UI kit</td><td>N/A</td><td>N/A</td><td>N/A</td><td><strong>Yes, this is the a11y layer.</strong> Rust core; platform adapters for Windows UIA, macOS, Linux AT-SPI, Android; winit adapter (VERIFIED). C bindings in separate repo <code>accesskit-c</code>, generated by cbindgen (VERIFIED). Python bindings on PyPI (VERIFIED).</td><td>accesskit_winit 0.34.1, 2026-09-25</td><td>2026-10-18</td><td>High. You would build the accessibility tree yourself and feed it. No SDL adapter exists in the listing.</td></tr><tr><td><strong>Yoga</strong></td><td>MIT (VERIFIED)</td><td>N/A (layout only)</td><td>N/A</td><td>N/A</td><td>N/A</td><td>None</td><td>v3.2.1 on 2024-12-13</td><td>2026-10-21</td><td>Low-medium as a flexbox layout engine inside your own renderer. C++ with bindings.</td></tr><tr><td><strong>Slint</strong></td><td>Triple: Royalty-free, GPLv3, or Commercial (VERIFIED)</td><td>No SDL integration checked. Renderers: FemtoVG (OpenGL ES 2.0), Skia, software (VERIFIED)</td><td>Not SDL_GPU</td><td>Not verified</td><td>Not verified</td><td>Not verified on the page. 2022 issue suggests AccessKit integration (VERIFIED: search snippet, slint-ui/slint#32). Status NOT FOUND.</td><td>v1.18.1 on 2026-09-21</td><td>2026-10-21</td><td>High. Has a C++ API (VERIFIED). Licence is a blocker unless you take the royalty-free terms, which need an application that is not open source or an application-level commercial terms check.</td></tr><tr><td><strong>Qt 6</strong></td><td>LGPLv3 / GPLv3 / commercial (VERIFIED via qt.io FAQ and search)</td><td>No SDL backend; you would embed Qt Quick or Widgets with your own SDL_GPU window (UNVERIFIED feasibility)</td><td>Qt RHI (UNVERIFIED for SDL_GPU)</td><td>Mature</td><td>Mature</td><td><strong>Yes: QAccessible on MSAA, macOS, AT-SPI</strong> (VERIFIED: doc.qt.io/qt-6/qaccessible.html)</td><td>Not checked this pass</td><td>Not checked</td><td>Very high. Static linking and LGPL relinking obligations (VERIFIED: qt.io FAQ summary). Not practical for a CDDA-style SDL game.</td></tr><tr><td><strong>Noesis GUI</strong></td><td>Commercial (VERIFIED: forum and trade article; current terms not fetched)</td><td>Not verified. Documented plugins: Unity, Unreal, Unigine, Ogre, Xenko (VERIFIED: trade article via search). Custom C++ SDK exists (VERIFIED: older forum post).</td><td>Not verified</td><td>XAML; not verified</td><td>Not verified</td><td>Not verified</td><td>n/a</td><td>n/a</td><td>High cost, paid licence per project. Could not reach noesisgui site (DNS failure).</td></tr><tr><td><strong>Coherent Gameface</strong></td><td>Commercial, per title (VERIFIED: search snippet from docs.coherent-labs.com)</td><td>Not verified; search returned no SDL info</td><td>Not verified</td><td>HTML/CSS (UNVERIFIED)</td><td>Not verified</td><td>Not verified</td><td>n/a</td><td>n/a</td><td>High cost. Per-title licence. Not recommended without a quote.</td></tr><tr><td><strong>Ultralight</strong></td><td>Core proprietary; free for indie under $100K revenue; paid otherwise (VERIFIED: github README summary via search)</td><td>Not verified</td><td>Not verified</td><td>HTML/CSS via WebCore (LGPL/BSD parts)</td><td>Not verified</td><td>Not verified</td><td>No release tag</td><td>2024-04-22 (stale in GitHub data)</td><td>High. Commercial terms, last push April 2024. Not recommended.</td></tr><tr><td><strong>FLTK</strong></td><td>LGPL with exception (UNVERIFIED)</td><td>No</td><td>No</td><td>No</td><td>No</td><td>No</td><td>Not checked</td><td>Not checked</td><td>Not recommended; out of scope.</td></tr><tr><td><strong>libui</strong></td><td>MIT (UNVERIFIED)</td><td>No</td><td>No</td><td>Native widgets only</td><td>No</td><td>Native a11y on each OS (UNVERIFIED)</td><td>Not checked</td><td>Not checked</td><td>Not recommended; no SDL, no GPU.</td></tr><tr><td><strong>Godot UI</strong></td><td>MIT (UNVERIFIED)</td><td>Not embeddable</td><td>N/A</td><td>N/A</td><td>N/A</td><td>Godot 4.5 added screen reader support via AccessKit (VERIFIED: caniplaythat.com snippet)</td><td>N/A</td><td>N/A</td><td>Not an option: it is an engine, not a library.</td></tr></tbody></table>
+<h2 id="2-per-library-notes">2. Per-library notes</h2>
+<h3 id="rmlui-rank-1-for-the-stated-requirements">RmlUi (rank 1 for the stated requirements)</h3>
+<ul>
+<li>Licence: MIT (<a href="https://github.com/mikke89/RmlUi">https://github.com/mikke89/RmlUi</a>). Current release 6.3, 2026-08-22 (GitHub API).
+</li>
+<li>SDL3 + SDL_GPU: the official Backends folder ships <code>RmlUi_Backend_SDL_GPU.cpp</code>, <code>RmlUi_Renderer_SDL_GPU.cpp/.h</code>, <code>RmlUi_Platform_SDL.cpp/.h</code>, and a <code>RmlUi_SDL_GPU</code> subfolder (VERIFIED: <a href="https://github.com/mikke89/RmlUi/tree/master/Backends">https://github.com/mikke89/RmlUi/tree/master/Backends</a> via GitHub API). The fetched README lists "SDL (2 and 3)" and "SDL GPU" among backends.
+</li>
+<li>This is the only candidate in the list that already has an SDL_GPU renderer shipped. That cuts integration cost materially for this project.
+</li>
+<li>Data-driven: RML (HTML-like) documents and RCSS (CSS-like) stylesheets, so layouts and themes live in data files. This is the closest match to the "data-driven/themable" requirement.
+</li>
+<li>Gamepad/keyboard focus: NOT VERIFIED. The fetched page covers touch and IME but not gamepad focus. Check the <code>Source</code> for a focus or navigation model before relying on it.
+</li>
+<li>Accessibility: NOT FOUND in the fetched page. Assume none.
+</li>
+<li>Risk: the sources and docs are less broad than Qt's; C++ and smaller community. 6.3 release is recent.
+</li></ul>
+<h3 id="dear-imgui-rank-2">Dear ImGui (rank 2)</h3>
+<ul>
+<li>Licence: MIT. v1.93.0 on 2026-10-14; last push 2026-10-16 (GitHub API).
+</li>
+<li>Backends: <code>imgui_impl_sdl3.cpp</code>, <code>imgui_impl_sdlgpu3.cpp</code> (with <code>sdlgpu3/</code> subfolder and shaders header), <code>imgui_impl_sdlrenderer3.cpp</code> (VERIFIED: <a href="https://github.com/ocornut/imgui/tree/master/backends">https://github.com/ocornut/imgui/tree/master/backends</a> and the GitHub API listing). Doc says "Prefer using SDL_GPU!" for the SDL3 renderer path (VERIFIED: <a href="https://github.com/ocornut/imgui/blob/master/docs/BACKENDS.md">https://github.com/ocornut/imgui/blob/master/docs/BACKENDS.md</a>).
+</li>
+<li>Gamepad: <code>ImGuiConfigFlags_NavEnableGamepad</code> (VERIFIED: <a href="https://github.com/ocornut/imgui/blob/master/docs/FAQ.md">https://github.com/ocornut/imgui/blob/master/docs/FAQ.md</a>). Gamepad keys are supplied via <code>io.AddKeyEvent</code>/<code>AddKeyAnalogEvent</code> with <code>ImGuiKey_GamepadXXX</code> (VERIFIED: BACKENDS.md summary).
+</li>
+<li>Text scaling: fonts are used at any size since 1.92 (VERIFIED: FAQ). Style sizes are not dynamically scalable; use <code>ScaleAllSizes</code> at startup (VERIFIED: FAQ). Rapid DPI change still needs a rebuild of style (UNVERIFIED consequence).
+</li>
+<li>Accessibility: none. Issue #7131 (F1 menu not blind accessible) was closed 2024-01-03 with the maintainer saying accessibility systems "typically don't work with dear imgui output." Issue #4122 ("Focus navigation and other features for accessibility?") is open, last activity January 2024, and says "screen readers currently won't work with GUI created with dear imgui" (VERIFIED: <a href="https://github.com/ocornut/imgui/issues/4122">https://github.com/ocornut/imgui/issues/4122</a> and <a href="https://github.com/ocornut/imgui/issues/7131">https://github.com/ocornut/imgui/issues/7131</a>).
+</li>
+<li>Positioning: FAQ says "Dear ImGui is NOT designed to create a user interface for games" and is "very programmer-centric" (VERIFIED: <a href="https://github.com/ocornut/imgui/blob/master/docs/FAQ.md">https://github.com/ocornut/imgui/blob/master/docs/FAQ.md</a>). This is the strongest argument against using it as the main player-facing UI.
+</li>
+<li>Docking: not checked in this pass. Check <code>imgui_internal</code> docking branch docs before claiming.
+</li></ul>
+<h3 id="clay-layout-only-rank-4-as-a-standalone">Clay (layout-only, rank 4 as a standalone)</h3>
+<ul>
+<li>Licence: Zlib (VERIFIED: <a href="https://github.com/nicbarker/clay">https://github.com/nicbarker/clay</a>).
+</li>
+<li>Renderer-agnostic, outputs render commands. Renderers folder contains <code>SDL3</code>, <code>SDL2</code>, <code>raylib</code>, <code>sokol</code>, <code>GLES3</code>, <code>terminal</code>, <code>web</code>, and others (VERIFIED: GitHub contents listing). The SDL3 renderer exists, and a 2025 commit notes the SDL3 example was updated (search snippet via git.objectionable.solutions mirror; UNVERIFIED on canonical source).
+</li>
+<li>Layout only: no accessibility, no focus model. You would own the input and a11y.
+</li>
+<li>Latest tag v0.14 (2025-06-06). The push date is recent (2026-05-20), so it is maintained, but without tagged releases.
+</li></ul>
+<h3 id="nuklear-rank-6">Nuklear (rank 6)</h3>
+<ul>
+<li>Licence: public domain or MIT (VERIFIED: <a href="https://github.com/Immediate-Mode-UI/Nuklear">https://github.com/Immediate-Mode-UI/Nuklear</a>).
+</li>
+<li>SDL backends are in the demo folder list (VERIFIED: fetched README), but an SDL_GPU backend is not documented. You would write the GPU bridge.
+</li>
+<li>No accessibility. Immediate mode, C.
+</li></ul>
+<h3 id="microui-rank-9">microui (rank 9)</h3>
+<ul>
+<li>MIT, ANSI C, immediate mode, no drawing (VERIFIED: <a href="https://github.com/rxi/microui">https://github.com/rxi/microui</a>). Last push 2024-08-13. README says feature PRs will likely not be merged. Too small for this scope.
+</li></ul>
+<h3 id="nanogui-nanovg-rank-10">NanoGUI / NanoVG (rank 10)</h3>
+<ul>
+<li>NanoGUI: BSD-style, OpenGL 3.x, GLFW, maintenance-only (VERIFIED: <a href="https://github.com/wjakob/nanogui">https://github.com/wjakob/nanogui</a>). Last push 2023-04-28. Not suitable for SDL_GPU.
+</li>
+<li>NanoVG: not checked in detail; it is a 2D vector-drawing library, not a UI toolkit.
+</li></ul>
+<h3 id="lvgl-rank-5">LVGL (rank 5)</h3>
+<ul>
+<li>Licence: MIT (VERIFIED: <a href="https://github.com/lvgl/lvgl">https://github.com/lvgl/lvgl</a>). v9.6.0 on 2026-09-16; last push 2026-10-20.
+</li>
+<li>SDL display driver: <code>src/drivers/sdl/</code> with <code>lv_sdl_sw.c</code>, <code>lv_sdl_texture.c</code>, <code>lv_sdl_egl.c</code>, plus keyboard, mouse, and mousewheel input files (VERIFIED: GitHub contents API). No SDL_GPU driver seen.
+</li>
+<li>Accessibility: none found (search and fetched page, VERIFIED negative within those sources).
+</li>
+<li>Embedded-first; style system is C code, not data-driven markup.
+</li></ul>
+<h3 id="accesskit-rank-3-as-a-complement-not-as-a-toolkit">AccessKit (rank 3 as a complement, not as a toolkit)</h3>
+<ul>
+<li>Licence: GitHub reports BSD-3-Clause; README says Apache-2.0 or MIT (VERIFIED: <a href="https://github.com/AccessKit/accesskit">https://github.com/AccessKit/accesskit</a>). The two statements differ; check <code>LICENSE-*</code> files before relying on either.
+</li>
+<li>Languages: Rust canonical; C via <code>accesskit-c</code> (separate repo, cbindgen header); Python via PyO3 (VERIFIED: GitHub README fetch).
+</li>
+<li>Platform adapters: Windows UI Automation, macOS, Linux AT-SPI, Android, and a winit wrapper (VERIFIED: search snippet and README). An SDL adapter is not listed.
+</li>
+<li>Toolkit adapters: egui (merged, per search snippet, egui PR #2294 link: <a href="https://github.com/emilk/egui/pull/2294">https://github.com/emilk/egui/pull/2294</a>), Bevy (<code>bevy_a11y</code>, snippet), Godot 4.5 (snippet). Slint had an open 2022 proposal (<a href="https://github.com/slint-ui/slint/issues/32">https://github.com/slint-ui/slint/issues/32</a>), status NOT FOUND. Makepad: NOT FOUND.
+</li>
+<li>Implication: AccessKit is the only standalone path to a real screen-reader tree in C/C++. You would have to build the tree from your own widget model and wire the platform adapter yourself. That is a large cost, but the only one on the list that actually reaches UIA/AT-SPI/NSAccessibility.
+</li></ul>
+<h3 id="yoga-layout-helper">Yoga (layout helper)</h3>
+<ul>
+<li>MIT, C++ with bindings, flexbox (VERIFIED: <a href="https://github.com/facebook/yoga">https://github.com/facebook/yoga</a>). v3.2.1 (2024-12-13); pushed 2026-10-21. No accessibility. Usable as a layout engine under a custom renderer.
+</li></ul>
+<h3 id="slint-rank-8-due-to-licence">Slint (rank 8 due to licence)</h3>
+<ul>
+<li>Triple licence: Royalty-free, GPLv3, Commercial (VERIFIED: <a href="https://github.com/slint-ui/slint">https://github.com/slint-ui/slint</a>). The royalty-free terms apply to proprietary desktop, mobile, or web apps; check the exact terms before adopting. GPLv3 is incompatible with a closed-source release.
+</li>
+<li>C++ API exists (VERIFIED: <code>api/cpp</code>). Renderers: FemtoVG, Skia, software (VERIFIED).
+</li>
+<li>Accessibility: not confirmed on the current page. A 2022 issue proposed AccessKit (VERIFIED: <a href="https://github.com/slint-ui/slint/issues/32">https://github.com/slint-ui/slint/issues/32</a>). Current status NOT FOUND.
+</li>
+<li>No SDL_GPU path. Would need a separate window and renderer, which conflicts with the SDL_GPU frame.
+</li></ul>
+<h3 id="qt-6-rank-7-not-practical">Qt 6 (rank 7, not practical)</h3>
+<ul>
+<li>Dual licence: LGPLv3/GPLv3 or commercial (VERIFIED: qt.io FAQ and forum summaries via search). Static linking under LGPL raises relinking obligations; the official guidance favours dynamic linking (VERIFIED: <a href="https://www.qt.io/faq/3.7.-what-are-my-obligations-when-using-qt-under-the-lgpl;">https://www.qt.io/faq/3.7.-what-are-my-obligations-when-using-qt-under-the-lgpl;</a> searched via Qt FAQ and forum).
+</li>
+<li>Accessibility: QAccessible covers MSAA, macOS Accessibility, AT-SPI (VERIFIED: <a href="https://doc.qt.io/qt-6/qaccessible.html">https://doc.qt.io/qt-6/qaccessible.html</a>). This is the most complete a11y tree on the list.
+</li>
+<li>Cost: a Qt runtime, a second event loop, and a second renderer next to SDL_GPU. High.
+</li></ul>
+<h3 id="noesis-gui-rank-9-for-this-project">Noesis GUI (rank 9 for this project)</h3>
+<ul>
+<li>Commercial, XAML-based. Trade article lists Unity, Unreal, Unigine, Ogre, Xenko integrations (VERIFIED via search snippet). Older forum post gives a per-project indie price of $195 (dated, UNVERIFIED current).
+</li>
+<li>Current licence terms and the custom-engine/SDL path could not be verified: <a href="https://www.noesisgui.com/">https://www.noesisgui.com/</a> returned DNS failure in this session.
+</li></ul>
+<h3 id="coherent-gameface-rank-10">Coherent Gameface (rank 10)</h3>
+<ul>
+<li>Commercial, per title, source access one-off fee (VERIFIED: <a href="https://docs.coherent-labs.com/cpp-gameface/what_is_gfp/overview/">https://docs.coherent-labs.com/cpp-gameface/what_is_gfp/overview/</a> via search). Supported platforms include PC (Windows, macOS, Linux). SDL and accessibility were NOT FOUND in search.
+</li></ul>
+<h3 id="ultralight-rank-11">Ultralight (rank 11)</h3>
+<ul>
+<li>Core proprietary; free for indie under $100K annual revenue; paid tiers for others (VERIFIED: <a href="https://github.com/ultralight-ux/Ultralight">https://github.com/ultralight-ux/Ultralight</a> README summary via search). Last GitHub push 2024-04-22 (VERIFIED: GitHub API). Stale. SDL and accessibility: NOT FOUND.
+</li></ul>
+<h3 id="godot-ui">Godot UI</h3>
+<ul>
+<li>Not embeddable as a UI library. Godot 4.5 added screen reader support through AccessKit (VERIFIED: caniplaythat.com snippet, <a href="https://caniplaythat.com/?p=15209">https://caniplaythat.com/?p=15209</a>). Not an option for an SDL C++ game.
+</li></ul>
+<h3 id="fltk-libui">FLTK, libui</h3>
+<ul>
+<li>Not checked in depth; no SDL_GPU path and no a11y evidence found. Excluded from the ranking. FLTK licence is LGPL with exception (UNVERIFIED). libui is MIT (UNVERIFIED).
+</li></ul>
+<h2 id="3-cataclysm-dark-days-ahead-cdda-imgui-lessons">3. Cataclysm: Dark Days Ahead (CDDA) ImGui lessons</h2>
+<p>Sources are GitHub PR and issue pages and search snippets, read on 2026-10-21. Reading status is noted per item.</p>
+<ol>
+<li><strong>ImGui is in upstream CDDA as vendored third-party code.</strong> A search snippet quotes an assertion path <code>src/third-party/imgui/imgui_tables.cpp:1464</code> from a tiles build (VERIFIED as snippet only: <a href="https://github.com/CleverRaven/Cataclysm-DDA/pull/73134">https://github.com/CleverRaven/Cataclysm-DDA/pull/73134</a>). Not confirmed by opening the tree.
+</li>
+<li><strong>Mission UI migration (PR #73134).</strong> Merged early May 2024 per search snippet. A reviewer reported a table assertion crash; changing a column to <code>ImGuiTableColumnFlags_WidthFixed</code> fixed it (snippet, VERIFIED as snippet: <a href="https://github.com/CleverRaven/Cataclysm-DDA/pull/73134">https://github.com/CleverRaven/Cataclysm-DDA/pull/73134</a>). Android selection and height issues were raised later and redirected to a separate bug report (snippet).
+</li>
+<li><strong>Item info window (PR #73456).</strong> Fetched page: merged 2024-09-03 by Maleclypse after being marked stale in June and reopened in August. Known issues at merge: damage info "slightly broken", X-button close does not exit <code>execute</code>, keyboard scrolling needs refactor, open AIM window sizing question. Works both as a standalone window and as embeddable controls. Used for inventory selector, AIM, and crafting; worn/wielded items still use the old UI (VERIFIED: <a href="https://github.com/CleverRaven/Cataclysm-DDA/pull/73456">https://github.com/CleverRaven/Cataclysm-DDA/pull/73456</a>).
+</li>
+<li><strong>Open migration issue.</strong> Good-first-issue #78465 asks contributors to migrate string popups to ImGui one file per PR (snippet: <a href="https://goodfirstissue.org/CleverRaven/Cataclysm-DDA/issues/78465,">https://goodfirstissue.org/CleverRaven/Cataclysm-DDA/issues/78465,</a> not a github.com URL; treat as a secondary source).
+</li>
+<li><strong>Performance, fonts, and mouse problems in CDDA: NOT FOUND.</strong> Searches returned no CDDA issue on ImGui performance, font, or mouse behaviour. The only font-related generic guidance came from the Dear ImGui troubleshooting page (white squares from font atlas, large atlas) (snippet, <a href="https://www.mintlify.com/ocornut/imgui/guides/troubleshooting,">https://www.mintlify.com/ocornut/imgui/guides/troubleshooting,</a> not the official source).
+</li>
+<li><strong>Curses vs tiles.</strong> PR #73456 notes ImGui is for SDL/tiles, with ImTui for curses builds (VERIFIED: fetched page). No CDDA evidence found on ImTui's status.
+</li>
+<li><strong>Local repo (Cataclysm-BN-3D).</strong> <code>git ls-files | grep imgui</code> returns nothing; <code>src/third-party</code> contains only <code>pinyin</code>. This repo does not vendor ImGui. The local <code>src/r3d_gpu.cpp</code> and <code>src/dynamic_atlas.cpp</code> exist and are the SDL_GPU path (VERIFIED by file listing).
+</li></ol>
+<h2 id="4-other-games">4. Other games</h2>
+<ul>
+<li><strong>Caves of Qud:</strong> wiki says the UI uses Source Code Pro, fixed 80x25 grid, 16x24 tiles (VERIFIED: <a href="https://wiki.cavesofqud.com/wiki/Visual_Style">https://wiki.cavesofqud.com/wiki/Visual_Style</a>). Unity interview says Bucklew experimented with running Caves of Qud inside Unity as a host, mainly for mobile releases (VERIFIED: <a href="https://unity.com/resources/systems-driven-design-in-caves-of-qud">https://unity.com/resources/systems-driven-design-in-caves-of-qud</a>). Whether its UI is uGUI, custom, or ImGui: NOT FOUND. No ncurses detail found.
+</li>
+<li><strong>Dwarf Fortress (Steam):</strong> coverage says the new Steam UI uses mouse-driven menus, clickable tabs and buttons, scrollbars, and scales to window size. Tarn Adams is the source per PCGamer and PCGamesN snippets (VERIFIED as press coverage: <a href="https://www.pcgamer.com/uk/the-new-dwarf-fortress-ui-looks-so-much-better,">https://www.pcgamer.com/uk/the-new-dwarf-fortress-ui-looks-so-much-better,</a> <a href="https://www.pcgamesn.com/dwarf-fortress/menus">https://www.pcgamesn.com/dwarf-fortress/menus</a>). The toolkit used is NOT FOUND. No 2026 release confirmation was found.
+</li></ul>
+<h2 id="5-could-not-verify">5. Could not verify</h2>
+<ul>
+<li>Noesis current licence terms, SDL integration, custom-engine pricing (noesisgui.com DNS failure; forum data is dated).
+</li>
+<li>Coherent Gameface SDL integration and accessibility (search returned none).
+</li>
+<li>RmlUi gamepad focus navigation model and accessibility (fetched README silent).
+</li>
+<li>RmlUi text rendering path and font engine (not fetched).
+</li>
+<li>Clay SDL3 renderer code details beyond the search snippet (only the GitHub contents listing and a mirror commit were seen).
+</li>
+<li>Slint current accessibility status and whether AccessKit is integrated (2022 issue only).
+</li>
+<li>Qt 6 current licence page (qt.io 404 on the URL tried; forum and FAQ used).
+</li>
+<li>Ultralight SDL integration and current terms (search only).
+</li>
+<li>Dear ImGui docking behaviour on SDL_GPU (not read).
+</li>
+<li>CDDA: whether PR #73134 and #73456 are still the current ImGui state; upstream vendored path confirmed only from a snippet.
+</li>
+<li>Caves of Qud and Dwarf Fortress UI toolkits: not documented in any source reached.
+</li>
+<li>LVGL keypad/encoder focus navigation details (not read).
+</li>
+<li>AccessKit SDL adapter: none found in the listing; third-party SDL integrations not searched.
+</li></ul>
+<h2 id="6-ranking-for-this-project-sdl3-sdl-gpu-data-driven-theme-gamepad-text-scaling-a11y-permissive">6. Ranking for this project (SDL3 + SDL_GPU, data-driven theme, gamepad, text scaling, a11y, permissive)</h2>
+<ol>
+<li><strong>RmlUi 6.3 (MIT)</strong>: best fit for data-driven themable layout, has an SDL_GPU backend in-tree, and is retained-mode. Accessibility missing; needs AccessKit or a custom tree to meet the a11y requirement.
+</li>
+<li><strong>Dear ImGui v1.93.0 (MIT)</strong>: best integration cost, SDL3 + SDL_GPU backends, gamepad nav flag, already in CDDA's tree. Poor for player-facing themed menus and has no a11y.
+</li>
+<li><strong>AccessKit (Apache-2.0/MIT, C bindings)</strong>: not a toolkit. Only route to real screen-reader trees. Pair with RmlUi or a custom layer; large cost.
+</li>
+<li><strong>Clay (Zlib)</strong>: layout only, SDL3 renderer exists. Good if you own the widget and input layer.
+</li>
+<li><strong>LVGL 9.6 (MIT)</strong>: SDL driver exists, but no SDL_GPU driver and no a11y.
+</li>
+<li><strong>Nuklear (public domain or MIT)</strong>: small, immediate mode, you write the GPU bridge.
+</li>
+<li><strong>Qt 6 (LGPL/commercial)</strong>: best a11y tree on the list, but a second runtime and LGPL linking constraints. Not practical.
+</li>
+<li><strong>Slint (triple licence)</strong>: C++ API, possible a11y, but no SDL_GPU path and GPL/royalty-free constraints.
+</li>
+<li><strong>Yoga (MIT)</strong>: layout only, pair with any renderer.
+</li>
+<li><strong>Noesis (commercial)</strong>, <strong>Coherent Gameface (commercial)</strong>, <strong>Ultralight (commercial/stale)</strong>: paid, unverified SDL paths.
+</li>
+<li><strong>microui, NanoGUI</strong> (stale or too small); <strong>FLTK, libui, Godot UI</strong> (not applicable).
+</li></ol>
+<p>Overall recommendation for the stated needs: RmlUi for player-facing themed layouts with ImGui kept for developer tools, and AccessKit only if a screen-reader requirement is confirmed as a deliverable. Neither RmlUi nor ImGui provides a screen-reader tree today.</p>
+<h2 id="sources">Sources</h2>
+<ul>
+<li><a href="https://github.com/ocornut/imgui/tree/master/backends">https://github.com/ocornut/imgui/tree/master/backends</a>
+</li>
+<li><a href="https://github.com/ocornut/imgui/blob/master/docs/FAQ.md">https://github.com/ocornut/imgui/blob/master/docs/FAQ.md</a>
+</li>
+<li><a href="https://github.com/ocornut/imgui/blob/master/docs/BACKENDS.md">https://github.com/ocornut/imgui/blob/master/docs/BACKENDS.md</a>
+</li>
+<li><a href="https://github.com/ocornut/imgui/issues/4122">https://github.com/ocornut/imgui/issues/4122</a>
+</li>
+<li><a href="https://github.com/ocornut/imgui/issues/7131">https://github.com/ocornut/imgui/issues/7131</a>
+</li>
+<li><a href="https://github.com/mikke89/RmlUi">https://github.com/mikke89/RmlUi</a>
+</li>
+<li><a href="https://github.com/mikke89/RmlUi/tree/master/Backends">https://github.com/mikke89/RmlUi/tree/master/Backends</a>
+</li>
+<li><a href="https://github.com/nicbarker/clay">https://github.com/nicbarker/clay</a>
+</li>
+<li><a href="https://github.com/Immediate-Mode-UI/Nuklear">https://github.com/Immediate-Mode-UI/Nuklear</a>
+</li>
+<li><a href="https://github.com/rxi/microui">https://github.com/rxi/microui</a>
+</li>
+<li><a href="https://github.com/wjakob/nanogui">https://github.com/wjakob/nanogui</a>
+</li>
+<li><a href="https://github.com/lvgl/lvgl">https://github.com/lvgl/lvgl</a>
+</li>
+<li><a href="https://github.com/AccessKit/accesskit">https://github.com/AccessKit/accesskit</a>
+</li>
+<li><a href="https://github.com/facebook/yoga">https://github.com/facebook/yoga</a>
+</li>
+<li><a href="https://github.com/slint-ui/slint">https://github.com/slint-ui/slint</a>
+</li>
+<li><a href="https://github.com/slint-ui/slint/issues/32">https://github.com/slint-ui/slint/issues/32</a>
+</li>
+<li><a href="https://github.com/emilk/egui/pull/2294">https://github.com/emilk/egui/pull/2294</a>
+</li>
+<li><a href="https://doc.qt.io/qt-6/qaccessible.html">https://doc.qt.io/qt-6/qaccessible.html</a>
+</li>
+<li><a href="https://www.qt.io/faq/3.7.-what-are-my-obligations-when-using-qt-under-the-lgpl">https://www.qt.io/faq/3.7.-what-are-my-obligations-when-using-qt-under-the-lgpl</a>
+</li>
+<li><a href="https://docs.coherent-labs.com/cpp-gameface/what_is_gfp/overview/">https://docs.coherent-labs.com/cpp-gameface/what_is_gfp/overview/</a>
+</li>
+<li><a href="https://github.com/ultralight-ux/Ultralight">https://github.com/ultralight-ux/Ultralight</a>
+</li>
+<li><a href="https://github.com/CleverRaven/Cataclysm-DDA/pull/73134">https://github.com/CleverRaven/Cataclysm-DDA/pull/73134</a>
+</li>
+<li><a href="https://github.com/CleverRaven/Cataclysm-DDA/pull/73456">https://github.com/CleverRaven/Cataclysm-DDA/pull/73456</a>
+</li>
+<li><a href="https://goodfirstissue.org/CleverRaven/Cataclysm-DDA/issues/78465">https://goodfirstissue.org/CleverRaven/Cataclysm-DDA/issues/78465</a>
+</li>
+<li><a href="https://wiki.cavesofqud.com/wiki/Visual_Style">https://wiki.cavesofqud.com/wiki/Visual_Style</a>
+</li>
+<li><a href="https://unity.com/resources/systems-driven-design-in-caves-of-qud">https://unity.com/resources/systems-driven-design-in-caves-of-qud</a>
+</li>
+<li><a href="https://www.pcgamer.com/uk/the-new-dwarf-fortress-ui-looks-so-much-better">https://www.pcgamer.com/uk/the-new-dwarf-fortress-ui-looks-so-much-better</a>
+</li>
+<li><a href="https://www.pcgamesn.com/dwarf-fortress/menus">https://www.pcgamesn.com/dwarf-fortress/menus</a>
+</li>
+<li><a href="https://caniplaythat.com/?p=15209">https://caniplaythat.com/?p=15209</a>
+</li></ul>
+</main>
+</body>
+</html>

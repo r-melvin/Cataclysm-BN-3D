@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03. The new UI: design</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="README.html">Summary</a><a href="01_pain_points.html">01 Pain points</a><a href="02_patterns.html">02 Patterns</a><a href="03_design.html" class="current">03 Design</a><a href="04_architecture.html">04 Architecture</a><a href="05_plan.html">05 Plan</a><a href="06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="03-the-new-ui-design">03. The new UI: design</h1>
+<p>Scope: the whole player-facing interface of Cataclysm: Bright Nights 3D, with the 3D renderer as the primary presentation. The classic 2D tiles mode keeps its sidebar and gets every new screen unchanged. The curses build is retired (user decision 2026-10-21; see <code>06_frontend_options.md</code> §4).</p>
+<p>Nothing here changes a game rule. Where a rule change would simplify the UI it is listed under "Feature cuts (last resort)" with the alternatives that were rejected first.</p>
+<p>Evidence references are to <code>01_pain_points.md</code> (P1-P10), <code>02_patterns.md</code> and the files in <code>research/</code>.</p>
+<h2 id="1-principles">1. Principles</h2>
+<ol>
+<li><strong>One screen per job.</strong> Every piece of state and every verb has exactly one home. If two screens can do the same thing, one of them is deleted. (P1, P5, P8.)
+</li>
+<li><strong>One interaction verb.</strong> Look at a thing, see the prompt, press the key. Dedicated verb keys (open, close, smash, pick up, examine, talk, board) become optional bindings, not the way in. (P1: "throw the entire list at you every time"; P8.)
+</li>
+<li><strong>The world shows, the text tells.</strong> In-world presentation (sky, weather, badges, arrows, combat text) may replace sidebar text, but every item of state stays available as text on demand: the F4 status report, the character screen, the log. No state is image-only.
+</li>
+<li><strong>Never colour alone.</strong> Every state has a shape or icon, a word, and a colour, in that order of importance. Colour is the third channel. (research g, 4.4.)
+</li>
+<li><strong>Nothing hides without a switch.</strong> Contextual elements (badges, stamina, prompts) each have an "always show" position in one option. (The Long Dark split; CDDA #27367 "Please allow this to be an option".)
+</li>
+<li><strong>Consistent navigation everywhere.</strong> One menu-navigation context for every list, grid and tab in the game: up/down/left/right, confirm, back, next/prev tab, page, home/end, search, info. A player who can use one screen can use all of them. (P2.)
+</li>
+<li><strong>Controller-first navigation, mouse-first pointing.</strong> Every screen is operable with a D-pad and two buttons. Every list and button is also clickable, with correct hit-testing. No virtual cursor. (P6; research f.)
+</li>
+<li><strong>Budget everything.</strong> Screens, menu items, options and keybindings all have a number, and the number is held (section 2).
+</li>
+<li><strong>Text scales; layout reflows.</strong> Nothing is laid out in fixed character cells in the new layer. 75-200 % UI scale is a first-class state, tested by screenshot. (P4.)
+</li>
+<li><strong>The accessibility tree is the UI tree.</strong> Screen-reader narration, controller focus and mouse hit-testing all read the same widget tree; there is no second description of a screen.
+</li></ol>
+<h2 id="2-budgets-before-and-after">2. Budgets: before and after</h2>
+<h3 id="2-1-screens-and-menus">2.1 Screens and menus</h3>
+<p>"Before" counts come from <code>research/l_codebase_ui_audit.md</code> (one row per distinct screen, player-facing, excluding debug/Lua/loading/computer terminal content).</p>
+<table><thead><tr><th>Group</th><th>Before (screens)</th><th>After (screens)</th></tr></thead><tbody><tr><td>Out of game</td><td>Main menu, New character (9 tabs), Load, World/mods (worldfactory), Credits, MOTD = 6</td><td>Main menu, New game (one screen, 5 steps), Load, Settings, Credits = 5</td></tr><tr><td>Always-on</td><td>Sidebar (4 layouts + panel manager), pixel minimap, 3D HUD = 3</td><td>HUD (3D) / sidebar (classic) = 1</td></tr><tr><td>Items</td><td>Inventory, Advanced inventory, Pickup, Wear, Wield, Take off, Read, Reload, Gun mods, Sort armour, Item info, Examine item menu, Item action menu, Drop, Unload = 15</td><td>Inventory (modes: manage, loot, trade, pick) + Item info card = 2</td></tr><tr><td>Making</td><td>Crafting, Construction, Zones manager, Salvage, Vehicle interaction = 5</td><td>Craft, Build (tabs: Construct, Zones), Vehicle = 3</td></tr><tr><td>Character</td><td>Character sheet (7 tabs), Mutations, Bionics, Perks, Morale, Spells = 6</td><td>Character (tabs: Status, Skills, Traits, Bionics, Spells*) = 1</td></tr><tr><td>World</td><td>Overmap, Missions, Factions, Messages log, Diary, Scores, Notes manager, List items/monsters (look-around filters) = 8</td><td>Map, Journal (tabs: Log, Missions, Lessons, Notes, Records), Cursor mode (look/target/list) = 3</td></tr><tr><td>People</td><td>Dialogue, Trade = 2</td><td>Dialogue, Trade (an Inventory mode) = 1 + 0</td></tr><tr><td>Settings</td><td>Options (6 pages + font page), Keybindings, Colour manager, Safe mode, Auto-pickup, Auto-notes, Panel manager, Distraction manager = 8</td><td>Settings (tabs: Game, Display, Audio, Controls, Accessibility, Rules), Controls editor (also the command palette) = 2</td></tr><tr><td>Help</td><td>Help, Onboarding checklist, Status report popup, Action menu = 4</td><td>Reference ('?'), Status report (F4, text) = 2</td></tr><tr><td>Popups</td><td>query_popup, string_input_popup, string editor, uilist (generic) = 4</td><td>Confirm, Text entry, Choice list = 3</td></tr><tr><td><strong>Total</strong></td><td><strong>61</strong></td><td><strong>23</strong></td></tr></tbody></table>
+<p>* Spells tab appears only when the character has spells; Bionics only with bionics.</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" role="img" aria-labelledby="t-sba">
+<title id="t-sba">Player-facing screens per group, before (61) and after (23) the redesign. Values are counts of distinct screens from the codebase audit.</title>
+<g font-size="13">
+  <!-- legend -->
+  <rect x="640" y="18" width="14" height="14" rx="3" class="d-s1"/><text x="660" y="30" class="d-text-2">Before (61 screens)</text>
+  <rect x="800" y="18" width="14" height="14" rx="3" class="d-s2"/><text x="820" y="30" class="d-text-2">After (23 screens)</text>
+  <!-- axis gridlines: 0..16, scale 36 px per screen, origin x=250 -->
+  <g class="d-line-soft">
+    <line x1="250" y1="50" x2="250" y2="420"/>
+    <line x1="430" y1="50" x2="430" y2="420"/>
+    <line x1="610" y1="50" x2="610" y2="420"/>
+    <line x1="790" y1="50" x2="790" y2="420"/>
+  </g>
+  <g class="d-text-3" text-anchor="middle">
+    <text x="250" y="436">0</text><text x="430" y="436">5</text><text x="610" y="436">10</text><text x="790" y="436">15</text>
+    <text x="520" y="452">screens</text>
+  </g>
+  <!-- rows: y step 36; each row has before bar (h 12) and after bar (h 12) with a 2 px gap -->
+  <g class="d-text-2" text-anchor="end">
+    <text x="238" y="74">Out of game</text>
+    <text x="238" y="110">Always-on (sidebar/HUD)</text>
+    <text x="238" y="146">Items</text>
+    <text x="238" y="182">Making</text>
+    <text x="238" y="218">Character</text>
+    <text x="238" y="254">World and log</text>
+    <text x="238" y="290">People</text>
+    <text x="238" y="326">Settings</text>
+    <text x="238" y="362">Help</text>
+    <text x="238" y="398">Popups</text>
+  </g>
+  <!-- bars: width = value * 36 -->
+  <g>
+    <rect x="250" y="58" width="216" height="12" rx="4" class="d-s1"><title>Out of game, before: 6</title></rect>
+    <rect x="250" y="72" width="180" height="12" rx="4" class="d-s2"><title>Out of game, after: 5</title></rect>
+    <text x="472" y="68" class="d-text-2">6</text><text x="436" y="82" class="d-text-2">5</text>
+
+    <rect x="250" y="94" width="108" height="12" rx="4" class="d-s1"><title>Always-on, before: 3</title></rect>
+    <rect x="250" y="108" width="36" height="12" rx="4" class="d-s2"><title>Always-on, after: 1</title></rect>
+    <text x="364" y="104" class="d-text-2">3</text><text x="292" y="118" class="d-text-2">1</text>
+
+    <rect x="250" y="130" width="540" height="12" rx="4" class="d-s1"><title>Items, before: 15</title></rect>
+    <rect x="250" y="144" width="72" height="12" rx="4" class="d-s2"><title>Items, after: 2</title></rect>
+    <text x="796" y="140" class="d-text-2">15</text><text x="328" y="154" class="d-text-2">2</text>
+
+    <rect x="250" y="166" width="180" height="12" rx="4" class="d-s1"><title>Making, before: 5</title></rect>
+    <rect x="250" y="180" width="108" height="12" rx="4" class="d-s2"><title>Making, after: 3</title></rect>
+    <text x="436" y="176" class="d-text-2">5</text><text x="364" y="190" class="d-text-2">3</text>
+
+    <rect x="250" y="202" width="216" height="12" rx="4" class="d-s1"><title>Character, before: 6</title></rect>
+    <rect x="250" y="216" width="36" height="12" rx="4" class="d-s2"><title>Character, after: 1</title></rect>
+    <text x="472" y="212" class="d-text-2">6</text><text x="292" y="226" class="d-text-2">1</text>
+
+    <rect x="250" y="238" width="288" height="12" rx="4" class="d-s1"><title>World and log, before: 8</title></rect>
+    <rect x="250" y="252" width="108" height="12" rx="4" class="d-s2"><title>World and log, after: 3</title></rect>
+    <text x="544" y="248" class="d-text-2">8</text><text x="364" y="262" class="d-text-2">3</text>
+
+    <rect x="250" y="274" width="72" height="12" rx="4" class="d-s1"><title>People, before: 2</title></rect>
+    <rect x="250" y="288" width="36" height="12" rx="4" class="d-s2"><title>People, after: 1</title></rect>
+    <text x="328" y="284" class="d-text-2">2</text><text x="292" y="298" class="d-text-2">1</text>
+
+    <rect x="250" y="310" width="288" height="12" rx="4" class="d-s1"><title>Settings, before: 8</title></rect>
+    <rect x="250" y="324" width="72" height="12" rx="4" class="d-s2"><title>Settings, after: 2</title></rect>
+    <text x="544" y="320" class="d-text-2">8</text><text x="328" y="334" class="d-text-2">2</text>
+
+    <rect x="250" y="346" width="144" height="12" rx="4" class="d-s1"><title>Help, before: 4</title></rect>
+    <rect x="250" y="360" width="72" height="12" rx="4" class="d-s2"><title>Help, after: 2</title></rect>
+    <text x="400" y="356" class="d-text-2">4</text><text x="328" y="370" class="d-text-2">2</text>
+
+    <rect x="250" y="382" width="144" height="12" rx="4" class="d-s1"><title>Popups, before: 4</title></rect>
+    <rect x="250" y="396" width="108" height="12" rx="4" class="d-s2"><title>Popups, after: 3</title></rect>
+    <text x="400" y="392" class="d-text-2">4</text><text x="364" y="406" class="d-text-2">3</text>
+  </g>
+</g>
+</svg>
+<figcaption>Out of game, before: 6</figcaption></figure>
+<h3 id="2-2-items-per-screen">2.2 Items per screen</h3>
+<p>Budget: a <strong>menu</strong> (a list of verbs or options) holds at most <strong>12 items</strong> and nests at most <strong>two levels</strong> (screen &gt; tab &gt; item). <strong>Data lists</strong> (inventory rows, recipes, log lines) are not menus; they are bounded by filters, search and scrolling instead. Every screen below states its menu count.</p>
+<table><thead><tr><th>Screen</th><th>Before (menu items)</th><th>After</th></tr></thead><tbody><tr><td>Main menu</td><td>8 top + New Game 4 + Settings 5 + World 4 = 21</td><td>5 + New game steps 5 = 10</td></tr><tr><td>Pause menu</td><td>n/a (main-menu ESC with 8)</td><td>5</td></tr><tr><td>Interaction prompt</td><td>Examine menu: up to 10 verbs plus nested uilists</td><td>1 primary verb + up to 5 secondary (hold key)</td></tr><tr><td>Action wheel</td><td>Action menu (<code>Enter</code>): ~60 entries in nested uilist</td><td>8</td></tr><tr><td>Quick-slot wheel / hotbar</td><td>none (hotbar did not exist)</td><td>8</td></tr><tr><td>Inventory</td><td>24 bound actions in INVENTORY_ITEM, 36 in ADVANCED_INVENTORY, 7 in INVENTORY</td><td>6 tabs, 8 verbs on the item card, 12 bound actions total</td></tr><tr><td>Craft</td><td>15 bound actions, 9 category tabs + subcategories</td><td>4 filters, 6 category tabs, 6 verbs</td></tr><tr><td>Build</td><td>4 bound actions + 10 construction categories</td><td>6 category tabs, 4 verbs, 1 Zones tab with 6 verbs</td></tr><tr><td>Character</td><td>7 tabs + 5 separate screens</td><td>5 tabs, 0 verbs except on Bionics/Spells (activate)</td></tr><tr><td>Map</td><td>21 bound actions</td><td>3 layers, 8 verbs</td></tr><tr><td>Journal</td><td>P/M/Home/)/kill list = 5 screens</td><td>5 tabs, 4 verbs</td></tr><tr><td>Settings</td><td>252 options over 7 pages (+43 Android)</td><td>39 options over 6 tabs (see 2.3)</td></tr><tr><td>Controls</td><td>585 actions in 61 contexts, no search</td><td>same actions, 12 contexts, one searchable list</td></tr></tbody></table>
+<h3 id="2-3-options">2.3 Options</h3>
+<p>Before: 252 registered options (<code>src/options.cpp</code>): interface 57, graphics 74 (of which 20 are <code>R3D_*</code>), world defaults 47, debug 24, general 5, font 3, plus 43 Android. After: <strong>39 in-game</strong> on six tabs; everything else moves to the advanced config file (section 9) or to the world-creation screen. The in-game list:</p>
+<p><strong>Game (7):</strong> Language (<code>USE_LANG</code>), Units (Metric / Imperial; replaces the five unit options), Autosave (Off / 5 / 15 / 30 min; merges autosave on/off and interval), Safe mode (Off / On; distance in Rules), Auto-pickup (Off / On; rules in Rules), Confirmations (Few / Normal / All; merges <code>QUERY_DISASSEMBLE</code>, <code>QUERY_KEYBIND_REMOVAL</code>, <code>FORCE_CAPITAL_YN</code>), Guided hints (existing).</p>
+<p><strong>Display (9):</strong> Renderer (Classic 2D / 3D; <code>USE_TILES</code>+<code>RENDERER_3D</code>), Tileset (<code>TILES</code>), Window (Windowed / Fullscreen / Borderless), HUD (Full / Minimal / Off), Minimap (Off / On), Camera (Orbit / First person; <code>R3D_CAMERA_MODE</code>), Field of view (<code>R3D_FP_FOV</code>), Weather and sky effects (<code>R3D_WEATHER</code>), Cutaway around the player (<code>R3D_CUTAWAY</code>).</p>
+<p><strong>Audio (4):</strong> Master, Music, Effects, Ambient (existing <code>*_VOLUME</code> plus <code>SOUND_ENABLED</code> folded into Master = 0).</p>
+<p><strong>Controls (5):</strong> Keyboard and mouse bindings (opens editor), Gamepad bindings (opens editor), Movement keys preset (Vi / WASD / Numpad / Arrows; sets a binding group), Gamepad (Off / Auto), Rumble (Off / On).</p>
+<p><strong>Accessibility (11):</strong> Preset (None / Vision / Hearing / Motor), UI scale (75-200 %), Colour vision (Normal / Deuteranopia / Protanopia / Tritanopia / High contrast), Narration (Off / Menus / Menus and log), Narration rate, Narration volume, Reduce motion and flashing (Off / On), Sound cues as text (Off / On), Hold or toggle (Hold / Toggle; global default for holdable actions), Confirmation holds (Hold / Press twice), Readable font (Off / On).</p>
+<p><strong>Rules (3 list editors):</strong> Safe mode rules, Auto-pickup rules, Auto-notes rules.</p>
+<p>Options that move to the file include: every <code>ANIMATION_*</code>, <code>BLINK_SPEED</code>, <code>MESSAGE_*</code>, <code>SIDEBAR_*</code>, <code>PIXEL_MINIMAP_*</code> (9 options collapse into the single Minimap toggle in-game), <code>R3D_FP_*</code> tuning, <code>R3D_VIEW_DEPTH</code>, <code>R3D_LEVEL_HEIGHT</code>, <code>R3D_THIN_WALLS</code>, <code>R3D_WALL_TEXTURES</code>, <code>R3D_VOXEL_ITEMS</code>, <code>TEXTURE_STREAMING</code>, <code>RENDER_BATCHING</code>, <code>FRAMEBUFFER_ACCEL</code>, <code>VSYNC</code>, <code>SCALING_FACTOR</code>, <code>COMPUTE_ACCELERATION</code>, <code>TERMINAL_X/Y</code>, all font options, <code>AIM_*</code>, <code>ACCURACY_DISPLAY</code>, <code>MORALE_STYLE</code>, <code>HEALTH_STYLE</code>, <code>LOG_FLOW</code>, <code>WIKI_DOC_URL</code>, <code>HHG_URL</code>, all <code>debug</code> options, and all <code>ANDROID_*</code>. World defaults stay per world (<code>worldoptions.json</code>) with 8 shown in the New game &gt; World step and the rest file-edited.</p>
+<p>The cut is justified per option in <code>05_plan.md</code>, milestone M2.</p>
+<h3 id="2-4-keybindings">2.4 Keybindings</h3>
+<p>Before: 585 actions, 61 contexts. After: the same actions exist (mods and scripts bind them) but default bindings are reduced: <strong>play context ≤ 32 default-bound actions on keyboard, ≤ 14 on gamepad</strong>, and the generic <code>menu</code> context replaces 40+ per-screen navigation duplicates. Contexts: <code>global</code>, <code>play</code>, <code>cursor</code>, <code>menu</code>, <code>text</code>, <code>inventory</code>, <code>craft</code>, <code>build</code>, <code>map</code>, <code>vehicle</code>, <code>dialogue</code>, <code>debug</code> = 12. Per-screen extras live in those; nothing else registers its own context.</p>
+<h2 id="3-information-architecture">3. Information architecture</h2>
+<p>Three tiers. An item of state is in exactly one tier; the F4 status report and the character screen are the text fallbacks for tiers 1 and 2.</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-labelledby="t-tiers">
+<title id="t-tiers">Information tiers: a small always-visible set, a larger set shown only when abnormal, and everything available on demand as text. Each item of state lives in one tier and always has a text fallback.</title>
+<defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker></defs>
+<g font-size="13">
+  <rect x="20" y="30" width="280" height="200" rx="8" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="160" y="58" text-anchor="middle" class="d-text" font-weight="600">Tier 1: always visible</text>
+  <text x="160" y="76" text-anchor="middle" class="d-text-3">HUD Full</text>
+  <g class="d-text-2">
+    <text x="40" y="104">Vitals strip (body, stamina, move mode)</text>
+    <text x="40" y="124">Safe-mode state</text>
+    <text x="40" y="144">Compass tape, minimap (if on)</text>
+    <text x="40" y="164">Hotbar, interaction prompt</text>
+    <text x="40" y="184">Message ticker (3 lines)</text>
+    <text x="40" y="204">Mission target on the compass</text>
+  </g>
+
+  <rect x="340" y="30" width="280" height="200" rx="8" class="d-box d-stroke-s2" stroke-width="2"/>
+  <text x="480" y="58" text-anchor="middle" class="d-text" font-weight="600">Tier 2: shown when abnormal</text>
+  <text x="480" y="76" text-anchor="middle" class="d-text-3">HUD Full and Minimal</text>
+  <g class="d-text-2">
+    <text x="360" y="104">Needs badges with trend</text>
+    <text x="360" y="124">Status-effect and stat badges</text>
+    <text x="360" y="144">Morale, power, mana rows</text>
+    <text x="360" y="164">Vehicle cluster while driving</text>
+    <text x="360" y="184">Edge arrows, hit direction</text>
+    <text x="360" y="204">"Entering: place", pinned recipe</text>
+  </g>
+
+  <rect x="660" y="30" width="280" height="200" rx="8" class="d-box d-stroke-s3" stroke-width="2"/>
+  <text x="800" y="58" text-anchor="middle" class="d-text" font-weight="600">Tier 3: on demand, as text</text>
+  <text x="800" y="76" text-anchor="middle" class="d-text-3">Character screen, F4 report, Journal</text>
+  <g class="d-text-2">
+    <text x="680" y="104">Exact numbers for every HUD item</text>
+    <text x="680" y="124">HP per limb, armour, encumbrance</text>
+    <text x="680" y="144">Speed breakdown, temperature per part</text>
+    <text x="680" y="164">Morale reasons, effects with durations</text>
+    <text x="680" y="184">Weather, time, date, place</text>
+    <text x="680" y="204">Full message log</text>
+  </g>
+
+  <path d="M160,232 V258 H790 V232" class="d-line" marker-end="url(#ah2)"/>
+  <path d="M480,232 V258" class="d-line"/>
+  <text x="480" y="282" text-anchor="middle" class="d-text-3">every tier 1 and 2 item is also here, as a sentence: the rule "the world shows, the text tells"</text>
+</g>
+</svg>
+<figcaption></figcaption></figure>
+<table><thead><tr><th>Tier</th><th>What</th><th>Where</th></tr></thead><tbody><tr><td><strong>Always visible</strong> (HUD: Full)</td><td>Vitals strip (body figure, stamina when relevant, move mode), safe-mode state, compass tape, minimap (if on), hotbar, message ticker (3 lines), interaction prompt, mission target on compass</td><td>HUD</td></tr><tr><td><strong>Shown when abnormal</strong></td><td>Needs badges with trend (hungry, thirsty, tired, cold, hot, pain, wet, overloaded, noisy), status-effect badges (bleeding, infected, poisoned, drunk, ...), stat-reduction badges (STR -2), morale badge (Miserable / Elated), power/mana rows, vehicle cluster while driving, edge arrows (hostile, sound), hit direction, "Entering: place", pinned recipe shortfall</td><td>HUD</td></tr><tr><td><strong>On demand</strong></td><td>Exact numbers for everything above, HP per limb, speed and move cost breakdown, temperature per body part, weather forecast text, time and date, weight/volume, morale reasons, effects with durations, skills, traits, bionics, armour, encumbrance</td><td>Character screen (<code>@</code>), F4 report (text), Inventory header</td></tr><tr><td><strong>Text only</strong></td><td>Everything that the HUD shows, as sentences</td><td>F4 status report (one paragraph; spoken by the narrator), message log</td></tr></tbody></table>
+<p>HUD modes: <strong>Full</strong> (all of tier 1 and 2), <strong>Minimal</strong> (tier 2 badges, prompt, ticker; vitals only when abnormal), <strong>Off</strong> (prompt and sound subtitles only). "Always show vitals" is implied by Full.</p>
+<h3 id="3-1-sidebar-replacement-3d-mode">3.1 Sidebar replacement (3D mode)</h3>
+<p>The current sidebar (<code>src/panels.cpp</code>, four layouts, <code>labels</code> by default) is removed in 3D mode. Its readability problems: two-letter limb labels in six colours, numbers packed to the cell, panel borders that eat a third of the width, state encoded by colour alone (stat buckets, limb colours), a message panel that is cut to 3-6 lines by layout, and no scaling (cell grid at a restart-only font size). Every panel's information is reassigned below.</p>
+<table><thead><tr><th>Sidebar panel (panels.cpp)</th><th>Problem today</th><th>3D replacement</th><th>Tier</th></tr></thead><tbody><tr><td>Limb HP (<code>draw_limb_*</code>, <code>draw_limb_health</code>)</td><td>6 rows of <code>HD</code>/<code>TO</code>/<code>LA</code> with coloured bars; colour-only severity</td><td>Body figure in the vitals strip: six segments filled by HP %, hatched when broken, a drop icon when bleeding, a tooth icon when bitten; the lowest limb's percent as a number under it; label "HP"</td><td>Always; exact numbers in Character &gt; Status and F4</td></tr><tr><td>Stamina (<code>draw_stamina</code> inside stat/needs panels)</td><td>Thin bar, easy to miss</td><td>Bar under the body figure, shown when below max, while running, or always in HUD Full</td><td>Always (Full)</td></tr><tr><td>Needs (<code>draw_needs_*</code>)</td><td>Six coloured words</td><td>Badges only when abnormal, each with icon + word + trend arrow (▲ worsening, ▼ improving)</td><td>Abnormal; F4</td></tr><tr><td>Stats STR/DEX/INT/PER (<code>draw_stat_*</code>)</td><td>Four numbers whose colour means "reduced"</td><td>Character &gt; Status; a badge "STR -2" appears while a stat is reduced</td><td>On demand; abnormal</td></tr><tr><td>Speed / moves / move mode (<code>draw_char_*</code>, <code>move_mode_string</code>)</td><td>"Spd 100 Mv 50"</td><td>Move mode icon + word in the vitals strip (Walk / Run / Crouch); speed with breakdown in Character &gt; Status</td><td>Always (move mode); on demand (speed)</td></tr><tr><td>Time / date / moon (<code>draw_time*</code>, <code>draw_moon_*</code>)</td><td>Clock only with a watch; moon glyph</td><td>Clock on the compass tape right end when the character has a watch; sun/moon sprites in the sky (shipped); date and approximate time in F4</td><td>Always (clock, gated by watch); text</td></tr><tr><td>Weather / temperature / wind / lighting (<code>draw_env_compact</code>, <code>draw_weather_classic</code>, <code>temp_stat</code>, <code>draw_wind</code>, <code>draw_lighting_classic</code>)</td><td>Text lines; temperature arrows in colour</td><td>Sky, precipitation, fog, wind chevron on the compass (shipped). Temperature badge (Cold / Hot, with body-part detail in F4) gated by feeling; exact degrees in F4 when a thermometer is carried; lighting as a sun/moon brightness glyph on the compass</td><td>Diegetic + abnormal badge; text</td></tr><tr><td>Location (<code>draw_loc_*</code>, <code>draw_location_classic</code>)</td><td>Place name</td><td>"Entering: place" notice (shipped) and the minimap label; always in F4 and Map</td><td>Event + on demand</td></tr><tr><td>Safe mode (<code>safe_color</code>)</td><td>"SAFE" coloured word</td><td>Shield icon + "SAFE" / "SAFE OFF" top-left; interrupt popup names the creature</td><td>Always</td></tr><tr><td>Messages (<code>draw_messages*</code>)</td><td>3-6 lines clipped by layout</td><td>Three-line ticker above the hotbar, newest at the bottom, older lines dim (no fade under Reduce motion); scroll wheel / <code>L2</code> over it opens Journal &gt; Log</td><td>Always; full log on demand</td></tr><tr><td>Minimap (<code>draw_mminimap</code>, <code>draw_minimap</code>, pixel minimap)</td><td>Two minimaps (overmap chunk and pixel)</td><td>One minimap, top-right: heading-up in first person (shipped), north-up in orbit; local pixel minimap dropped</td><td>Always if on</td></tr><tr><td>Compass (<code>draw_compass</code>, <code>draw_simple_compass</code>)</td><td>Creature letters per direction</td><td>Compass tape (shipped) + edge arrows for hostiles (shipped)</td><td>Always</td></tr><tr><td>Vehicle (<code>draw_veh_*</code>)</td><td>Speed, fuel, cruise in one line</td><td>Vehicle cluster replaces the stamina row while in a vehicle: speed and cruise target, fuel bar per tank type, engine state word, lights/doors icons</td><td>While driving; F4 says "Driving at 30 mph, fuel 40 %"</td></tr><tr><td>Weapon / style (<code>draw_weapon_*</code>)</td><td>Name + style</td><td>Hotbar slot 1 shows the wielded item name and ammo count; style name in Character &gt; Skills</td><td>Always (slot)</td></tr><tr><td>Weight / volume (<code>draw_weightvolume_*</code>)</td><td>Two numbers</td><td>Inventory header; badge "Overloaded" when over limit</td><td>On demand; abnormal</td></tr><tr><td>Armour (<code>draw_armor*</code>)</td><td>Per-limb armour values</td><td>Character &gt; Status (body figure hover/focus shows armour per limb)</td><td>On demand</td></tr><tr><td>Power / mana (<code>power_stat</code>, <code>mana_*</code>)</td><td>Numbers</td><td>Extra row in the vitals strip only when the character has bionics / spells</td><td>Always when applicable</td></tr><tr><td>Morale face (<code>morale_emotion</code>)</td><td>ASCII face</td><td>Badge when mood is outside the neutral band; reasons list in Character &gt; Status</td><td>Abnormal; on demand</td></tr><tr><td>Sound / stealth (<code>draw_sound_*</code>, <code>draw_stealth</code>)</td><td>"Sound: 12"</td><td>Badge "Noisy" when own noise exceeds a threshold; exact in F4</td><td>Abnormal; text</td></tr><tr><td>AI goal (<code>draw_ai_goal</code>)</td><td>Debug text</td><td>Dropped from the player HUD; stays in the debug menu</td><td>Dropped</td></tr><tr><td>Lua sidebar widgets (<code>lua_sidebar_widgets</code>)</td><td>Mod-defined text lines</td><td>Rendered as text badges in the badge row with the widget's colour; full text in F4. <strong>Decision needed</strong> (open question 6 in <code>05_plan.md</code>)</td><td>Abnormal / text</td></tr><tr><td>Hint panel (<code>draw_hint</code>)</td><td>Onboarding "Next" step</td><td>Lesson line at the top of the message ticker, dismissable</td><td>Always while a lesson is active</td></tr></tbody></table>
+<h3 id="3-2-map-area-without-the-sidebar">3.2 Map area without the sidebar</h3>
+<p>Today <code>game::create_or_get_main_ui_adaptor</code> sizes the terrain window as <code>TERMX - (sidebar_left + sidebar_right)</code> (<code>src/game.cpp:4692-4729</code>) and <code>game::draw_panels</code> (<code>game.cpp:4946</code>) draws every panel of the current layout beside it. In 3D mode with the sidebar removed:</p>
+<ul>
+<li><code>panel_manager::get_width_left/right()</code> return 0 and <code>draw_panels</code> returns early when <code>RENDERER_3D</code> is active (one predicate, <code>ui::sidebar_hidden()</code>).
+</li>
+<li><code>TERRAIN_WINDOW_WIDTH = TERMX</code>, <code>w_terrain</code> at <code>point_zero</code>; the 3D draw rectangle in <code>src/sdltiles.cpp:1684</code> already follows <code>w_terrain</code>, so the picture fills the window.
+</li>
+<li>Screens that position themselves relative to the sidebar must be re-anchored: look-around info window (<code>game.cpp:10082-10107</code>, uses <code>get_width_left()</code> and <code>LOOKAROUND_POSITION</code>), the <code>offsetX</code> computation at <code>game.cpp:9576</code>, the right-offset block at <code>game.cpp:10531-10539</code>, and pickup/AIM window placement (<code>PICKUP_POSITION</code>). In the new layer these become HUD cards anchored to a screen edge.
+</li>
+<li>The pixel minimap window (<code>w_pixel_minimap</code>) is no longer created in 3D mode.
+</li>
+<li>Curses and classic 2D are untouched: the predicate is false there.
+</li></ul>
+<p>Risks: anything that reads <code>TERRAIN_WINDOW_WIDTH</code> to compute a sidebar-relative position (grep <code>get_width_left|get_width_right|SIDEBAR_POSITION</code> in <code>game.cpp</code>: 7 sites), the panel manager key (<code>}</code>) must become a no-op with a message in 3D, saved panel layouts must still load for classic mode, and the option toggle at runtime must mark the main ui_adaptor for resize.</p>
+<h2 id="4-screen-by-screen">4. Screen by screen</h2>
+<p>Wireframes are at 100 % scale on a 16:9 window. Letters in brackets are default keyboard keys; gamepad glyphs replace them when a gamepad was the last device used.</p>
+<h3 id="4-1-hud-3d-orbit-and-first-person">4.1 HUD (3D, orbit and first person)</h3>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" role="img" aria-labelledby="t-hud">
+<title id="t-hud">HUD regions in 3D mode: the scene fills the window; a compass tape, minimap and safe-mode state at the top; badges, vitals, message ticker, hotbar and the interaction prompt at the bottom; edge arrows and hit direction on the frame.</title>
+<defs>
+  <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" stroke-width="1.5" opacity="0.5"/></pattern>
+</defs>
+<g font-size="13">
+  <!-- window -->
+  <rect x="20" y="20" width="920" height="518" rx="8" class="d-box"/>
+  <text x="480" y="300" text-anchor="middle" class="d-text-3" font-size="16">3D scene (full window, no sidebar)</text>
+
+  <!-- top-left: safe mode -->
+  <rect x="36" y="34" width="118" height="30" rx="5" class="d-box-soft"/>
+  <text x="95" y="54" text-anchor="middle" class="d-text">[shield] SAFE</text>
+  <text x="36" y="82" class="d-text-3">icon + word, always</text>
+
+  <!-- top-centre: compass tape -->
+  <rect x="300" y="34" width="360" height="30" rx="5" class="d-box-soft"/>
+  <text x="480" y="54" text-anchor="middle" class="d-text">W  .  .  N  .  .  E     wind >   (sun)   12:40</text>
+  <text x="480" y="82" text-anchor="middle" class="d-text-3">compass tape: cardinal points, sun/moon, wind, mission target, notes; clock only with a watch</text>
+  <polygon points="430,66 436,76 424,76" class="d-s4"/>
+  <text x="442" y="76" class="d-text-3">mission</text>
+
+  <!-- top-right: minimap -->
+  <rect x="820" y="34" width="104" height="90" rx="5" class="d-box-soft"/>
+  <text x="872" y="84" text-anchor="middle" class="d-text">minimap</text>
+  <text x="872" y="100" text-anchor="middle" class="d-text-3">one map, optional</text>
+
+  <!-- edge arrow / hit direction -->
+  <polygon points="936,250 922,240 922,260" class="d-critical"/>
+  <text x="914" y="256" text-anchor="end" class="d-text-3">edge arrow: class glyph + colour</text>
+  <rect x="22" y="200" width="6" height="120" class="d-critical" opacity="0.55"/>
+  <polygon points="30,250 44,240 44,260" class="d-critical"/>
+  <text x="50" y="256" class="d-text-3">hit direction: chevron + glow</text>
+
+  <!-- place notice -->
+  <rect x="610" y="360" width="190" height="28" rx="5" class="d-box-soft"/>
+  <text x="705" y="379" text-anchor="middle" class="d-text">Entering: Evac shelter</text>
+
+  <!-- badge row -->
+  <g>
+    <rect x="36" y="360" width="86" height="26" rx="13" class="d-box-soft"/><text x="79" y="378" text-anchor="middle" class="d-text">Cold &#9660;</text>
+    <rect x="130" y="360" width="80" height="26" rx="13" class="d-box-soft"/><text x="170" y="378" text-anchor="middle" class="d-text">Tired</text>
+    <rect x="218" y="360" width="86" height="26" rx="13" class="d-box-soft"/><text x="261" y="378" text-anchor="middle" class="d-text">Pain &#9650;</text>
+    <text x="36" y="404" class="d-text-3">badges: icon + word + trend, only when abnormal, fixed order</text>
+  </g>
+
+  <!-- vitals strip -->
+  <rect x="36" y="420" width="54" height="70" rx="5" class="d-box-soft"/>
+  <!-- body figure: head, torso, arms, legs -->
+  <circle cx="63" cy="432" r="6" class="d-good"/>
+  <rect x="55" y="440" width="16" height="22" rx="3" class="d-warn"/>
+  <rect x="45" y="441" width="7" height="20" rx="3" class="d-hatch" style="color: var(--critical)"/>
+  <rect x="74" y="441" width="7" height="20" rx="3" class="d-good"/>
+  <rect x="55" y="464" width="7" height="22" rx="3" class="d-good"/>
+  <rect x="64" y="464" width="7" height="22" rx="3" class="d-good"/>
+  <text x="100" y="436" class="d-text">HP 62 %</text>
+  <rect x="100" y="446" width="140" height="8" rx="4" class="d-box-soft"/>
+  <rect x="100" y="446" width="98" height="8" rx="4" class="d-s1"/>
+  <text x="248" y="454" class="d-text-2">Stamina</text>
+  <text x="100" y="478" class="d-text">[walk] Walk</text>
+  <text x="36" y="508" class="d-text-3">vitals: body figure (fill = HP, hatch = broken), stamina when relevant, move mode</text>
+
+  <!-- ticker -->
+  <text x="330" y="436" class="d-text-2">&gt; You hear a gunshot to the north, far away.</text>
+  <text x="330" y="454" class="d-text-2">&gt; The zombie bites your left arm!</text>
+  <text x="330" y="472" class="d-text-2">&gt; You feel cold.</text>
+  <text x="330" y="492" class="d-text-3">message ticker: three lines, full log in Journal</text>
+
+  <!-- hotbar -->
+  <g>
+    <rect x="36" y="514" width="110" height="20" rx="4" class="d-box-soft"/><text x="91" y="528" text-anchor="middle" class="d-text" font-size="11">1 pistol 7/15</text>
+    <rect x="150" y="514" width="90" height="20" rx="4" class="d-box-soft"/><text x="195" y="528" text-anchor="middle" class="d-text" font-size="11">2 bandage x3</text>
+    <rect x="244" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="264" y="528" text-anchor="middle" class="d-text-3" font-size="11">3</text>
+    <rect x="288" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="308" y="528" text-anchor="middle" class="d-text-3" font-size="11">4</text>
+    <rect x="332" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="352" y="528" text-anchor="middle" class="d-text-3" font-size="11">5</text>
+    <rect x="376" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="396" y="528" text-anchor="middle" class="d-text-3" font-size="11">6</text>
+    <rect x="420" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="440" y="528" text-anchor="middle" class="d-text-3" font-size="11">7</text>
+    <rect x="464" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="484" y="528" text-anchor="middle" class="d-text-3" font-size="11">8</text>
+  </g>
+
+  <!-- prompt -->
+  <rect x="760" y="500" width="164" height="30" rx="5" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="842" y="520" text-anchor="middle" class="d-text" font-weight="600">[E] Open door</text>
+  <text x="924" y="492" text-anchor="end" class="d-text-3">interaction prompt: one verb, hold for more</text>
+</g>
+</svg>
+<figcaption></figcaption></figure>
+<pre><code>+------------------------------------------------------------------------------+
+| [shield] SAFE        W . . N . . E        wind&gt;  (sun)          +---------+   |
+|                        ^mission  ^note                          | minimap |   |
+|                                                                 |  12:40  |   |
+|                                                                 +---------+   |
+|                                                                               |
+|                                  (3D scene)                  hostile &gt; [edge] |
+|                                                                               |
+|   [cold] Cold v    [bed] Tired    [bolt] Pain ^           Entering: Evac shelter
+|                                                                               |
+|  +------+                                                                     |
+|  | body | HP 62 %         &gt; You hear a gunshot to the north, far away.        |
+|  +------+ Stamina ||||||||..                                                  |
+|  [walk] Walk               &gt; The zombie bites your left arm!                  |
+|                            &gt; You feel cold.                                   |
+|  [1 pistol 7/15] [2 bandage x3] [3] [4] [5] [6] [7] [8]       [E] Open door   |
++------------------------------------------------------------------------------+</code></pre>
+<ul>
+<li>Compass tape top-centre (shipped), clock at its right end only when a watch is carried.
+</li>
+<li>Edge arrows (shipped) get a chevron shape with a one-letter class glyph (Z zombie, A animal, H human, ? unknown, ♪ sound) so hostile vs sound is not colour-only.
+</li>
+<li>Badge row above the vitals: icon + word + trend. Order is fixed (needs, then effects, then stats) so a returning glance finds things in the same place.
+</li>
+<li>Vitals strip bottom-left: body figure (six segments), stamina bar, move mode. Rows for power and mana appear below when applicable; the vehicle cluster replaces stamina while driving.
+</li>
+<li>Message ticker: three lines, left-aligned above the hotbar; combat text in-world stays.
+</li>
+<li>Hotbar: eight slots; slot 1 is always the wielded item (name, ammo). Slots are items or actions.
+</li>
+<li>Interaction prompt bottom-right: glyph + verb + target name.
+</li>
+<li>Hit direction: edge chevron plus glow (shipped glow; chevron added for colour-blind use).
+</li>
+<li>All HUD text is drawn by the new text layer at UI scale, not the map font.
+</li></ul>
+<p>Menu items: 0. Options involved: HUD mode, Minimap, UI scale.</p>
+<h3 id="4-2-interaction-prompt-and-secondary-verbs">4.2 Interaction prompt and secondary verbs</h3>
+<p>Replaces: examine (<code>e</code>), open/close (<code>o</code>/<code>c</code>), smash (<code>s</code>), pick up (<code>g</code>, single tile), talk (<code>C</code>), board/alight, use furniture, drive, and the examine item menu.</p>
+<p>Target selection: in first person the crosshair tile; in orbit the tile in the facing direction, or the tile under the mouse when the pointer is over the scene, or the adjacent tile chosen by holding the interact key and pressing a direction.</p>
+<pre><code>[E] Open door                      (primary verb: one press)
+[hold E] ⌄ Close | Lock | Examine  (secondary verbs: hold to reveal, release on one)</code></pre>
+<p>Rules: one primary verb computed by priority (talk &gt; drive/board &gt; open/close &gt; pick up (single item) &gt; loot (several items, opens Inventory in loot mode) &gt; examine). Up to five secondary verbs in a hold list; more than that is a design error. Smash is a secondary verb on terrain and furniture. The prompt always shows the target's name and, for creatures, their one-word attitude (hostile / neutral / friendly) with an icon.</p>
+<p>Gamepad: <code>A</code> primary, hold <code>A</code> for the list, stick to pick, release to run. Keyboard: <code>E</code> and hold <code>E</code>. Mouse: left click = primary, right click = the list as a context menu at the pointer. Hold-vs-toggle: "Confirmation holds" and the global Hold/Toggle apply.</p>
+<h3 id="4-3-action-wheel-and-quick-slot-wheel-hotbar">4.3 Action wheel and quick-slot wheel (hotbar)</h3>
+<p>Two radial menus of eight. Hold to open, direction to pick, release to run. Keyboard: hold <code>Tab</code> (actions), hold <code>Q</code> (quick slots), or press <code>1</code>-<code>8</code> directly for quick slots. Mouse: hover a slice. Gamepad: hold <code>LB</code> (actions), hold <code>RB</code> (quick slots); D-pad left/right cycles the hotbar without the wheel.</p>
+<p>Action wheel, fixed order: Inventory, Craft, Build, Character, Map, Journal, Wait/rest, Look. These are also the eight screen keys (<code>i</code>, <code>&amp;</code>, <code>*</code>, <code>@</code>, <code>m</code>, <code>j</code>, <code>|</code>, <code>x</code>). The wheel exists so a gamepad reaches every screen in one gesture and so the keys are discoverable.</p>
+<p>Quick slots: items (wield, wear, eat, use, read) or actions (fire, reload, throw, sleep, toggle light). Binding: in Inventory, "Assign to slot" on the item card; in the Controls editor for actions. Slots never reorder themselves (BG3 complaint).</p>
+<h3 id="4-4-inventory-one-screen-four-modes">4.4 Inventory (one screen, four modes)</h3>
+<p>Replaces 15 screens (table 2.1). Modes differ only in which panes are shown and which verb is the default:</p>
+<ul>
+<li><strong>Manage</strong> (<code>i</code>): Nearby | Worn and wielded | Pack. Default verb: use.
+</li>
+<li><strong>Loot</strong> (from the prompt or <code>g</code>): Nearby (the looked-at tiles, expandable to 3x3) | Pack. Default verb: take.
+</li>
+<li><strong>Trade</strong> (from Dialogue): Their goods | Your goods, with a balance row.
+</li>
+<li><strong>Pick</strong> (any "choose an item" request: wear, wield, read, reload ammo, eat, gun mod, drop, unload, salvage, component choice): a single filtered pane with the requested verb as default; <code>Esc</code> cancels. This is the <code>game_menus::inv::*</code> family rendered by the same screen.
+</li></ul>
+<pre><code>+-- Inventory ------------------------------------------- 23.4 / 40 kg   18 / 36 L --+
+| [All] [Weapons] [Clothing] [Food] [Tools] [Other]      search [        ]  sort: Name v |
+|-------------------------------------+------------------------------------------------|
+| NEARBY  (3 tiles)                   | Survivor jacket                     worn: torso |
+|  &gt; wooden plank x4           2.4 kg | Warmth 20   Coverage 90 %   Encumbrance 12      |
+|    rock x2                   1.0 kg | vs hoodie (worn):  Warmth +12 ^  Encumb +4 ^    |
+|    first aid kit             0.5 kg |                                                 |
+| WORN / WIELDED                      | Sturdy. Keeps rain out. Pockets: 2.              |
+|  wielded  pipe wrench        1.1 kg |                                                 |
+|  torso    survivor jacket    1.8 kg | [E] Use  [W] Wear  [D] Drop  [T] Take           |
+|  legs     jeans              0.6 kg | [A] Assign slot  [I] Full info  [C] Compare     |
+| PACK                                |                                                 |
+|  water bottle (2)            1.0 kg |                                                 |
+|  can of beans                0.4 kg |                                                 |
+|-------------------------------------+------------------------------------------------|
+| Tab pane  Enter move  Space mark  Ctrl+A all  Esc close            Marked: 2 (3.4 kg) |
++---------------------------------------------------------------------------------------+</code></pre>
+<ul>
+<li>Left pane: three sections in one scroll (not three panes), so Tab cycles sections and the list never loses position (P9). Section headers show weight/volume totals (StarUI).
+</li>
+<li>Column sort by header click or <code>S</code>; secondary key is name; the active key is shown.
+</li>
+<li>Category tabs across the top; <code>LB/RB</code> or <code>[</code>/<code>]</code> switch; search filters all sections and looks inside containers (BN #7280). The search box has no prefix syntax (CDDA #26311); instead, three toggle chips: "can use", "needed for pinned recipe", "junk".
+</li>
+<li>Item card right: 6-line summary, comparison against the worn item for the same body part when <code>C</code> is held (toggle on gamepad), deltas as signed numbers with ▲▼ glyphs, full info on <code>I</code> (scrollable page). The card updates synchronously with focus; no hover delay.
+</li>
+<li>Move: <code>Enter</code> moves the focused or marked items to the other section (Nearby ⇄ Pack); for Worn, <code>Enter</code> is wear/take off. Drag-and-drop works with the mouse but is never required.
+</li>
+<li>Worn order (armour layers) is edited by <code>Shift+Up/Down</code> in the Worn section; the separate sort-armour screen is gone.
+</li>
+<li>Reload: "Pick" mode lists compatible ammo with a "best" row first.
+</li></ul>
+<p>Menu count: 6 tabs, 8 verbs, 12 bound actions in the <code>inventory</code> context.</p>
+<h3 id="4-5-craft">4.5 Craft</h3>
+<pre><code>+-- Craft --------------------------------------------------------------------------+
+| [Can craft] [Missing one] [All known] [Favourites]     search [       ]   Tools near: 4 |
+| [Food] [Tools] [Weapons] [Armour] [Chemistry] [Other]                                   |
+|-----------------------------------+------------------------------------------------------|
+| &gt; Makeshift knife           2 min | Makeshift knife                      skill: fabric. 1 |
+|   Wooden spear              5 min | Needs: 1 scrap metal (have 3), 1 rag or duct tape (2) |
+|   Bandage x3               10 min |        tool: hammer or rock (hammer nearby)           |
+|   Water, clean              8 min | Result: 1 makeshift knife.  Batch of 3: 5 min.        |
+|   ...                             |                                                       |
+|                                   | [Enter] Craft 1  [B] Batch...  [P] Pin  [F] Favourite |
+|                                   | [I] Item info  [R] Who can teach / book               |
+|-----------------------------------+------------------------------------------------------|
+| 42 recipes shown, 310 known, 6 unknown in this category (needs: Fabrication 3 or a book)  |
++------------------------------------------------------------------------------------------+</code></pre>
+<ul>
+<li>Four filters, six category tabs, no subcategory tabs (search replaces them).
+</li>
+<li>Component alternatives render as one row with the chosen alternative and <code>Left/Right</code> to cycle (Vintage Story).
+</li>
+<li>"Pin" puts the recipe's shortfall on the HUD badge row and tags matching items "needed" in inventory and loot views.
+</li>
+<li>Unknown recipes are counted, never named (Satisfactory thread); the count's hint says how to learn them (skill level or book type).
+</li>
+<li>Crafting from nearby containers is existing BN behaviour; the header states the radius ("Tools near: 4").
+</li></ul>
+<p>Menu count: 4 filters, 6 tabs, 6 verbs.</p>
+<h3 id="4-6-build-construct-zones">4.6 Build (Construct + Zones)</h3>
+<p>Construct tab mirrors Craft (filters: Can build / Missing one / All; six categories; search; detail card with stages and materials). Differences: choosing a construction enters placement mode over the scene; the menu stays open (Subnautica 2 rule); <code>E</code> places, <code>R</code> rotates where applicable, <code>Esc</code> returns to the list. "Copy this" (<code>C</code> in cursor mode on existing furniture/terrain) selects the matching construction (Satisfactory F+middle-click). The list remembers its tab and selection (BN #8299, #8154).</p>
+<p>Zones tab: a list of zones for the current area with type, name, size; verbs: Add (draw a rectangle in cursor mode), Edit, Move, Enable/disable, Delete, Show on map. Replaces the zones manager screen.</p>
+<p>Menu count: 6 tabs, 4 verbs (Construct); 6 verbs (Zones).</p>
+<h3 id="4-7-cursor-mode-look-target-list">4.7 Cursor mode (look, target, list)</h3>
+<p><code>x</code> (look), <code>f</code> (fire), <code>t</code> (throw) and the "list items/monsters" screens become one mode: a cursor on the scene with a side card. The card describes the tile under the cursor (terrain, furniture, items, creature with attitude, remembered vs seen), and has filter chips "Items" "Creatures" "Terrain" that turn the card into a sorted list of visible things; selecting a row jumps the cursor. Verbs: Fire/Throw (when entered from <code>f</code>/<code>t</code>, with the aim confidence shown as a bar with a word), Travel to, Note, Copy construction, Peek. The narrator reads the card on every cursor move (section 7.3).</p>
+<p>Menu count: 3 chips, 6 verbs.</p>
+<h3 id="4-8-vehicle">4.8 Vehicle</h3>
+<p>Opened by interacting with a vehicle part. Replaces <code>veh_interact</code> (3270 lines, 24 bound actions) with a screen of three areas: a top-down part grid (reuses <code>vehicle_preview</code>), a part card (state, fuel, controls), and verbs: Install, Repair, Remove, Refill/Siphon, Rename, Change tyre, Assign crew/animal; "Examine contents" opens Inventory in loot mode. Driving controls (lights, cruise, horn, engine) live on the HUD vehicle cluster and the action wheel while seated, not in this screen.</p>
+<p>Menu count: 8 verbs. This is the hardest screen and is last in the plan.</p>
+<h3 id="4-9-character">4.9 Character</h3>
+<pre><code>+-- Character: Sam Reyes ------------------ [Status] [Skills] [Traits] [Bionics] [Spells] --+
+|  +--------+  Head      100 %        Hunger   Normal        Mood   -12  Miserable          |
+|  |  body  |  Torso      62 % bitten Thirst   Thirsty v      - Cold (-8)                   |
+|  | figure |  L arm      40 % broken Fatigue  Tired v        - Saw a friend die (-10)      |
+|  |        |  R arm      90 %        Pain     Moderate ^     + Fine meal (+6)              |
+|  +--------+  L leg      85 %        Temp     Cold (torso)                                 |
+|              R leg      85 %        Weight   23.4/40 kg                                   |
+|  STR 10  DEX 9 (-1 pain)  INT 11  PER 8        Speed 92 (-8 pain)   Moves 100            |
+|  Effects: Bleeding (left arm, 4 min), Cold, Infected (torso, severe)                      |
+|  Armour (focus a limb): Torso bash 6 cut 8 ballistic 2   Encumbrance 12                   |
++-------------------------------------------------------------------------------------------+</code></pre>
+<p>Tabs: Status (as above, including the morale reasons list and effects with durations), Skills (level, progress, rust, style), Traits (mutations and perks, with the perk picker's verbs), Bionics (activate / deactivate / reassign slot), Spells (cast, assign slot; only when present). Replaces six screens. Every number the HUD summarises is here in full.</p>
+<p>Menu count: 5 tabs; verbs only on Bionics/Spells (3 each).</p>
+<h3 id="4-10-map">4.10 Map</h3>
+<p>The overmap with three layers toggled by chips: Notes, Missions, Zones (local zones when zoomed to the current overmap tile). Verbs: Travel here, Add note, Edit/delete note, Set as destination, Centre on me, Filter notes (search), Delete notes in view (with count), Zoom. The notes manager list is the Journal &gt; Notes tab, not a map sub-screen. Missions are listed in the Journal; the map shows the active target. Replaces overmap, notes manager and the zone overlay.</p>
+<p>Menu count: 3 layers, 8 verbs.</p>
+<h3 id="4-11-journal">4.11 Journal</h3>
+<p>Tabs: <strong>Log</strong> (the full message log, filter chips: Combat, Needs, Danger, Info, Speech; search), <strong>Missions</strong> (active / completed, each with its target and "show on map"), <strong>Lessons</strong> (the guided-onboarding checklist; re-readable), <strong>Notes</strong> (diary entries and overmap notes in one list, add/edit), <strong>Records</strong> (kills, scores, achievements, play time). Replaces messages, missions, diary, scores, kill list and the onboarding checklist popup.</p>
+<p>Menu count: 5 tabs, 4 verbs.</p>
+<h3 id="4-12-dialogue-and-trade">4.12 Dialogue and trade</h3>
+<p>Dialogue keeps its shape: the NPC's line, then a numbered list of responses (data list, not a menu). Added: the NPC's attitude word and icon in the header, a "repeat last line" key for the narrator, and consistent <code>menu</code> navigation. Trade opens Inventory in Trade mode. The dozen NPC-management actions that today live in dialogue (follow, guard, rules, equipment) stay as dialogue responses; "Manage equipment" opens Inventory with the NPC's panes (BN #3525 asked for this to be one place).</p>
+<h3 id="4-13-settings-and-controls">4.13 Settings and Controls</h3>
+<p>Settings: six tabs (2.3), 39 options, each a single row with its value and a one-line description under the focused row. Accessibility is the fifth tab and is also reachable from the main menu and the pause menu directly ("Accessibility" entry) so it is found before any other setting is needed.</p>
+<p>Controls editor: one searchable list of every action, grouped by context, three columns (Keyboard, Mouse, Gamepad). <code>Enter</code> on a column captures the next input (keys with modifiers, mouse buttons including middle, gamepad buttons with an optional held <code>LT</code> modifier); conflicts within the context and its parents are shown inline with a one-key "swap" fix. Per-action "hold / toggle" and "assign to quick slot" live in the row. Presets: Vi, WASD, Numpad, Arrows, Left-handed, One-handed (section 7.9). The same list, filtered to runnable actions, is the <strong>command palette</strong> (<code>Ctrl+Space</code> / <code>Start+Y</code>): type a verb, run it.</p>
+<h3 id="4-14-main-menu-new-game-pause">4.14 Main menu, new game, pause</h3>
+<p>Main menu (5): Continue, New game, Load, Settings, Quit (Credits is under Settings &gt; Game as a row "About and credits": the 40th item is a link, not an option). The MOTD becomes a line under the title.</p>
+<p>New game: one screen, five steps down the left (World, Scenario, Profession, Character, Skills and traits), detail on the right, points in the header, "Quick start" (random of everything valid) and "Guided play" buttons at the top. The World step shows name, seed, mods (opens the mod list as a Pick list), and 8 world options (city size, spawn density, NPC density, season length, monster evolution, vehicle spawn rate, item spawn rate, starting season); the other 39 world options are file-edited (<code>worldoptions.json</code>, documented). Character creation today is 4799 lines over nine tabs; the "Skills and traits" step merges Stats, Traits, Skills, Bionics into one scrolling form with the points shown per group.</p>
+<p>Pause (<code>Esc</code>, 5): Resume, Save, Settings, Reference, Quit to menu.</p>
+<h3 id="4-15-reference">4.15 Reference ('?')</h3>
+<p>One searchable screen: Actions (every action with its binding, runnable), Lessons, Items and recipes (the in-game handbook: item pages with "used in" and "made from"), Game concepts (the existing help texts). Replaces help, keybinding help, action menu and the onboarding checklist popup. The F2 "explain this screen" lesson stays and opens here.</p>
+<h2 id="5-input-model">5. Input model</h2>
+<h3 id="5-1-actions-and-contexts">5.1 Actions and contexts</h3>
+<p>The unit stays the action id (<code>data/raw/keybindings/*.json</code>). Contexts become twelve (section 2.4) and nest: <code>global</code> &lt; <code>play</code> | <code>menu</code> | <code>cursor</code> | <code>text</code>; <code>inventory</code>, <code>craft</code>, <code>build</code>, <code>map</code>, <code>vehicle</code>, <code>dialogue</code> extend <code>menu</code>; <code>debug</code> extends <code>global</code>. A screen registers only its own verbs; navigation comes from <code>menu</code>. This fixes "rebinding movement breaks menus" (CDDA #45927): menus do not use movement actions.</p>
+<p>The <code>menu</code> context: up, down, left, right, confirm, back, next tab, prev tab, page up, page down, home, end, search, info, help, mark, mark all, sort, secondary (context menu). 18 actions, bound once.</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-labelledby="t-ctx">
+<title id="t-ctx">Input contexts after the redesign: twelve contexts in a parent chain, with the shared menu context supplying navigation to every screen, instead of 61 contexts each with its own keys.</title>
+<g font-size="13">
+  <rect x="400" y="20" width="160" height="40" rx="6" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="480" y="38" text-anchor="middle" class="d-text" font-weight="600">global</text>
+  <text x="480" y="53" text-anchor="middle" class="d-text-3">pause, status report, palette</text>
+
+  <g class="d-line">
+    <path d="M480,60 V80"/>
+    <path d="M120,80 H840"/>
+    <path d="M120,80 V100"/><path d="M300,80 V100"/><path d="M480,80 V100"/><path d="M660,80 V100"/><path d="M840,80 V100"/>
+  </g>
+
+  <rect x="50" y="100" width="140" height="40" rx="6" class="d-box"/>
+  <text x="120" y="118" text-anchor="middle" class="d-text" font-weight="600">play</text>
+  <text x="120" y="133" text-anchor="middle" class="d-text-3">32 keyboard / 14 pad defaults</text>
+
+  <rect x="230" y="100" width="140" height="40" rx="6" class="d-box"/>
+  <text x="300" y="118" text-anchor="middle" class="d-text" font-weight="600">cursor</text>
+  <text x="300" y="133" text-anchor="middle" class="d-text-3">look, target, throw, list</text>
+
+  <rect x="410" y="100" width="140" height="40" rx="6" class="d-box d-stroke-s2" stroke-width="2"/>
+  <text x="480" y="118" text-anchor="middle" class="d-text" font-weight="600">menu</text>
+  <text x="480" y="133" text-anchor="middle" class="d-text-3">18 navigation actions, bound once</text>
+
+  <rect x="590" y="100" width="140" height="40" rx="6" class="d-box"/>
+  <text x="660" y="118" text-anchor="middle" class="d-text" font-weight="600">text</text>
+  <text x="660" y="133" text-anchor="middle" class="d-text-3">entry fields, on-screen keyboard</text>
+
+  <rect x="770" y="100" width="140" height="40" rx="6" class="d-box"/>
+  <text x="840" y="118" text-anchor="middle" class="d-text" font-weight="600">debug</text>
+  <text x="840" y="133" text-anchor="middle" class="d-text-3">debug menu, Lua console</text>
+
+  <g class="d-line">
+    <path d="M480,140 V165"/>
+    <path d="M110,165 H850"/>
+    <path d="M110,165 V185"/><path d="M258,165 V185"/><path d="M406,165 V185"/><path d="M554,165 V185"/><path d="M702,165 V185"/><path d="M850,165 V185"/>
+  </g>
+  <g>
+    <rect x="50" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="110" y="208" text-anchor="middle" class="d-text">inventory</text>
+    <rect x="198" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="258" y="208" text-anchor="middle" class="d-text">craft</text>
+    <rect x="346" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="406" y="208" text-anchor="middle" class="d-text">build</text>
+    <rect x="494" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="554" y="208" text-anchor="middle" class="d-text">map</text>
+    <rect x="642" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="702" y="208" text-anchor="middle" class="d-text">vehicle</text>
+    <rect x="790" y="185" width="120" height="36" rx="6" class="d-box-soft"/><text x="850" y="208" text-anchor="middle" class="d-text">dialogue</text>
+  </g>
+  <text x="480" y="250" text-anchor="middle" class="d-text-2">Screen contexts register only their own verbs; navigation is inherited from menu.</text>
+  <text x="480" y="270" text-anchor="middle" class="d-text-3">Before: 585 actions in 61 contexts (DEFAULTMODE 132, ADVANCED_INVENTORY 36, VEH_INTERACT 24, ...), per-screen navigation keys, conflicts checked within one context only.</text>
+</g>
+</svg>
+<figcaption></figcaption></figure>
+<h3 id="5-2-devices">5.2 Devices</h3>
+<ul>
+<li><strong>Keyboard:</strong> key + modifiers (Ctrl, Shift, Alt) captured as a unit. Today modifiers are not capturable in the editor (research m, A). Movement presets set the eight directions, wait, and stairs.
+</li>
+<li><strong>Mouse:</strong> left, right, middle, wheel, with modifiers; movement by click-to-travel on the scene (existing auto-travel); right-click context menu = the hold-list of the prompt; middle drag stays the camera (shipped). Every list row and button is hit-tested.
+</li>
+<li><strong>Gamepad:</strong> replace <code>SDL_Joystick</code> (hat-only, buttons sent as keyboard events, no sticks: <code>src/sdltiles.cpp:1871-1935</code>, <code>3499-3503</code>) with <code>SDL_Gamepad</code>: hot-plug, named buttons, sticks with dead zones, rumble, <code>SDL_GetGamepadButtonLabel</code> for glyphs (available in the system SDL 3.4.18 header). One optional modifier: hold <code>LT</code>. Default layout:
+</li></ul>
+<table><thead><tr><th>Input</th><th>Play</th><th>Menu</th></tr></thead><tbody><tr><td>Left stick / D-pad</td><td>move (8-way; D-pad 4-way + LT for diagonals)</td><td>navigate</td></tr><tr><td>Right stick</td><td>camera (orbit) / look (first person)</td><td>scroll detail card</td></tr><tr><td>A</td><td>interact (hold: verb list)</td><td>confirm</td></tr><tr><td>B</td><td>cancel / back / stop activity</td><td>back</td></tr><tr><td>X</td><td>use quick slot (current)</td><td>secondary verb / context menu</td></tr><tr><td>Y</td><td>inventory</td><td>info</td></tr><tr><td>LB hold</td><td>action wheel</td><td>prev tab</td></tr><tr><td>RB hold</td><td>quick-slot wheel</td><td>next tab</td></tr><tr><td>LT</td><td>modifier (diagonals, hold-list) / aim mode (hold or toggle)</td><td>page up</td></tr><tr><td>RT</td><td>fire / attack confirm</td><td>page down</td></tr><tr><td>D-pad L/R (play)</td><td>cycle hotbar</td><td></td></tr><tr><td>D-pad Up / Down (play)</td><td>wait one turn / crouch toggle</td><td></td></tr><tr><td>Start</td><td>pause</td><td></td></tr><tr><td>Back/View</td><td>map</td><td>search</td></tr><tr><td>LS click / RS click</td><td>zoom / toggle first person</td><td>home / end</td></tr></tbody></table>
+<p>14 play actions, all content reachable (Steam Deck rule 8). Text entry opens the on-screen keyboard (<code>SDL_StartTextInput</code> reaches the Deck keyboard; a built-in grid keyboard for other pads).</p>
+<h3 id="5-3-keyboard-defaults-play-context-32">5.3 Keyboard defaults (play context, 32)</h3>
+<p>Move x8 (preset), wait, stairs up/down, interact <code>E</code>, inventory <code>i</code>, craft <code>&amp;</code>, build <code>*</code>, character <code>@</code>, map <code>m</code>, journal <code>j</code>, look <code>x</code>, fire <code>f</code>, throw <code>t</code>, reload <code>r</code>, action wheel hold <code>Tab</code>, quick-slot wheel hold <code>Q</code>, quick slots <code>1</code>-<code>8</code> (one action with an index), run toggle <code>Shift</code>/<code>&quot;</code>, crouch, sleep <code>$</code>, safe mode <code>!</code>, status report <code>F4</code>, lessons <code>F1</code>, explain screen <code>F2</code>, reference <code>?</code>, command palette <code>Ctrl+Space</code>, pause <code>Esc</code>, zoom <code>z</code>/<code>Z</code>, first person <code>Ctrl+F</code>, turn toward threat <code>Ctrl+G</code>. Every other action keeps its id and can be bound; most legacy keys stay bound by default in a "Legacy" binding group that the player can turn off in one row of the Controls tab (so veterans lose nothing on day one and new players see a short list in the Reference).</p>
+<h3 id="5-4-hold-vs-toggle">5.4 Hold vs toggle</h3>
+<p>Holdable actions: run, crouch, aim mode, action wheel, quick-slot wheel, interact hold-list, camera glance, map pan. Each has a per-action setting (Hold / Toggle / Default) in the Controls editor; the global default is in Accessibility. Confirmation holds (long-press to confirm destructive verbs) can be "press twice" instead.</p>
+<h2 id="6-options-architecture-in-game-versus-file">6. Options architecture: in-game versus file</h2>
+<p>Rule for placing an option: it stays in-game if (a) a player changes it in a normal session (language, volume, scale, HUD mode, controls, accessibility), or (b) it is an accessibility need. Everything else is in the advanced file. Options that are "tuning" of a feature the player already turned on (particle density, fade times, minimap pixel ratio, FOV tween) are file-only. Debug and developer options are file-only. Duplicate signals are merged (five unit options to one; nine minimap options to one toggle; three autosave options to one).</p>
+<p>The advanced file is specified in section 9.</p>
+<h2 id="7-accessibility">7. Accessibility</h2>
+<p>All items are in the Accessibility tab (11 options) plus the Controls editor. Presets set several of them at once and are documented as such; a preset is never the only way to reach an option.</p>
+<h3 id="7-1-remapping">7.1 Remapping</h3>
+<p>Every action, every device, in one editor (4.13). Modifiers and middle mouse capturable. Conflicts shown and fixable inline. Presets include Left-handed (mirrored movement and verbs) and One-handed (7.9). Mods that add actions appear in the same list. Bindings are stored per device so a keyboard rebind never touches the gamepad.</p>
+<h3 id="7-2-colour-vision-and-non-colour-redundancy">7.2 Colour vision and non-colour redundancy</h3>
+<p>Rules first: every state carries (1) an icon shape or glyph, (2) a word, (3) a colour. Lists that use colour for rarity/condition also show the word. Deltas show sign and arrow. Hostile vs neutral vs friendly creatures show an icon on the prompt and on edge arrows.</p>
+<p>Palettes: UI semantic tokens use the Okabe-Ito set, designed to stay distinct under deutan, protan and tritan vision (hex from a secondary source; verify against jfly.uni-koeln.de before shipping; see research g):</p>
+<table><thead><tr><th>Token</th><th>Use</th><th>Normal</th><th>Note</th></tr></thead><tbody><tr><td><code>danger</code></td><td>hostile, damage, broken limb, critical need</td><td>#D55E00 vermillion</td><td>not pure red</td></tr><tr><td><code>warn</code></td><td>abnormal need, low stamina, warning</td><td>#E69F00 orange</td><td></td></tr><tr><td><code>good</code></td><td>healthy, improving, can craft</td><td>#009E73 bluish green</td><td></td></tr><tr><td><code>info</code></td><td>neutral facts, sound markers, notes</td><td>#56B4E9 sky blue</td><td></td></tr><tr><td><code>accent</code></td><td>focus ring, selected tab, mission target</td><td>#F0E442 yellow</td><td>focus ring also has a 2 px dark outline</td></tr><tr><td><code>special</code></td><td>magic, bionic power</td><td>#CC79A7 reddish purple</td><td></td></tr><tr><td><code>muted</code></td><td>remembered/unseen, disabled</td><td>#999999</td><td></td></tr></tbody></table>
+<p>Colour vision modes (Deuteranopia / Protanopia / Tritanopia) remap the game's 16-entry terminal palette (<code>data/raw/colors.json</code> → <code>windowsPalette</code>, used by every curses-drawn glyph and by <code>cata_tiles.cpp:3406</code>) to a mode-specific table, and also remap the 3D palette tints (hostile outline, remembered sepia, hit glow). The table is data (<code>data/raw/ colors_&lt;mode&gt;.json</code>) and is validated in CI by simulating each mode (daltonlens or the Machado 2009 matrices) and asserting the pairwise colour distance of the semantic tokens. "High contrast" is a fourth mode: UI on black with the token set at full saturation, and in the 3D scene hostiles, items and interactables tinted with tokens while the rest desaturates (TLOU2 style).</p>
+<p>Contrast: text ≥ 4.5:1 against its background, UI components ≥ 3:1 (WCAG 2.2 SC 1.4.3 and 1.4.11), checked by a Catch2 test over the theme tokens.</p>
+<h3 id="7-3-screen-reader-and-self-voicing">7.3 Screen reader and self-voicing</h3>
+<p>Architecture (detail in <code>04_architecture.md</code> §5): the widget tree carries, per node, a role, a name, a value, a state and an optional description. A <strong>narrator</strong> walks it:</p>
+<ul>
+<li>Screen open: speak title, then a one-line hint ("Inventory. 3 sections. Tab to switch.").
+</li>
+<li>Focus change: speak "name, value, state, position" ("Survivor jacket, worn on torso, 1.8 kilograms, 7 of 24"). Verbosity Low drops position and state.
+</li>
+<li>Value change on the focused control: speak the new value.
+</li>
+<li>HUD events (narration = Menus and log): new log lines, badge appear/disappear ("Cold"), "Entering: place", interrupt popups. Combat text is not spoken separately; the log line is.
+</li>
+<li>Cursor mode: speak the tile card on every move ("Door, closed. Zombie, hostile, 3 tiles north-east."). This is the blind-navigation path for the map.
+</li>
+<li>Keys: F4 speaks the status report (already text); <code>Ctrl+R</code> repeats the last utterance; <code>Ctrl+Up/Down</code> reads the previous/next line of the current card without moving focus.
+</li>
+<li>Queue rules: focus and screen changes interrupt; log lines queue; a volume and rate slider.
+</li></ul>
+<p>Speech backends (research h): Windows: NVDA controller client (LGPL-2.1, dynamically loaded) when NVDA is running, else SAPI 5 via COM; Tolk is not used (its README says it is not being developed). macOS: <code>AVSpeechSynthesizer</code> through a small Objective-C++ file. Linux: <code>libspeechd</code> loaded with <code>dlopen</code> (present on this machine, 0.12.1; Flatpak/SteamOS access to the daemon is unverified). SDL3 has no speech API. This is self-voicing; it works with or without a screen reader. A second phase exposes the same tree through AccessKit's C API (Apache-2.0 or MIT; <code>accesskit-c</code> repository exists) so JAWS/NVDA/VoiceOver/Orca can navigate the UI natively; this is deferred until the self-voiced UI is complete, because the accessibility tree it needs is the same tree.</p>
+<p>Trade-off stated plainly: self-voicing gives blind players a playable game soonest and does not depend on the still-experimental AccessKit adapters, at the cost of a second speech stream when a screen reader is also running (mitigated: when NVDA/JAWS/Orca is detected the narrator routes through it instead of SAPI/speechd).</p>
+<h3 id="7-4-text-and-ui-scale">7.4 Text and UI scale</h3>
+<p>One slider, 75-200 % in 5 % steps, applied live (no restart) to every new-layer screen and the HUD. Floor is computed so the smallest glyph is ≥ 9 px at 1280x800 (Steam Deck rule), target 12 px. The map/tile zoom stays a separate in-play key. Fonts: default UI font plus "Readable font" (Atkinson Hyperlegible; dyslexia-specific fonts are not shipped, the evidence for them is weak; research i §8), CJK/emoji fallbacks via <code>TTF_AddFallbackFont</code>. Every screen reflows: cards wrap, lists scroll, nothing truncates (P4). Screenshot tests at 100 % and 200 %.</p>
+<h3 id="7-5-reduced-motion-and-flashing">7.5 Reduced motion and flashing</h3>
+<p>One switch: camera easing off, HUD fades replaced by instant show/hide, hit-direction pulse replaced by a static chevron for one turn, lightning flash removed (sky brightens without the frame flash), screen shake (if any) off, precipitation particle count halved. The game's baseline must already pass WCAG 2.3.1 (≤ 3 flashes per second); the lightning flash and the hit glow are the two effects to measure (research g §6).</p>
+<h3 id="7-6-audio-cues-as-text">7.6 Audio cues as text</h3>
+<p>"Sound cues as text" shows a subtitle line for every heard sound in the message ticker with direction and distance words ("You hear glass breaking, east, close"), speaks it when the narrator is on, and keeps the in-world sound markers (shipped). NPC speech is already text. Music and ambient cues carry no information in BN, so nothing else is needed.</p>
+<h3 id="7-7-cognitive-load">7.7 Cognitive load</h3>
+<p>HUD Minimal, Guided hints, the Reference's "explain this screen" (F2), consistent navigation, no timed popups, one verb per interaction, lessons re-readable in the Journal. "Confirmations: All" adds a confirm step to every irreversible verb.</p>
+<h3 id="7-8-hold-vs-toggle">7.8 Hold vs toggle</h3>
+<p>Section 5.4. Also: no action requires two simultaneous inputs; the <code>LT</code> gamepad modifier and keyboard modifiers can be set to "sticky" (press, then press the key) in the Controls tab (this is one row: Sticky modifiers Off/On, counted within the Controls editor, not the 39).</p>
+<h3 id="7-9-one-handed-and-switch-friendly-play">7.9 One-handed and switch-friendly play</h3>
+<ul>
+<li><strong>One-handed presets</strong> (left and right): movement on one hand's cluster, verbs on the same cluster, radials for everything else; nothing on the far side of the keyboard.
+</li>
+<li><strong>Mouse-only play</strong> is possible: click-to-travel, right-click verb list, hotbar and wheels clickable, every screen clickable, scroll wheel for lists. BN is turn-based, so speed is not an issue.
+</li>
+<li><strong>Single-switch scanning</strong> is not built in (it is a large, separate feature); instead the command palette guarantees every action is reachable by typing, which works with external switch-to-keyboard tools, and the Reference lists every action. Stated as a limitation.
+</li></ul>
+<h2 id="8-theming">8. Theming</h2>
+<p>Two shipped themes: Dark (default) and High contrast; the Modern menu border option is subsumed. Theme = a JSON token file (colours, spacing scale, corner radius, border width, font family) in <code>data/raw/ui/themes/</code>; the classic look is a third theme file (plain borders, no padding) so "make it look like before" is a theme choice, not an option. Colour vision modes layer over any theme.</p>
+<h2 id="9-the-advanced-config-file">9. The advanced config file</h2>
+<ul>
+<li><strong>File:</strong> <code>config/advanced.json</code> (next to the existing <code>config/options.json</code>).
+</li>
+<li><strong>Format:</strong> one flat JSON object. Keys are option ids in lower case; values are the typed value. A <code>&quot;//key&quot;</code> entry before each option carries its description and allowed values, so the file is self-documenting without a comment syntax:
+</li></ul>
+<pre><code>{
+  &quot;//message_ttl&quot;: &quot;Turns a message stays in the ticker. integer 1-1000. default 10&quot;,
+  &quot;message_ttl&quot;: 10,
+  &quot;//r3d_fp_tween_ms&quot;: &quot;First-person step easing, milliseconds. 0 disables. default 90&quot;,
+  &quot;r3d_fp_tween_ms&quot;: 90
+}</code></pre>
+<ul>
+<li><strong>Generation:</strong> on first run the game writes the file with every advanced option at its default and its description. <code>cataclysm-bn-tiles --dump-advanced-options</code> prints the same list as Markdown for <code>docs/en/user/advanced_options.md</code>, so the doc is generated, not maintained.
+</li>
+<li><strong>Reload:</strong> read at launch, when the Settings screen closes, and when returning to the main menu. Options marked "restart" in their description apply at the next launch; the Settings screen shows a one-line "advanced.json changed; N settings need a restart" notice.
+</li>
+<li><strong>Validation:</strong> unknown key → warning in the log, ignored; wrong type or out of range → default used, warning in the log; the file is never rewritten by the game after creation except by an explicit "Reset advanced settings" row under Settings &gt; Game (that row is the 40th item and is a verb, not an option).
+</li>
+<li><strong>Migration:</strong> existing <code>options.json</code> values for moved options are copied into <code>advanced.json</code> once, then ignored.
+</li></ul>
+<h2 id="10-cuts-and-merges-ui-only-no-rule-changes">10. Cuts and merges (UI only, no rule changes)</h2>
+<p>Merged: 15 item screens → Inventory; 6 character screens → Character; 8 world/log screens → Map + Journal + Cursor mode; 8 settings screens → Settings + Controls; 4 help screens → Reference; 4 sidebar layouts + panel manager + pixel minimap → HUD (3D only).</p>
+<p>Cut outright (UI): the action menu uilist (replaced by the wheel and the palette), the examine item menu (verbs are on the item card), <code>}</code> panel manager in 3D, the advanced inventory's 36-action context, per-screen navigation keys, the <code>LOOKAROUND_POSITION</code> / <code>PICKUP_POSITION</code> / <code>SIDEBAR_POSITION</code> options, the two minimaps in favour of one, the separate "list items" and "list monsters" screens, crafting search prefixes, construction subcategories, <code>MORALE_STYLE</code> and <code>HEALTH_STYLE</code> (one style), <code>ITEM_SYMBOLS</code> (always on in the new layer), the colour manager screen (replaced by theme files), the distraction manager (its toggles become Rules &gt; Safe mode rules rows).</p>
+<p>Kept on the legacy cell-drawn path until M11, unchanged: the debug menu, Lua console, computer terminals, loading screen, the in-game minigames, Defense mode screens (see below), and the classic 2D sidebar. (The terminal build itself is retired; these screens draw through the in-process cell canvas, <code>cursesport.cpp</code>, until they are ported or dropped.)</p>
+<h2 id="11-feature-cuts-last-resort">11. Feature cuts (last resort)</h2>
+<p>Each lists the alternatives rejected before proposing the cut. None is required for the design; they reduce the long tail of legacy screens.</p>
+<ol>
+<li><strong>Defense mode (and its Caravan shop).</strong> Two bespoke curses screens (<code>DEFENSE_SETUP</code>, <code>CARAVAN</code> contexts) for a game mode outside the survival loop. Rejected alternatives: port to the new layer (a full screen's cost for a mode with no evidence of use); keep on the legacy path (cheap, but it keeps the old uilist stack alive and inconsistent with principle 6). Recommendation: keep on the legacy path, mark "Legacy" in the mode list, and cut only when the legacy stack is retired.
+</li>
+<li><strong>Item minigames (Sokoban, Minesweeper, Lights on).</strong> Three keybinding contexts and three screens for console items. Rejected alternatives: port (cost for no gain); replace the items' use with a morale effect only (a rule change for a trivial feature). Recommendation: same as 1.
+</li>
+<li><strong>"Examine also picks up" (BN #9805).</strong> Not a feature cut: the interaction prompt makes examine and pick up distinct verbs on the same target, which answers the complaint without changing what the player can do.
+</li></ol>
+<p>No other game-rule cut is proposed. The brief's permission to cut was not needed for the design: the complexity players complain about is in the screens, not in the rules.</p>
+</main>
+</body>
+</html>

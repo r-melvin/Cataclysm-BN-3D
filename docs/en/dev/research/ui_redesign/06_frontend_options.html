@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>06. Frontend options: stay on SDL3 or move to an engine</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="README.html">Summary</a><a href="01_pain_points.html">01 Pain points</a><a href="02_patterns.html">02 Patterns</a><a href="03_design.html">03 Design</a><a href="04_architecture.html">04 Architecture</a><a href="05_plan.html">05 Plan</a><a href="06_frontend_options.html" class="current">06 Frontends</a></nav>
+<main>
+<h1 id="06-frontend-options-stay-on-sdl3-or-move-to-an-engine">06. Frontend options: stay on SDL3 or move to an engine</h1>
+<p>Question from the user (2026-10-21, <code>BACKLOG.md</code> UI-02): now that curses is being retired, would moving the 3D frontend to a different engine materially help accessibility? This compares the options on verified facts and costs them against the plan in <code>05_plan.md</code>.</p>
+<p>Evidence tags: <strong>V</strong> = verified this session from an official page, source file, release list or class reference (URL given; several checked directly through the GitHub API); <strong>NV</strong> = not verified (agents' web-search budget ran out; or the page was unreachable). Nothing tagged NV is used to decide anything. Raw findings: <code>research/q_*.md</code>.</p>
+<h2 id="0-what-has-to-be-true-for-a-move-to-pay-off">0. What has to be true for a move to pay off</h2>
+<p>A frontend move pays off only if it removes work that option A must do and does not add more than it removes. The accessibility work in <code>03_design.md</code> §7 has five parts:</p>
+<ol>
+<li>a UI tree with names, roles, values and states (needed by any screen reader path);
+</li>
+<li>a narrator that decides what to say and when (reading order, HUD events, cursor-mode tile descriptions, log lines) with speech output;
+</li>
+<li>an OS accessibility bridge (UIA / NSAccessibility / AT-SPI) so NVDA, VoiceOver and Orca can navigate the tree;
+</li>
+<li>remapping, gamepad, text scale, colour modes, reduced motion;
+</li>
+<li>per-screen design of what the tree contains.
+</li></ol>
+<p>An engine can supply 1 (as its widget set), 3 (as its screen-reader integration) and parts of</p>
+<ol>
+<li value="4">No engine supplies 2 or 5: every shipped narrated game the research found did that
+</li></ol>
+<p>per-screen itself (Sea of Thieves, Mortal Kombat 1: <code>research/q_case_studies.md</code>). So the ceiling on what a move can save is roughly milestones M1 (widget layer, ~5 weeks), M12 (AccessKit bridge, ~3 weeks) and half of M2 (gamepad, ~1.5 weeks): <strong>about 10 weeks</strong>. Anything a move costs above that is a net loss for accessibility.</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="t-fd">
+<title id="t-fd">What an engine move can save versus what it costs, in developer-weeks. The saving is capped at about ten weeks of accessibility work; the cheapest engine (Godot) adds twenty to thirty weeks of renderer, compute and embedding work.</title>
+<g font-size="13">
+  <text x="20" y="30" class="d-text" font-weight="600">Accessibility work in the plan, and who can supply it</text>
+  <g class="d-text-2">
+    <text x="20" y="56">1. UI tree with names, roles, values</text>
+    <text x="20" y="78">2. Narrator: what to say, when</text>
+    <text x="20" y="100">3. OS bridge (UIA / NSAccessibility / AT-SPI)</text>
+    <text x="20" y="122">4. Remapping, gamepad, scale, colour modes</text>
+    <text x="20" y="144">5. Per-screen reading-order design</text>
+  </g>
+  <g font-size="12">
+    <text x="340" y="56" class="d-text-2">engine supplies (as its widgets)</text>
+    <text x="340" y="78" class="d-critical" font-weight="600">no engine supplies</text>
+    <text x="340" y="100" class="d-text-2">Godot supplies; others partial</text>
+    <text x="340" y="122" class="d-text-2">engine supplies part</text>
+    <text x="340" y="144" class="d-critical" font-weight="600">no engine supplies (MK1, Sea of Thieves did it per screen)</text>
+  </g>
+
+  <!-- bars: scale 12 px per week, origin x=300 -->
+  <text x="20" y="196" class="d-text" font-weight="600">Saved by moving (upper bound)</text>
+  <g>
+    <text x="20" y="220" class="d-text-2">M1 widget layer</text>
+    <rect x="300" y="210" width="60" height="12" rx="4" class="d-s3"><title>M1 widget layer: 5 weeks saved</title></rect><text x="366" y="221" class="d-text-2">5 wk</text>
+    <text x="20" y="242" class="d-text-2">M12 AccessKit bridge</text>
+    <rect x="300" y="232" width="36" height="12" rx="4" class="d-s3"><title>M12 bridge: 3 weeks saved</title></rect><text x="342" y="243" class="d-text-2">3 wk</text>
+    <text x="20" y="264" class="d-text-2">Half of M2 (gamepad plumbing)</text>
+    <rect x="300" y="254" width="18" height="12" rx="4" class="d-s3"><title>Half of M2: 1.5 weeks saved</title></rect><text x="324" y="265" class="d-text-2">1.5 wk</text>
+    <text x="20" y="286" class="d-text" font-weight="600">Total</text>
+    <rect x="300" y="276" width="114" height="12" rx="4" class="d-s3"><title>Total saving: about 9.5 weeks</title></rect><text x="420" y="287" class="d-text" font-weight="600">~10 wk</text>
+  </g>
+
+  <text x="20" y="326" class="d-text" font-weight="600">Added by Godot (option B), mid estimates</text>
+  <g>
+    <text x="20" y="350" class="d-text-2">Embedding + threading bridge</text>
+    <rect x="300" y="340" width="60" height="12" rx="4" class="d-s2"><title>Embedding and threading bridge: 4-6 weeks</title></rect><text x="366" y="351" class="d-text-2">4-6 wk</text>
+    <text x="20" y="372" class="d-text-2">Renderer + compute port, re-validation</text>
+    <rect x="300" y="362" width="228" height="12" rx="4" class="d-s2"><title>Renderer and compute port plus re-validation: 15-24 weeks</title></rect><text x="534" y="373" class="d-text-2">15-24 wk</text>
+    <text x="20" y="394" class="d-text" font-weight="600">Net</text>
+    <rect x="300" y="384" width="228" height="12" rx="4" class="d-s8"><title>Net cost of moving: about 20-30 weeks more than staying</title></rect><text x="534" y="395" class="d-text" font-weight="600">+20-30 wk, low confidence</text>
+  </g>
+  <g class="d-line-soft"><line x1="300" y1="200" x2="300" y2="404"/><line x1="420" y1="200" x2="420" y2="404" stroke-dasharray="3 3"/><line x1="540" y1="200" x2="540" y2="404" stroke-dasharray="3 3"/></g>
+  <g class="d-text-3" text-anchor="middle"><text x="300" y="414">0</text><text x="420" y="414">10</text><text x="540" y="414">20 weeks</text></g>
+
+  <text x="620" y="220" class="d-text" font-weight="600">Flip to Godot only if all hold:</text>
+  <g class="d-text-2">
+    <text x="620" y="242">1. accesskit-c fails with 2 of 3 readers</text>
+    <text x="620" y="258">   in the M0/M1 spike, and</text>
+    <text x="620" y="280">2. the renderer is being replaced anyway, and</text>
+    <text x="620" y="302">3. a second developer for 6+ months.</text>
+    <text x="620" y="330">Or: the project targets mobile/console.</text>
+  </g>
+</g>
+</svg>
+<figcaption>M1 widget layer: 5 weeks saved</figcaption></figure>
+<h2 id="1-the-options">1. The options</h2>
+<h3 id="a-stay-sdl3-sdl-gpu-own-widget-layer-self-voicing-accesskit-c">A. Stay: SDL3 + SDL_GPU, own widget layer, self-voicing, AccessKit C</h3>
+<ul>
+<li><strong>Accessibility reality.</strong> Nothing exists today (verified: no TTS, narration or a11y code in <code>src/</code>). The plan builds the tree (M1), the narrator with NVDA-client/SAPI, AVSpeech and speech-dispatcher backends (M8), then the OS bridge through <code>accesskit-c</code> (M12). <code>accesskit-c</code> 0.23.1 was released 2026-09-26 and its repository ships <code>examples/sdl</code> and <code>examples/windows</code> (<strong>V</strong>, GitHub API listing); Godot 4.7 vendors the same header (<code>thirdparty/accesskit</code>, version 0.23.1, MIT: <strong>V</strong>, <code>thirdparty/README.md</code>). AccessKit's own docs call the adapters "best-effort" and the project "sparsely documented" (<strong>V</strong>, <code>ARCHITECTURE.md</code>); the Linux adapter needs the AT-SPI bus up (<strong>V</strong>). Remapping, gamepad, text scale and colour modes are all our own work (M2, M8).
+</li>
+<li><strong>Core embedding.</strong> None: the core stays in-process, screens keep their blocking input loops (82 <code>handle_input</code> call sites, <code>while( !g-&gt;do_turn() )</code> main loop), Lua and saves untouched.
+</li>
+<li><strong>r3d reuse.</strong> 100 %: the 15.2 k LOC in <code>src/r3d_*</code>, the 6.4 k LOC SDL_GPU compute lightmap in <code>src/compute/</code> and the 25 SPIR-V shaders stay as they are.
+</li>
+<li><strong>Platforms.</strong> Linux (tested), macOS and Windows (unverified by this fork so far, per the renderer guide), Steam Deck via SDL gamepad labels and the Deck text-size rules.
+</li>
+<li><strong>Licensing / CI.</strong> SDL (zlib), SDL_ttf (zlib), AccessKit (Apache-2.0 or MIT; GitHub's licence field says BSD-3-Clause because of Chromium-derived parts, <strong>V</strong>), libspeechd (LGPL-2.1+, dlopen), NVDA client (LGPL-2.1, dlopen). CI unchanged except a Rust toolchain or prebuilt binaries for M12.
+</li>
+<li><strong>Effort.</strong> The plan: 28-36 weeks critical path for one developer (<code>05_plan.md</code>). Confidence: medium; the widget-layer size (8-12 k LOC) is an estimate.
+</li>
+<li><strong>Reversibility.</strong> High: the view-model boundary (<code>04_architecture.md</code> §2.2) is exactly the seam a later frontend swap needs.
+</li></ul>
+<h3 id="b-godot-4-x-as-the-frontend-game-core-as-a-gdextension">B. Godot 4.x as the frontend, game core as a GDExtension</h3>
+<ul>
+<li><strong>Accessibility reality (V unless noted).</strong> Screen-reader support arrived in 4.5 (tag 2025-09-15) "thanks to AccessKit" for Control nodes, "still in its experimental phase" (release page). Current stable is 4.7.2 (2026-08-18). In 4.7 the API moved from <code>DisplayServer</code> to a dedicated <code>AccessibilityServer</code> singleton (changelog GH-116839), "implemented on Android, Linux, macOS, and Windows" (class reference); the <code>FEATURE_ACCESSIBILITY_SCREEN_READER</code> flag lists Linux (X11/Wayland), macOS, Windows. The 4.7 GDExtension API exposes <code>AccessibilityServer</code> (75 methods incl. <code>create_element</code>, <code>update_set_role</code>, <code>update_set_name</code>), <code>Control.accessibility_name/description/live/...</code>, and the virtuals <code>_accessibility_get_contextual_info</code>, <code>_get_accessibility_container_name</code>, <code>Node._get_focused_accessibility_element</code>, <code>Node.queue_accessibility_update</code> (checked in <code>godot-cpp/gdextension/extension_api-4-7.json</code>). So custom nodes written in C++ can be made accessible. Open issues include screen-reader-related crashes and wrong positions (#121388, #120999, #111028, #123623, all open on 2026-10-21). Runtime detection is automatic when a screen reader is running. Remapping: <code>InputMap</code> runtime methods exist; gamepads use the SDL controller database; no glyph API found (NV). Text scale: <code>Window.content_scale_*</code>; OS DPI is read only on macOS, Android and Wayland, "On Linux (X11) and Windows, you will need to provide a manual scaling option" (docs). Colour-blind: proposal #473 open, nothing built in. Narration (what to say, when) is still ours; Godot provides <code>accessibility_live</code> regions for announcements.
+</li>
+<li><strong>Core embedding.</strong> godot-cpp 10.0.0 (2026-09-15, MIT; targets 4.3+ via <code>api_version</code>; extensions built for an earlier minor run on later ones, not the reverse: <strong>V</strong>, README). The scene tree "is not thread-safe"; cross-thread work goes through <code>call_deferred</code> (<strong>V</strong>, docs). Consequence: the game core, whose screens are blocking input loops, must run on a worker thread and talk to the scene tree through a message channel, and every screen must be rewritten as Godot Controls fed by view models, with input routed back. That is the thin-client split from <code>04_architecture.md</code> §2.2 made mandatory, plus Godot's threading rules. "libgodot" (embedding Godot into our own executable instead) is proposal #6267, still open since 2023 (<strong>V</strong>). Public case studies of a 300 kLOC C++ core inside GDExtension: none found (NV); the only data point is Caves of Qud "booting under Godot" after ~16 hours, a test and not a migration (<strong>V</strong>, fullcleared.com paraphrase).
+</li>
+<li><strong>r3d reuse.</strong> The pure-C++ parts transfer: meshing, shapes, voxel conversion, wall/door/ scene/vehicle rules and profiles (~4.9 k LOC), camera and math (~1.2 k), knowledge/memory rules. Rewritten: the SDL_GPU device layer, pipelines and atlas (~4.5 k), sky/decals/entity drawing (~3.0 k), HUD drawing (~1.2 k), the capture tooling, and the compute lightmap (6.4 k LOC + 16 compute shaders in HLSL/SPIR-V; Godot compute runs on <code>RenderingDevice</code> only on the Forward+/Mobile renderers, shaders would be re-authored in Godot's GLSL: NV for details). Roughly 10 k LOC of renderer and compute to rewrite and re-validate against the geometry snapshot and the comparison galleries.
+</li>
+<li><strong>Platforms.</strong> Export templates for Linux/macOS/Windows and Steam Deck: NV this session (the agent could not fetch the export docs). Widely used in practice, but not verified here.
+</li>
+<li><strong>Licensing / CI.</strong> Engine MIT (<strong>V</strong>). Headless editor and export templates are free downloads; GitHub-hosted runners suffice. Adds: a Godot version pin, a GDExtension build (SCons documented; a <code>CMakeLists.txt</code> exists in godot-cpp but is undocumented, <strong>V</strong>), export packaging, and a second test harness (Godot's) beside Catch2.
+</li>
+<li><strong>Effort.</strong> Embedding and threading bridge 4-6 weeks; renderer and compute port 12-20 weeks; screens in Godot Controls 20-30 weeks (the widget layer is free, each screen is not); input 2 weeks; a11y narration 3 weeks; geometry/visual re-validation 3-4 weeks. <strong>About 45-65 weeks</strong> for one developer, versus 28-36 for A. Confidence: low-medium (no comparable case study; the threading bridge is the unknown).
+</li>
+<li><strong>Reversibility.</strong> Low once the renderer is ported. The decision is effectively a rewrite of the presentation half of the fork.
+</li>
+<li><strong>Net for accessibility.</strong> Saves the AccessKit bridge (M12) and the widget layer (M1), about 8-10 weeks, and buys a maintained accessibility tree with active bug fixing (the 4.7 changelog lists a dozen accessibility fixes). Costs 20-30 weeks of renderer and embedding work that has nothing to do with accessibility. <strong>Not justified on accessibility grounds.</strong>
+</li></ul>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-labelledby="t-emb">
+<title id="t-emb">How the C++ game core would have to be embedded in Godot: the core runs on a worker thread because its screens are blocking input loops and Godot's scene tree is not thread-safe; a message channel carries view models out and actions in; the renderer's rules and math transfer, its GPU, sky, HUD and compute layers are rewritten.</title>
+<defs><marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker></defs>
+<g font-size="13">
+  <!-- worker thread -->
+  <rect x="20" y="40" width="380" height="330" rx="8" class="d-box-soft"/>
+  <text x="210" y="64" text-anchor="middle" class="d-text" font-weight="600">Worker thread: C++ game core (GDExtension)</text>
+  <rect x="40" y="84" width="340" height="40" rx="6" class="d-box"/>
+  <text x="210" y="102" text-anchor="middle" class="d-text">while( !g->do_turn() )  +  82 blocking handle_input() loops</text>
+  <text x="210" y="117" text-anchor="middle" class="d-text-3">must not touch the scene tree; waits on a channel instead of SDL</text>
+  <rect x="40" y="140" width="160" height="40" rx="6" class="d-box"/>
+  <text x="120" y="158" text-anchor="middle" class="d-text">Lua (sol2), JSON data</text>
+  <text x="120" y="173" text-anchor="middle" class="d-text-3">unchanged</text>
+  <rect x="220" y="140" width="160" height="40" rx="6" class="d-box"/>
+  <text x="300" y="158" text-anchor="middle" class="d-text">Saves</text>
+  <text x="300" y="173" text-anchor="middle" class="d-text-3">unchanged</text>
+
+  <rect x="40" y="200" width="340" height="70" rx="6" class="d-box d-stroke-s3" stroke-width="2"/>
+  <text x="210" y="220" text-anchor="middle" class="d-text" font-weight="600">r3d: reusable as pure C++ (~6 k LOC)</text>
+  <text x="210" y="238" text-anchor="middle" class="d-text-2">meshing, shapes, voxel conversion, wall/door/scene/vehicle rules,</text>
+  <text x="210" y="254" text-anchor="middle" class="d-text-2">presentation profiles, camera and first-person math, knowledge rules</text>
+
+  <rect x="40" y="284" width="340" height="70" rx="6" class="d-box d-stroke-s8" stroke-width="2"/>
+  <text x="210" y="304" text-anchor="middle" class="d-text" font-weight="600">r3d: rewritten for Godot (~10 k LOC + 16 compute shaders)</text>
+  <text x="210" y="322" text-anchor="middle" class="d-text-2">SDL_GPU device, pipelines, atlas; sky, decals, entities; HUD drawing;</text>
+  <text x="210" y="338" text-anchor="middle" class="d-text-2">src/compute lightmap (HLSL/SPIR-V to Godot GLSL); capture tooling</text>
+
+  <!-- channel -->
+  <rect x="420" y="150" width="120" height="100" rx="8" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="480" y="180" text-anchor="middle" class="d-text" font-weight="600">Message</text>
+  <text x="480" y="198" text-anchor="middle" class="d-text" font-weight="600">channel</text>
+  <text x="480" y="220" text-anchor="middle" class="d-text-3">view models out,</text>
+  <text x="480" y="234" text-anchor="middle" class="d-text-3">actions in; call_deferred</text>
+  <path d="M400,185 H418" class="d-line" marker-end="url(#ah4)"/>
+  <path d="M418,215 H400" class="d-line" marker-end="url(#ah4)"/>
+  <path d="M540,185 H558" class="d-line" marker-end="url(#ah4)"/>
+  <path d="M558,215 H540" class="d-line" marker-end="url(#ah4)"/>
+
+  <!-- main thread -->
+  <rect x="560" y="40" width="380" height="330" rx="8" class="d-box-soft"/>
+  <text x="750" y="64" text-anchor="middle" class="d-text" font-weight="600">Godot main thread (scene tree, not thread-safe)</text>
+  <rect x="580" y="84" width="340" height="40" rx="6" class="d-box"/>
+  <text x="750" y="102" text-anchor="middle" class="d-text">23 screens rewritten as Control nodes</text>
+  <text x="750" y="117" text-anchor="middle" class="d-text-3">accessibility_name / description / live; AccessibilityServer for custom nodes</text>
+  <rect x="580" y="140" width="160" height="40" rx="6" class="d-box"/>
+  <text x="660" y="158" text-anchor="middle" class="d-text">InputMap, SDL gamepad db</text>
+  <text x="660" y="173" text-anchor="middle" class="d-text-3">no glyph API (not verified)</text>
+  <rect x="760" y="140" width="160" height="40" rx="6" class="d-box"/>
+  <text x="840" y="158" text-anchor="middle" class="d-text">AccessKit (vendored 0.23.1)</text>
+  <text x="840" y="173" text-anchor="middle" class="d-text-3">Linux, macOS, Windows, Android</text>
+  <rect x="580" y="200" width="340" height="70" rx="6" class="d-box"/>
+  <text x="750" y="220" text-anchor="middle" class="d-text" font-weight="600">RenderingServer: ArrayMesh / MultiMesh from core buffers</text>
+  <text x="750" y="238" text-anchor="middle" class="d-text-2">sky and weather via ProceduralSkyMaterial / GPUParticles3D;</text>
+  <text x="750" y="254" text-anchor="middle" class="d-text-2">compute via RenderingDevice (Forward+/Mobile only; not verified in detail)</text>
+  <rect x="580" y="284" width="340" height="70" rx="6" class="d-box"/>
+  <text x="750" y="304" text-anchor="middle" class="d-text" font-weight="600">Export templates, second test harness</text>
+  <text x="750" y="322" text-anchor="middle" class="d-text-2">Godot version pin, GDExtension build (SCons documented, CMake undocumented),</text>
+  <text x="750" y="338" text-anchor="middle" class="d-text-2">geometry snapshot and galleries re-validated against the new output</text>
+  <text x="480" y="392" text-anchor="middle" class="d-text-3">Estimate 45-65 developer-weeks versus 26-34 for staying; no comparable public case study found (Caves of Qud's 16-hour "booting" test is not a migration).</text>
+</g>
+</svg>
+<figcaption></figcaption></figure>
+<h3 id="c-unity-6">C. Unity 6</h3>
+<ul>
+<li><strong>Accessibility (V).</strong> <code>AssistiveSupport</code> / <code>AccessibilityHierarchy</code>: "Screen readers cannot detect GameObject components or UI elements directly", so the hierarchy is built by the developer (the same tree we build in A). The 6.6 guide names TalkBack, VoiceOver (iOS and macOS) and Narrator (Windows) as test readers; an older 6000.7 reference names Android only; the conflict is unresolved (NV which applies to which version). Linux desktop screen readers: not mentioned anywhere found. UAP (third-party, Apache-2.0) is tested only to Unity 2020.1 and re-implements speech rather than exposing UI to readers (<strong>V</strong>).
+</li>
+<li><strong>Embedding.</strong> C# host with the C++ core as a native plugin via P/Invoke; Unity API is main-thread only (<strong>V</strong>); two debuggers; IL2CPP build times. No case study found.
+</li>
+<li><strong>Licensing / CI.</strong> Personal free under $200 k revenue/funding, Runtime Fee cancelled 2024-09-12 (<strong>V</strong>); closed-source editor; CI needs licence activation secrets (GameCI, <strong>V</strong>); Linux editor Ubuntu-only (<strong>V</strong>).
+</li>
+<li><strong>Verdict.</strong> Rejected: the accessibility tree is still ours to build, Linux screen readers are unsupported, and the stack is closed-source C# around a CC-BY-SA C++ game.
+</li></ul>
+<h3 id="d-unreal-engine-5">D. Unreal Engine 5</h3>
+<ul>
+<li><strong>Accessibility (V, 5.8 docs).</strong> Slate Screen Reader is "Experimental", third-party readers on Windows and VoiceOver on iOS only; Text To Speech "English only"; <code>EColorVisionDeficiency</code> enum exists (shipping status NV); CommonUI handles controller icons and cardinal navigation.
+</li>
+<li><strong>Embedding.</strong> Engine is C++20 and avoids STL outside interop (<strong>V</strong>, coding standard); exceptions and RTTI defaults NV; a C++23 core with exceptions, STL and sol2/Lua would be interop code wrapped in a module. Engine source cannot be redistributed; royalty and EULA terms NV this session (pages 403).
+</li>
+<li><strong>Verdict.</strong> Rejected: no Linux or macOS screen-reader support, heavy toolchain, licence and distribution constraints for an open-source game.
+</li></ul>
+<h3 id="e-rust-bevy-egui-slint">E. Rust: Bevy, egui, Slint</h3>
+<ul>
+<li><strong>Bevy 0.20.0 (2026-10-08, Apache-2.0 or MIT, V).</strong> <code>bevy_a11y</code> exposes Button, Image and Label roles only; the Linux AT-SPI path "only works with experimental screen readers and forks" (<strong>V</strong>, Cargo.toml); open design issue #25213; no colour-blind mode (#2724). Pre-1.0 with a breaking release every 3.5-5 months (<strong>V</strong>, release dates).
+</li>
+<li><strong>egui 0.37.0 + AccessKit (V).</strong> Works in eframe; immediate mode; open issue #8671.
+</li>
+<li><strong>Slint (V).</strong> AccessKit feature exists; royalty-free licence requires an About widget and a public badge, else GPL-3.0.
+</li>
+<li><strong>C++ interop (V).</strong> <code>cxx</code>: an uncaught C++ exception in a non-<code>Result</code> function terminates; <code>autocxx</code> is archived. The core throws.
+</li>
+<li><strong>Verdict.</strong> Rejected: a11y coverage below what A builds, plus a second language and FFI boundary around a throwing C++ core.
+</li></ul>
+<h3 id="f-others">F. Others</h3>
+<ul>
+<li><strong>O3DE</strong> (Apache-2.0/MIT, V): no screen-reader code found (NV, search was rate-limited). <strong>Flax</strong> (custom EULA with royalty, V): no accessibility statements. <strong>Stride</strong> (MIT, C#): none found. All rejected.
+</li>
+<li><strong>Web (Emscripten/WASM + DOM/ARIA).</strong> The only option where the platform supplies the accessibility tree (DOM + ARIA, every browser screen reader). But CDDA's own <code>build-emscripten.sh</code> is self-declared unsupported and its release entry commented out (<strong>V</strong>, issue #76956 open); BN has no WASM build; SDL_GPU on the web is NV; threads need COOP/COEP; desktop distribution needs an Electron/Tauri wrapper. Cost would exceed B. Rejected for now; the one case where it would return is a browser-first distribution goal.
+</li>
+<li><strong>Thin-client split (core process + frontend process).</strong> Not a frontend by itself; it is the architecture that makes any frontend swap cheap. Option A's view-model layer is the in-process version of it. Recommended as a design rule, not as a milestone.
+</li></ul>
+<h2 id="2-comparison">2. Comparison</h2>
+<table><thead><tr><th></th><th>A. SDL3 + own layer</th><th>B. Godot 4.7</th><th>C. Unity 6</th><th>D. Unreal 5</th><th>E. Bevy</th><th>F. Web</th></tr></thead><tbody><tr><td>Screen-reader bridge supplied</td><td>No (build via accesskit-c, M12)</td><td>Yes: Linux/macOS/Windows/Android, experimental, active fixes (V)</td><td>Partly; Linux not mentioned (V)</td><td>Windows + iOS only, experimental (V)</td><td>3 roles; Linux experimental (V)</td><td>Browser DOM (V in principle)</td></tr><tr><td>Narration (what/when) supplied</td><td>No</td><td>No (live regions only)</td><td>No</td><td>TTS plugin, English only</td><td>No</td><td>No</td></tr><tr><td>Remapping / gamepad</td><td>Build (M2)</td><td>InputMap + SDL db (V), no glyph API (NV)</td><td>Input System rebinding (V)</td><td>Enhanced Input / CommonUI (V)</td><td>leafwing / gilrs (NV)</td><td>Build</td></tr><tr><td>Text scale</td><td>Build (M1)</td><td><code>content_scale_*</code>, manual on X11/Windows (V)</td><td>Panel settings DPI (V)</td><td>DPI curve (NV)</td><td>Build</td><td>CSS</td></tr><tr><td>Colour modes</td><td>Build (M8)</td><td>None built in (V, proposal open)</td><td>NV</td><td>Enum exists (V), shipping NV</td><td>None (V)</td><td>Build</td></tr><tr><td>Core embedding</td><td>None</td><td>Worker thread + channel, all screens rewritten</td><td>Native plugin, C# host</td><td>Interop module, C++20</td><td>cxx FFI, no exceptions</td><td>Emscripten</td></tr><tr><td>r3d + compute reuse</td><td>100 %</td><td>~40 % (rules/math); ~10 k LOC rewritten</td><td>~40 %</td><td>~40 %</td><td>~40 %</td><td>depends on SDL_GPU web (NV)</td></tr><tr><td>Platforms Linux/macOS/Win/Deck</td><td>Yes</td><td>Yes (templates NV this session)</td><td>Yes (Linux editor Ubuntu)</td><td>Linux weak for a11y</td><td>Yes</td><td>Browser</td></tr><tr><td>Licence</td><td>zlib/MIT/Apache</td><td>MIT (V)</td><td>Proprietary, free tier (V)</td><td>Proprietary, royalty (NV)</td><td>MIT/Apache (V)</td><td>n/a</td></tr><tr><td>CI burden (no paid CI)</td><td>Unchanged (+Rust for M12)</td><td>+Godot pin, templates, 2nd harness</td><td>+licence secrets, IL2CPP</td><td>+engine build, disk</td><td>+cargo</td><td>+Emscripten</td></tr><tr><td>Effort (1 dev)</td><td>28-36 wk</td><td>45-65 wk</td><td>&gt;60 wk</td><td>&gt;60 wk</td><td>&gt;60 wk</td><td>&gt;70 wk</td></tr><tr><td>Confidence</td><td>medium</td><td>low-medium</td><td>low</td><td>low</td><td>low</td><td>low</td></tr><tr><td>Reversible</td><td>high</td><td>low</td><td>low</td><td>low</td><td>low</td><td>low</td></tr></tbody></table>
+<h2 id="3-recommendation">3. Recommendation</h2>
+<p><strong>Stay on SDL3 (option A).</strong> The accessibility gain available from any engine is capped at about ten weeks of the plan, and the cheapest engine (Godot) costs twenty to thirty weeks of non-accessibility work and a low-confidence embedding of a blocking, exception-throwing C++ core into a scene tree that is not thread-safe. Godot's accessibility is real and improving (4.5 → 4.7 changes verified), but it exposes the same AccessKit that option A reaches through <code>accesskit-c</code>, whose repository already carries an SDL example.</p>
+<p>Conditions under which the recommendation flips to B:</p>
+<ol>
+<li>The M0/M1 spike cannot get <code>accesskit-c</code> working with NVDA, VoiceOver and Orca from the SDL window on at least two of the three desktops within two weeks, <strong>and</strong>
+</li>
+<li>the renderer is going to be replaced anyway (for instance if <code>r3d_gpu</code> is abandoned for a different lighting or asset strategy), <strong>and</strong>
+</li>
+<li>a second developer is committed for at least six months.
+</li></ol>
+<p>Also flip if the project's goals change to mobile or console targets, where Godot's export pipeline is worth more than the renderer port costs. None of these holds today.</p>
+<p>Decision gate: end of M1 (<code>05_plan.md</code>), with the spike results written into this file.</p>
+<h2 id="4-curses-retirement-scope-and-cost-ui-02">4. Curses retirement: scope and cost (UI-02)</h2>
+<p>Decided by the user on 2026-10-21. What exists (verified by grep/wc this session):</p>
+<table><thead><tr><th>Item</th><th>Size</th><th>Action</th></tr></thead><tbody><tr><td><code>src/ncurses_def.cpp/.h</code> (terminal backend)</td><td>554 LOC</td><td>delete in phase 1</td></tr><tr><td><code>src/wincurse.cpp</code> (Windows console backend)</td><td>796 LOC</td><td>delete in phase 1</td></tr><tr><td><code>CURSES</code> CMake option, <code>find_package(Curses)</code>, macOS ncursesw bundling, <code>tests/CMakeLists.txt</code> branch</td><td><code>CMakeLists.txt:33, 207-212, 646-660, 893-934</code>; <code>src/CMakeLists.txt:208-230</code></td><td>delete in phase 1</td></tr><tr><td>Presets <code>linux-curses</code>, <code>dist-curses</code>, <code>osx-curses-x64-dist</code>, <code>osx-curses-arm-dist</code> and the <code>ci-curses</code> matrix entry</td><td><code>CMakePresets.json</code>, <code>.github/workflows/{build,matrix,release}.yml</code> (4 jobs)</td><td>delete in phase 1</td></tr><tr><td><code>src/cursesport.cpp/.h</code>, <code>src/cursesdef.h</code> (the in-house cell model the tiles build draws legacy screens with)</td><td>790 LOC</td><td><strong>keep</strong> until the last legacy screen is replaced (M11), then delete</td></tr><tr><td><code>#if defined(TILES)</code> guards</td><td>230 guards in 66 files (<code>newcharacter.cpp</code> 33, <code>game.cpp</code> 32, <code>animation.cpp</code> 28, <code>options.cpp</code> 13, ...)</td><td>the <code>#else</code> branches become dead in phase 1; remove per file as each screen migrates (phase 2), remaining ones in phase 3</td></tr><tr><td><code>catacurses::</code> call sites</td><td>932 references in 82 files</td><td>go away screen by screen with M3-M10; none deleted up front</td></tr><tr><td>Tests referring to curses/TILES</td><td>39 files mention them; the <code>cata_test</code> (curses) target</td><td>drop the curses test target in phase 1; <code>cata_test-tiles</code> stays the only test binary</td></tr><tr><td>Docs</td><td>building guides, <code>ui_overhaul.md</code> ("F4 is also registered in the curses interface"), README</td><td>phase 1</td></tr><tr><td>Options</td><td><code>USE_TILES</code>, <code>TERMINAL_X/Y</code>, font-grid options</td><td>fold into the Display tab / advanced file in M4</td></tr></tbody></table>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-labelledby="t-cr">
+<title id="t-cr">Curses retirement in three phases: the terminal and console backends, build option, presets and CI go first; the cell canvas and the per-screen drawing code go with each migrated screen; the remaining canvas and guards go at the end.</title>
+<defs><marker id="ah5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker></defs>
+<g font-size="13">
+  <!-- timeline -->
+  <path d="M30,40 H930" class="d-line" marker-end="url(#ah5)"/>
+  <g class="d-text-3"><text x="40" y="30">after M0</text><text x="400" y="30" text-anchor="middle">M3 to M10 (screen by screen)</text><text x="880" y="30" text-anchor="end">M11</text></g>
+
+  <rect x="20" y="60" width="280" height="220" rx="8" class="d-box d-stroke-s8" stroke-width="2"/>
+  <text x="160" y="84" text-anchor="middle" class="d-text" font-weight="600">Phase 1: delete the builds (1 week)</text>
+  <g class="d-text-2">
+    <text x="36" y="110">ncurses_def.cpp/.h (554 LOC)</text>
+    <text x="36" y="130">wincurse.cpp (796 LOC)</text>
+    <text x="36" y="150">CURSES option, find_package, macOS ncursesw</text>
+    <text x="36" y="170">5 presets, 4 CI jobs, cata_test (curses)</text>
+    <text x="36" y="190">building guides, ui_overhaul.md, README</text>
+  </g>
+  <text x="36" y="222" class="d-text-3">Keeps: cursesport.cpp (cell canvas) and</text>
+  <text x="36" y="236" class="d-text-3">TILES guards in files the fork has not changed</text>
+  <text x="36" y="262" class="d-text-3">Verify: configure without CURSES; both binaries build</text>
+
+  <rect x="340" y="60" width="280" height="220" rx="8" class="d-box d-stroke-s2" stroke-width="2"/>
+  <text x="480" y="84" text-anchor="middle" class="d-text" font-weight="600">Phase 2: with each screen (no extra cost)</text>
+  <g class="d-text-2">
+    <text x="356" y="110">932 catacurses:: references in 82 files</text>
+    <text x="356" y="130">230 TILES guards in 66 files</text>
+    <text x="356" y="150">(newcharacter 33, game 32, animation 28, ...)</text>
+    <text x="356" y="170">each migrated screen deletes its cell drawing</text>
+    <text x="356" y="190">and its #else branches</text>
+  </g>
+  <text x="356" y="222" class="d-text-3">Risk: upstream merge friction in every touched file;</text>
+  <text x="356" y="236" class="d-text-3">delete guards only where the fork already diverges</text>
+  <text x="356" y="262" class="d-text-3">Open question: do upstream merges continue?</text>
+
+  <rect x="660" y="60" width="280" height="220" rx="8" class="d-box d-stroke-s3" stroke-width="2"/>
+  <text x="800" y="84" text-anchor="middle" class="d-text" font-weight="600">Phase 3: delete the canvas (2 weeks)</text>
+  <g class="d-text-2">
+    <text x="676" y="110">cursesport.cpp/.h, cursesdef.h (790 LOC)</text>
+    <text x="676" y="130">remaining TILES guards</text>
+    <text x="676" y="150">TERMINAL_X/Y, font-grid options</text>
+    <text x="676" y="170">bitmap-font path if unused</text>
+    <text x="676" y="190">ncurses mentions in packaging</text>
+  </g>
+  <text x="676" y="222" class="d-text-3">Precondition: last legacy screen ported or dropped</text>
+  <text x="676" y="236" class="d-text-3">(debug, Lua console, terminals, minigames, Defense)</text>
+  <text x="676" y="262" class="d-text-3">Verify: rg "catacurses::|cursesport|defined(TILES)" empty</text>
+</g>
+</svg>
+<figcaption></figcaption></figure>
+<p>Phases and cost:</p>
+<ul>
+<li><strong>Phase 1 (S, 1 week), right after M0:</strong> remove the terminal and Windows-console backends, the build option, presets, CI jobs, the curses test target and docs. The tiles build keeps <code>cursesport</code> as the cell canvas for legacy screens. → verify: <code>cmake --preset linux-full</code> and the MSVC preset configure without <code>CURSES</code>; the release workflow matrix has no curses rows; <code>rg &quot;CURSES&quot; CMakeLists.txt</code> is empty.
+</li>
+<li><strong>Phase 2 (ongoing, inside M3-M10):</strong> each migrated screen deletes its <code>catacurses</code> drawing and its <code>#else</code> branches. No separate cost beyond the screen itself.
+</li>
+<li><strong>Phase 3 (inside M11, M, 2 weeks):</strong> delete <code>cursesport</code>, <code>cursesdef.h</code>, the remaining guards, <code>TERMINAL_X/Y</code>, the bitmap-font path if unused, and <code>ncurses</code> mentions in packaging.
+</li></ul>
+<p>Risks: <strong>upstream merge friction.</strong> Upstream Bright Nights keeps curses, so every file where an <code>#else</code> branch is deleted will conflict on future upstream merges. Mitigation: delete guards only in files this fork already diverges in (the screens being replaced), keep guards untouched in files the fork has not changed, and record in <code>BACKLOG.md</code> whether upstream merges are still planned (open question). A second risk is Android: the Android build uses the tiles path, so it is unaffected by phase 1, but the <code>ANDROID_*</code> options and virtual joystick code are tied to <code>sdltiles.cpp</code> and must survive M2's gamepad rewrite.</p>
+<p>Accessibility consequence (from UI-02): terminal screen readers were never a supported path in this fork (the only related code is caret placement), so retiring curses removes no working accessibility; the narrator and AccessKit path is the plan either way.</p>
+<h2 id="5-what-this-changes-in-the-plan">5. What this changes in the plan</h2>
+<ul>
+<li><code>04_architecture.md</code>: the cells backend is removed; the widget tree has one renderer (SDL). The frontend decision gate is added at the end of M1.
+</li>
+<li><code>05_plan.md</code>: new milestone <strong>M1.5 Curses retirement phase 1</strong>, the gate in M1's verify list, UI-01 as its own milestone after M6/M9, and phase-3 deletion inside M11.
+</li>
+<li>Effort: the plan loses the 15-20 % per-screen cells cost (about 4-6 weeks over the programme) and gains 1 week (phase 1) + 2 weeks (phase 3). Net: about 2-3 weeks shorter.
+</li></ul>
+<h2 id="6-verification-notes">6. Verification notes</h2>
+<p>Verified directly through the GitHub API or raw file fetches in this session: Godot release tags and dates; <code>thirdparty/README.md</code> (accesskit 0.23.1, MIT); <code>doc/classes/ AccessibilityServer.xml</code>, <code>Control.xml</code>, <code>DisplayServer.xml</code>; the 4.7.2 <code>CHANGELOG.md</code> entries GH-116839, GH-116960, GH-117740 and the accessibility fix list; godot-cpp release 10.0.0 and licence; <code>godot-cpp/gdextension/extension_api-4-7.json</code> contents; godot-proposals #6267 state; the 4.5 release page sentence on AccessKit; accesskit-c examples and release 0.23.1; Bevy 0.20.0 release date and crate list; the local <code>src/</code> and build-file counts. Everything else in this document is tagged with the agent's own verification status in <code>research/q_*.md</code>.</p>
+<p>Not verified (and marked NV above): Godot export templates and Steam Deck specifics; Godot compute-shader port details; any large-C++ GDExtension case study; Unreal royalty and EULA text; Unity platform matrix for screen readers on desktop; Unity/Unreal/Bevy Steam Deck status; web SDL_GPU support; thin-client case studies (DFHack, NetHack window ports).</p>
+</main>
+</body>
+</html>

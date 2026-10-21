@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-labelledby="t-emb">
+<title id="t-emb">How the C++ game core would have to be embedded in Godot: the core runs on a worker thread because its screens are blocking input loops and Godot's scene tree is not thread-safe; a message channel carries view models out and actions in; the renderer's rules and math transfer, its GPU, sky, HUD and compute layers are rewritten.</title>
+<defs><marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker></defs>
+<g font-size="13">
+  <!-- worker thread -->
+  <rect x="20" y="40" width="380" height="330" rx="8" class="d-box-soft"/>
+  <text x="210" y="64" text-anchor="middle" class="d-text" font-weight="600">Worker thread: C++ game core (GDExtension)</text>
+  <rect x="40" y="84" width="340" height="40" rx="6" class="d-box"/>
+  <text x="210" y="102" text-anchor="middle" class="d-text">while( !g->do_turn() )  +  82 blocking handle_input() loops</text>
+  <text x="210" y="117" text-anchor="middle" class="d-text-3">must not touch the scene tree; waits on a channel instead of SDL</text>
+  <rect x="40" y="140" width="160" height="40" rx="6" class="d-box"/>
+  <text x="120" y="158" text-anchor="middle" class="d-text">Lua (sol2), JSON data</text>
+  <text x="120" y="173" text-anchor="middle" class="d-text-3">unchanged</text>
+  <rect x="220" y="140" width="160" height="40" rx="6" class="d-box"/>
+  <text x="300" y="158" text-anchor="middle" class="d-text">Saves</text>
+  <text x="300" y="173" text-anchor="middle" class="d-text-3">unchanged</text>
+
+  <rect x="40" y="200" width="340" height="70" rx="6" class="d-box d-stroke-s3" stroke-width="2"/>
+  <text x="210" y="220" text-anchor="middle" class="d-text" font-weight="600">r3d: reusable as pure C++ (~6 k LOC)</text>
+  <text x="210" y="238" text-anchor="middle" class="d-text-2">meshing, shapes, voxel conversion, wall/door/scene/vehicle rules,</text>
+  <text x="210" y="254" text-anchor="middle" class="d-text-2">presentation profiles, camera and first-person math, knowledge rules</text>
+
+  <rect x="40" y="284" width="340" height="70" rx="6" class="d-box d-stroke-s8" stroke-width="2"/>
+  <text x="210" y="304" text-anchor="middle" class="d-text" font-weight="600">r3d: rewritten for Godot (~10 k LOC + 16 compute shaders)</text>
+  <text x="210" y="322" text-anchor="middle" class="d-text-2">SDL_GPU device, pipelines, atlas; sky, decals, entities; HUD drawing;</text>
+  <text x="210" y="338" text-anchor="middle" class="d-text-2">src/compute lightmap (HLSL/SPIR-V to Godot GLSL); capture tooling</text>
+
+  <!-- channel -->
+  <rect x="420" y="150" width="120" height="100" rx="8" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="480" y="180" text-anchor="middle" class="d-text" font-weight="600">Message</text>
+  <text x="480" y="198" text-anchor="middle" class="d-text" font-weight="600">channel</text>
+  <text x="480" y="220" text-anchor="middle" class="d-text-3">view models out,</text>
+  <text x="480" y="234" text-anchor="middle" class="d-text-3">actions in; call_deferred</text>
+  <path d="M400,185 H418" class="d-line" marker-end="url(#ah4)"/>
+  <path d="M418,215 H400" class="d-line" marker-end="url(#ah4)"/>
+  <path d="M540,185 H558" class="d-line" marker-end="url(#ah4)"/>
+  <path d="M558,215 H540" class="d-line" marker-end="url(#ah4)"/>
+
+  <!-- main thread -->
+  <rect x="560" y="40" width="380" height="330" rx="8" class="d-box-soft"/>
+  <text x="750" y="64" text-anchor="middle" class="d-text" font-weight="600">Godot main thread (scene tree, not thread-safe)</text>
+  <rect x="580" y="84" width="340" height="40" rx="6" class="d-box"/>
+  <text x="750" y="102" text-anchor="middle" class="d-text">23 screens rewritten as Control nodes</text>
+  <text x="750" y="117" text-anchor="middle" class="d-text-3">accessibility_name / description / live; AccessibilityServer for custom nodes</text>
+  <rect x="580" y="140" width="160" height="40" rx="6" class="d-box"/>
+  <text x="660" y="158" text-anchor="middle" class="d-text">InputMap, SDL gamepad db</text>
+  <text x="660" y="173" text-anchor="middle" class="d-text-3">no glyph API (not verified)</text>
+  <rect x="760" y="140" width="160" height="40" rx="6" class="d-box"/>
+  <text x="840" y="158" text-anchor="middle" class="d-text">AccessKit (vendored 0.23.1)</text>
+  <text x="840" y="173" text-anchor="middle" class="d-text-3">Linux, macOS, Windows, Android</text>
+  <rect x="580" y="200" width="340" height="70" rx="6" class="d-box"/>
+  <text x="750" y="220" text-anchor="middle" class="d-text" font-weight="600">RenderingServer: ArrayMesh / MultiMesh from core buffers</text>
+  <text x="750" y="238" text-anchor="middle" class="d-text-2">sky and weather via ProceduralSkyMaterial / GPUParticles3D;</text>
+  <text x="750" y="254" text-anchor="middle" class="d-text-2">compute via RenderingDevice (Forward+/Mobile only; not verified in detail)</text>
+  <rect x="580" y="284" width="340" height="70" rx="6" class="d-box"/>
+  <text x="750" y="304" text-anchor="middle" class="d-text" font-weight="600">Export templates, second test harness</text>
+  <text x="750" y="322" text-anchor="middle" class="d-text-2">Godot version pin, GDExtension build (SCons documented, CMake undocumented),</text>
+  <text x="750" y="338" text-anchor="middle" class="d-text-2">geometry snapshot and galleries re-validated against the new output</text>
+  <text x="480" y="392" text-anchor="middle" class="d-text-3">Estimate 45-65 developer-weeks versus 26-34 for staying; no comparable public case study found (Caves of Qud's 16-hour "booting" test is not a migration).</text>
+</g>
+</svg>

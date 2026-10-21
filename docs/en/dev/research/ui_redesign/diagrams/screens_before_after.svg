@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" role="img" aria-labelledby="t-sba">
+<title id="t-sba">Player-facing screens per group, before (61) and after (23) the redesign. Values are counts of distinct screens from the codebase audit.</title>
+<g font-size="13">
+  <!-- legend -->
+  <rect x="640" y="18" width="14" height="14" rx="3" class="d-s1"/><text x="660" y="30" class="d-text-2">Before (61 screens)</text>
+  <rect x="800" y="18" width="14" height="14" rx="3" class="d-s2"/><text x="820" y="30" class="d-text-2">After (23 screens)</text>
+  <!-- axis gridlines: 0..16, scale 36 px per screen, origin x=250 -->
+  <g class="d-line-soft">
+    <line x1="250" y1="50" x2="250" y2="420"/>
+    <line x1="430" y1="50" x2="430" y2="420"/>
+    <line x1="610" y1="50" x2="610" y2="420"/>
+    <line x1="790" y1="50" x2="790" y2="420"/>
+  </g>
+  <g class="d-text-3" text-anchor="middle">
+    <text x="250" y="436">0</text><text x="430" y="436">5</text><text x="610" y="436">10</text><text x="790" y="436">15</text>
+    <text x="520" y="452">screens</text>
+  </g>
+  <!-- rows: y step 36; each row has before bar (h 12) and after bar (h 12) with a 2 px gap -->
+  <g class="d-text-2" text-anchor="end">
+    <text x="238" y="74">Out of game</text>
+    <text x="238" y="110">Always-on (sidebar/HUD)</text>
+    <text x="238" y="146">Items</text>
+    <text x="238" y="182">Making</text>
+    <text x="238" y="218">Character</text>
+    <text x="238" y="254">World and log</text>
+    <text x="238" y="290">People</text>
+    <text x="238" y="326">Settings</text>
+    <text x="238" y="362">Help</text>
+    <text x="238" y="398">Popups</text>
+  </g>
+  <!-- bars: width = value * 36 -->
+  <g>
+    <rect x="250" y="58" width="216" height="12" rx="4" class="d-s1"><title>Out of game, before: 6</title></rect>
+    <rect x="250" y="72" width="180" height="12" rx="4" class="d-s2"><title>Out of game, after: 5</title></rect>
+    <text x="472" y="68" class="d-text-2">6</text><text x="436" y="82" class="d-text-2">5</text>
+
+    <rect x="250" y="94" width="108" height="12" rx="4" class="d-s1"><title>Always-on, before: 3</title></rect>
+    <rect x="250" y="108" width="36" height="12" rx="4" class="d-s2"><title>Always-on, after: 1</title></rect>
+    <text x="364" y="104" class="d-text-2">3</text><text x="292" y="118" class="d-text-2">1</text>
+
+    <rect x="250" y="130" width="540" height="12" rx="4" class="d-s1"><title>Items, before: 15</title></rect>
+    <rect x="250" y="144" width="72" height="12" rx="4" class="d-s2"><title>Items, after: 2</title></rect>
+    <text x="796" y="140" class="d-text-2">15</text><text x="328" y="154" class="d-text-2">2</text>
+
+    <rect x="250" y="166" width="180" height="12" rx="4" class="d-s1"><title>Making, before: 5</title></rect>
+    <rect x="250" y="180" width="108" height="12" rx="4" class="d-s2"><title>Making, after: 3</title></rect>
+    <text x="436" y="176" class="d-text-2">5</text><text x="364" y="190" class="d-text-2">3</text>
+
+    <rect x="250" y="202" width="216" height="12" rx="4" class="d-s1"><title>Character, before: 6</title></rect>
+    <rect x="250" y="216" width="36" height="12" rx="4" class="d-s2"><title>Character, after: 1</title></rect>
+    <text x="472" y="212" class="d-text-2">6</text><text x="292" y="226" class="d-text-2">1</text>
+
+    <rect x="250" y="238" width="288" height="12" rx="4" class="d-s1"><title>World and log, before: 8</title></rect>
+    <rect x="250" y="252" width="108" height="12" rx="4" class="d-s2"><title>World and log, after: 3</title></rect>
+    <text x="544" y="248" class="d-text-2">8</text><text x="364" y="262" class="d-text-2">3</text>
+
+    <rect x="250" y="274" width="72" height="12" rx="4" class="d-s1"><title>People, before: 2</title></rect>
+    <rect x="250" y="288" width="36" height="12" rx="4" class="d-s2"><title>People, after: 1</title></rect>
+    <text x="328" y="284" class="d-text-2">2</text><text x="292" y="298" class="d-text-2">1</text>
+
+    <rect x="250" y="310" width="288" height="12" rx="4" class="d-s1"><title>Settings, before: 8</title></rect>
+    <rect x="250" y="324" width="72" height="12" rx="4" class="d-s2"><title>Settings, after: 2</title></rect>
+    <text x="544" y="320" class="d-text-2">8</text><text x="328" y="334" class="d-text-2">2</text>
+
+    <rect x="250" y="346" width="144" height="12" rx="4" class="d-s1"><title>Help, before: 4</title></rect>
+    <rect x="250" y="360" width="72" height="12" rx="4" class="d-s2"><title>Help, after: 2</title></rect>
+    <text x="400" y="356" class="d-text-2">4</text><text x="328" y="370" class="d-text-2">2</text>
+
+    <rect x="250" y="382" width="144" height="12" rx="4" class="d-s1"><title>Popups, before: 4</title></rect>
+    <rect x="250" y="396" width="108" height="12" rx="4" class="d-s2"><title>Popups, after: 3</title></rect>
+    <text x="400" y="392" class="d-text-2">4</text><text x="364" y="406" class="d-text-2">3</text>
+  </g>
+</g>
+</svg>

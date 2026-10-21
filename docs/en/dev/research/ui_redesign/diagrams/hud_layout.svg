@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" role="img" aria-labelledby="t-hud">
+<title id="t-hud">HUD regions in 3D mode: the scene fills the window; a compass tape, minimap and safe-mode state at the top; badges, vitals, message ticker, hotbar and the interaction prompt at the bottom; edge arrows and hit direction on the frame.</title>
+<defs>
+  <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" stroke-width="1.5" opacity="0.5"/></pattern>
+</defs>
+<g font-size="13">
+  <!-- window -->
+  <rect x="20" y="20" width="920" height="518" rx="8" class="d-box"/>
+  <text x="480" y="300" text-anchor="middle" class="d-text-3" font-size="16">3D scene (full window, no sidebar)</text>
+
+  <!-- top-left: safe mode -->
+  <rect x="36" y="34" width="118" height="30" rx="5" class="d-box-soft"/>
+  <text x="95" y="54" text-anchor="middle" class="d-text">[shield] SAFE</text>
+  <text x="36" y="82" class="d-text-3">icon + word, always</text>
+
+  <!-- top-centre: compass tape -->
+  <rect x="300" y="34" width="360" height="30" rx="5" class="d-box-soft"/>
+  <text x="480" y="54" text-anchor="middle" class="d-text">W  .  .  N  .  .  E     wind >   (sun)   12:40</text>
+  <text x="480" y="82" text-anchor="middle" class="d-text-3">compass tape: cardinal points, sun/moon, wind, mission target, notes; clock only with a watch</text>
+  <polygon points="430,66 436,76 424,76" class="d-s4"/>
+  <text x="442" y="76" class="d-text-3">mission</text>
+
+  <!-- top-right: minimap -->
+  <rect x="820" y="34" width="104" height="90" rx="5" class="d-box-soft"/>
+  <text x="872" y="84" text-anchor="middle" class="d-text">minimap</text>
+  <text x="872" y="100" text-anchor="middle" class="d-text-3">one map, optional</text>
+
+  <!-- edge arrow / hit direction -->
+  <polygon points="936,250 922,240 922,260" class="d-critical"/>
+  <text x="914" y="256" text-anchor="end" class="d-text-3">edge arrow: class glyph + colour</text>
+  <rect x="22" y="200" width="6" height="120" class="d-critical" opacity="0.55"/>
+  <polygon points="30,250 44,240 44,260" class="d-critical"/>
+  <text x="50" y="256" class="d-text-3">hit direction: chevron + glow</text>
+
+  <!-- place notice -->
+  <rect x="610" y="360" width="190" height="28" rx="5" class="d-box-soft"/>
+  <text x="705" y="379" text-anchor="middle" class="d-text">Entering: Evac shelter</text>
+
+  <!-- badge row -->
+  <g>
+    <rect x="36" y="360" width="86" height="26" rx="13" class="d-box-soft"/><text x="79" y="378" text-anchor="middle" class="d-text">Cold &#9660;</text>
+    <rect x="130" y="360" width="80" height="26" rx="13" class="d-box-soft"/><text x="170" y="378" text-anchor="middle" class="d-text">Tired</text>
+    <rect x="218" y="360" width="86" height="26" rx="13" class="d-box-soft"/><text x="261" y="378" text-anchor="middle" class="d-text">Pain &#9650;</text>
+    <text x="36" y="404" class="d-text-3">badges: icon + word + trend, only when abnormal, fixed order</text>
+  </g>
+
+  <!-- vitals strip -->
+  <rect x="36" y="420" width="54" height="70" rx="5" class="d-box-soft"/>
+  <!-- body figure: head, torso, arms, legs -->
+  <circle cx="63" cy="432" r="6" class="d-good"/>
+  <rect x="55" y="440" width="16" height="22" rx="3" class="d-warn"/>
+  <rect x="45" y="441" width="7" height="20" rx="3" class="d-hatch" style="color: var(--critical)"/>
+  <rect x="74" y="441" width="7" height="20" rx="3" class="d-good"/>
+  <rect x="55" y="464" width="7" height="22" rx="3" class="d-good"/>
+  <rect x="64" y="464" width="7" height="22" rx="3" class="d-good"/>
+  <text x="100" y="436" class="d-text">HP 62 %</text>
+  <rect x="100" y="446" width="140" height="8" rx="4" class="d-box-soft"/>
+  <rect x="100" y="446" width="98" height="8" rx="4" class="d-s1"/>
+  <text x="248" y="454" class="d-text-2">Stamina</text>
+  <text x="100" y="478" class="d-text">[walk] Walk</text>
+  <text x="36" y="508" class="d-text-3">vitals: body figure (fill = HP, hatch = broken), stamina when relevant, move mode</text>
+
+  <!-- ticker -->
+  <text x="330" y="436" class="d-text-2">&gt; You hear a gunshot to the north, far away.</text>
+  <text x="330" y="454" class="d-text-2">&gt; The zombie bites your left arm!</text>
+  <text x="330" y="472" class="d-text-2">&gt; You feel cold.</text>
+  <text x="330" y="492" class="d-text-3">message ticker: three lines, full log in Journal</text>
+
+  <!-- hotbar -->
+  <g>
+    <rect x="36" y="514" width="110" height="20" rx="4" class="d-box-soft"/><text x="91" y="528" text-anchor="middle" class="d-text" font-size="11">1 pistol 7/15</text>
+    <rect x="150" y="514" width="90" height="20" rx="4" class="d-box-soft"/><text x="195" y="528" text-anchor="middle" class="d-text" font-size="11">2 bandage x3</text>
+    <rect x="244" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="264" y="528" text-anchor="middle" class="d-text-3" font-size="11">3</text>
+    <rect x="288" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="308" y="528" text-anchor="middle" class="d-text-3" font-size="11">4</text>
+    <rect x="332" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="352" y="528" text-anchor="middle" class="d-text-3" font-size="11">5</text>
+    <rect x="376" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="396" y="528" text-anchor="middle" class="d-text-3" font-size="11">6</text>
+    <rect x="420" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="440" y="528" text-anchor="middle" class="d-text-3" font-size="11">7</text>
+    <rect x="464" y="514" width="40" height="20" rx="4" class="d-box-soft"/><text x="484" y="528" text-anchor="middle" class="d-text-3" font-size="11">8</text>
+  </g>
+
+  <!-- prompt -->
+  <rect x="760" y="500" width="164" height="30" rx="5" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="842" y="520" text-anchor="middle" class="d-text" font-weight="600">[E] Open door</text>
+  <text x="924" y="492" text-anchor="end" class="d-text-3">interaction prompt: one verb, hold for more</text>
+</g>
+</svg>

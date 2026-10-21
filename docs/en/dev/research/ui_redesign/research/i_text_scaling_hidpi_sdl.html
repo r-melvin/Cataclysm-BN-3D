@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text scaling, high-DPI, and UI layout for SDL3 games</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="text-scaling-high-dpi-and-ui-layout-for-sdl3-games">Text scaling, high-DPI, and UI layout for SDL3 games</h1>
+<p>Research note. Sources were fetched or searched in this session. Anything not backed by a fetched or searched source is marked <strong>UNVERIFIED</strong> or listed under "Could not verify".</p>
+<h2 id="1-sdl3-high-dpi-model">1. SDL3 high-DPI model</h2>
+<table><thead><tr><th>Item</th><th>Verified fact</th><th>Source</th></tr></thead><tbody><tr><td>High-DPI is always on in SDL3</td><td>"high DPI support is always enabled" (the high-DPI disable hint was removed)</td><td><a href="https://wiki.libsdl.org/SDL3/README-migration">https://wiki.libsdl.org/SDL3/README-migration</a></td></tr><tr><td><code>SDL_GetWindowDisplayScale</code></td><td><code>float SDL_GetWindowDisplayScale(SDL_Window *window);</code>. Described as "a combination of the window pixel density and the display content scale", i.e. the scale at which content should be drawn. Follows the OS scale setting and updates when the window moves to a display with a different setting. Returns 0.0f on failure. Main thread only. Since 3.2.0.</td><td><a href="https://wiki.libsdl.org/SDL3/SDL_GetWindowDisplayScale">https://wiki.libsdl.org/SDL3/SDL_GetWindowDisplayScale</a></td></tr><tr><td><code>SDL_GetWindowPixelDensity</code></td><td><code>float SDL_GetWindowPixelDensity(SDL_Window *window);</code>. "This is a ratio of pixel size to window size." Example: 1920x1080 window with a 3840x2160 back buffer gives 2.0. Returns 0.0f on failure.</td><td><a href="https://wiki.libsdl.org/SDL3/SDL_GetWindowPixelDensity">https://wiki.libsdl.org/SDL3/SDL_GetWindowPixelDensity</a></td></tr><tr><td><code>SDL_WINDOW_HIGH_PIXEL_DENSITY</code></td><td>"window uses high pixel density back buffer if possible". The page does not say how it relates to the two functions above. <strong>UNVERIFIED</strong>: from memory, without this flag the back buffer is window-sized and pixel density is 1.0. Check before relying on it.</td><td><a href="https://wiki.libsdl.org/SDL3/SDL_WindowFlags">https://wiki.libsdl.org/SDL3/SDL_WindowFlags</a></td></tr><tr><td>Pixel size query</td><td><code>SDL_GetWindowSizeInPixels()</code> replaces <code>SDL_Metal_GetDrawableSize()</code>. <code>SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED</code> tracks back-buffer size changes; <code>SDL_EVENT_WINDOW_SIZE_CHANGED</code> was removed.</td><td><a href="https://wiki.libsdl.org/SDL3/README-migration">https://wiki.libsdl.org/SDL3/README-migration</a></td></tr><tr><td>Mouse coordinates</td><td>Mouse events and several query/warp functions use floats for sub-pixel precision. The renderer no longer rewrites mouse/touch coordinates or scales them automatically.</td><td><a href="https://wiki.libsdl.org/SDL3/README-migration">https://wiki.libsdl.org/SDL3/README-migration</a></td></tr><tr><td>Event to render coordinates</td><td><code>bool SDL_ConvertEventToRenderCoordinates(SDL_Renderer *renderer, SDL_Event *event);</code>. "Convert the coordinates in an event to render coordinates."</td><td><a href="https://wiki.libsdl.org/SDL3/SDL_ConvertEventToRenderCoordinates">https://wiki.libsdl.org/SDL3/SDL_ConvertEventToRenderCoordinates</a></td></tr><tr><td>Safe area</td><td><code>bool SDL_GetWindowSafeArea(SDL_Window *window, SDL_Rect *rect);</code>. Area "which is safe to have interactable content". Obscured areas come from on-screen controls, curved edges, notches, and TV overscan (the examples are mine, not the page's). Keep rendering across the whole window, but keep important or interactive content inside this rect.</td><td><a href="https://wiki.libsdl.org/SDL3/SDL_GetWindowSafeArea">https://wiki.libsdl.org/SDL3/SDL_GetWindowSafeArea</a></td></tr></tbody></table>
+<h3 id="logical-presentation">Logical presentation</h3>
+<p><code>bool SDL_SetRenderLogicalPresentation(SDL_Renderer *renderer, int w, int h, SDL_RendererLogicalPresentation mode);</code>. Verified: "You can disable logical coordinates by setting the mode to SDL_LOGICAL_PRESENTATION_DISABLED, and in that case you get the full pixel resolution of the render target." Related: <code>SDL_GetRenderLogicalPresentation</code>, <code>SDL_GetRenderLogicalPresentationRect</code>.</p>
+<table><thead><tr><th>Mode</th><th>Documented behaviour</th><th>Trade-off for a text UI</th></tr></thead><tbody><tr><td><code>SDL_LOGICAL_PRESENTATION_DISABLED</code></td><td>"There is no logical size in effect"</td><td>Full pixel resolution. Text is laid out in real pixels. Best fidelity for font rendering.</td></tr><tr><td><code>SDL_LOGICAL_PRESENTATION_STRETCH</code></td><td>"The rendered content is stretched to the output resolution"</td><td>Distorts glyphs at any aspect mismatch. Poor for text.</td></tr><tr><td><code>SDL_LOGICAL_PRESENTATION_LETTERBOX</code></td><td>"fit to the largest dimension and the other dimension is letterboxed with the clear color"</td><td>Keeps aspect. Costs screen area on 21:9 and 4:3. Text stays undistorted but is resampled unless the scale is integral.</td></tr><tr><td><code>SDL_LOGICAL_PRESENTATION_OVERSCAN</code></td><td>"fit to the smallest dimension and the other dimension extends beyond the output bounds"</td><td>Fills the screen. Content at the edges is cut off, so the UI must respect the safe area.</td></tr><tr><td><code>SDL_LOGICAL_PRESENTATION_INTEGER_SCALE</code></td><td>"scaled up by integer multiples to fit the output resolution"</td><td>Crisp, but steps are large (2x, 3x), and the output can be much smaller than the window.</td></tr></tbody></table>
+<p>Sources: <a href="https://wiki.libsdl.org/SDL3/SDL_RendererLogicalPresentation">https://wiki.libsdl.org/SDL3/SDL_RendererLogicalPresentation</a> and <a href="https://wiki.libsdl.org/SDL3/SDL_SetRenderLogicalPresentation.">https://wiki.libsdl.org/SDL3/SDL_SetRenderLogicalPresentation.</a></p>
+<p>Implication for a custom UI: a logical size (for example 1280x800) lets you write layouts once, but it makes font sizes scale with the window. A UI that needs a fixed text scale should use <code>DISABLED</code> and compute the layout in device pixels, scaling by <code>SDL_GetWindowDisplayScale</code> itself.</p>
+<h2 id="2-sdl-ttf-3">2. SDL_ttf 3</h2>
+<table><thead><tr><th>Item</th><th>Verified fact</th><th>Source</th></tr></thead><tbody><tr><td>Renderer text engine</td><td><code>TTF_TextEngine * TTF_CreateRendererTextEngine(SDL_Renderer *renderer);</code>. "Create a text engine for drawing text on an SDL renderer."</td><td><a href="https://wiki.libsdl.org/SDL3_ttf/TTF_CreateRendererTextEngine">https://wiki.libsdl.org/SDL3_ttf/TTF_CreateRendererTextEngine</a></td></tr><tr><td>GPU text engine</td><td><code>TTF_TextEngine * TTF_CreateGPUTextEngine(SDL_GPUDevice *device);</code>. Should be called on the thread that created the device. Since 3.0.0. A <code>...WithProperties</code> variant takes an atlas texture size. <code>TTF_GetGPUTextDrawData</code> returns vertex data for your own GPU drawing.</td><td><a href="https://wiki.libsdl.org/SDL3_ttf/TTF_CreateGPUTextEngine,">https://wiki.libsdl.org/SDL3_ttf/TTF_CreateGPUTextEngine,</a> <a href="https://www.mankier.com/3/TTF_CreateGPUTextEngineWithProperties">https://www.mankier.com/3/TTF_CreateGPUTextEngineWithProperties</a> (search result, not fetched)</td></tr><tr><td>SDF</td><td><code>bool TTF_SetFontSDF(TTF_Font *font, bool enabled);</code>. "SDF is a technique that helps fonts look sharp even when scaling and rotating," and "requires special shader support for display." Works with Blended APIs; raw signed distance values go in the alpha channel. Changing it clears the glyph cache. The page does not name the shaders or engines that support it.</td><td><a href="https://wiki.libsdl.org/SDL3_ttf/TTF_SetFontSDF">https://wiki.libsdl.org/SDL3_ttf/TTF_SetFontSDF</a></td></tr><tr><td>Hinting</td><td><code>void TTF_SetFontHinting(TTF_Font *font, TTF_HintingFlags hinting);</code>. Values: <code>TTF_HINTING_NORMAL</code>, <code>TTF_HINTING_LIGHT</code>, <code>TTF_HINTING_MONO</code>, <code>TTF_HINTING_NONE</code>, <code>TTF_HINTING_LIGHT_SUBPIXEL</code> (3.0.0+). The page does not describe each value.</td><td><a href="https://wiki.libsdl.org/SDL3_ttf/TTF_SetFontHinting">https://wiki.libsdl.org/SDL3_ttf/TTF_SetFontHinting</a></td></tr><tr><td>DPI-aware size</td><td><code>bool TTF_SetFontSizeDPI(TTF_Font *font, float ptsize, int hdpi, int vdpi);</code>. Changing it clears the glyph cache. The page does not explain how DPI changes the rasterised size.</td><td><a href="https://wiki.libsdl.org/SDL3_ttf/TTF_SetFontSizeDPI">https://wiki.libsdl.org/SDL3_ttf/TTF_SetFontSizeDPI</a></td></tr><tr><td>Fallback fonts</td><td><code>bool TTF_AddFallbackFont(TTF_Font *font, TTF_Font *fallback);</code>. Supplies glyphs the primary lacks. Fallbacks "used in the order added". Both fonts should share size and style.</td><td><a href="https://wiki.libsdl.org/SDL3_ttf/TTF_AddFallbackFont">https://wiki.libsdl.org/SDL3_ttf/TTF_AddFallbackFont</a></td></tr><tr><td>Emoji / CJK</td><td>Fallback chaining is the documented mechanism. <strong>UNVERIFIED</strong>: whether SDL_ttf renders colour emoji, and which CJK fonts to ship. Not searched.</td><td>-</td></tr></tbody></table>
+<p>Implication: SDF is a shader-dependent option. With the renderer engine, scale glyphs at the target size instead, and use SDF only if you own a shader path. CJK support needs a fallback font with CJK coverage added via <code>TTF_AddFallbackFont</code>.</p>
+<h2 id="3-game-ui-scale-ranges">3. Game UI-scale ranges</h2>
+<table><thead><tr><th>Game</th><th>Range / control</th><th>Verified?</th><th>Source</th></tr></thead><tbody><tr><td>World of Warcraft</td><td>Checkbox plus slider. Minimum 0.64. The wiki says 1.0 scales widgets "as if the screen were 768 units tall". Default when unchecked is chosen by the game (0.64 to 1.00 Retail, 0.90 to 1.00 Classic). Menu location differs between sources.</td><td>Yes (wiki), upper bound implied</td><td><a href="https://warcraft.wiki.gg/wiki/UI_Scale">https://warcraft.wiki.gg/wiki/UI_Scale</a></td></tr><tr><td>Final Fantasy XIV</td><td>Forum user reports only 100% or 150% UI scale, which is too small or too large on 1440p.</td><td>Anecdotal (forum)</td><td><a href="https://forum.square-enix.com/ffxiv/showthread.php?p=5950592">https://forum.square-enix.com/ffxiv/showthread.php?p=5950592</a> (search result)</td></tr><tr><td>Factorio</td><td>Fixed 25% steps. Typed values are rounded to 75 or 100 per a forum post.</td><td>Anecdotal</td><td><a href="https://forums.factorio.com/viewtopic.php?p=476644">https://forums.factorio.com/viewtopic.php?p=476644</a> (search result)</td></tr><tr><td>Minecraft</td><td>Fixed presets (100%, 167% and so on). A feedback post asks for a continuous slider.</td><td>Anecdotal</td><td><a href="https://feedback.minecraft.net/hc/en-us/community/posts/47926274708109-Custom-UI-Scale-Slider-in-Video-Settings">https://feedback.minecraft.net/hc/en-us/community/posts/47926274708109-Custom-UI-Scale-Slider-in-Video-Settings</a> (search result)</td></tr><tr><td>Caves of Qud</td><td>"Modern and Overlay Control Scale" dropdown with no upper limit (2020 Steam thread). Play-area scale: Fit, Cover, Pixel Perfect (2022 devlog); default changed from Fit to Cover. Tiles are 16x24. Text font is Source Code Pro.</td><td>Yes (dev/community), dated</td><td><a href="https://steamcommunity.com/app/333640/discussions/0/2997669713998413653,">https://steamcommunity.com/app/333640/discussions/0/2997669713998413653,</a> <a href="https://freeholdgames.itch.io/cavesofqud/devlog/450719/feature-friday-november-11-2022,">https://freeholdgames.itch.io/cavesofqud/devlog/450719/feature-friday-november-11-2022,</a> <a href="https://wiki.cavesofqud.com/wiki/Visual_Style">https://wiki.cavesofqud.com/wiki/Visual_Style</a></td></tr><tr><td>Dwarf Fortress (Steam, v50)</td><td>Interface-scale toggle that fits menus to a grid (default 170x64 cells). A percentage sets cell growth when grid-fit is off. Tilesets are 8x12 and 10x12 cells. Users report the interface stays small on 4K.</td><td>Yes (community wiki), v50 details unconfirmed</td><td><a href="https://dwarffortresswiki.org/Settings,">https://dwarffortresswiki.org/Settings,</a> <a href="https://dwarffortresswiki.org/Tileset_repository">https://dwarffortresswiki.org/Tileset_repository</a></td></tr><tr><td>God of War (PC), Diablo IV</td><td><strong>Could not verify.</strong> A HUD-scale control was not found for either. The God of War search found only a render-scale option (50-100%), which is not HUD scale.</td><td>No</td><td>-</td></tr></tbody></table>
+<p>Pattern: a percentage slider with a floor near 0.6x to 0.7x and a ceiling near 1.5x to 2x is common (WoW shows 0.64 as the floor). Games with fixed steps (FFXIV, Factorio, Minecraft) get the most complaints.</p>
+<h2 id="4-minimum-sizes-and-distance-rules">4. Minimum sizes and distance rules</h2>
+<table><thead><tr><th>Rule</th><th>Value</th><th>Source</th></tr></thead><tbody><tr><td>Steam Deck: readable at distance</td><td>"Interface text must be easily readable at a distance of 12 inches/30 cm from the screen."</td><td><a href="https://partner.steamgames.com/doc/steamdeck/compat">https://partner.steamgames.com/doc/steamdeck/compat</a></td></tr><tr><td>Steam Deck: absolute minimum</td><td>"the smallest on-screen font character should never fall below 9 pixels in height at 1280x800." 9px is the approval minimum.</td><td>same</td></tr><tr><td>Steam Deck: target</td><td>"we recommend aiming for 12px whenever possible."</td><td>same</td></tr><tr><td>Steam Deck: settings</td><td>"We recommend supporting user-configurable text size and, when possible, contrast."</td><td>same</td></tr><tr><td>Steam Machine</td><td>Display tests are not run because "resolution and text size could vary depending on the size and type of display being used."</td><td>same</td></tr><tr><td>1080p / 1440p / 4K</td><td><strong>Could not verify</strong> an official minimum. The Steam Deck figure is the only official number found. Convert it to a physical size instead (see derived note below).</td><td>-</td></tr><tr><td>TV / 10-foot distance</td><td>Microsoft gives no number. Its guidance says the ten-foot viewing distance makes small fonts hard to read and that text should be minimized.</td><td><a href="https://msdn.microsoft.com/library/jj883727,">https://msdn.microsoft.com/library/jj883727,</a> <a href="https://learn.microsoft.com/pl-pl/windows/apps/design/devices/designing-for-tv">https://learn.microsoft.com/pl-pl/windows/apps/design/devices/designing-for-tv</a></td></tr><tr><td>TV: third-party figure</td><td>"never be smaller than 24 pts" and "18px is probably the smallest readable size, and only for nonessential labels". Third-party, not official.</td><td><a href="https://www.toptal.com/designers/ui/tv-ui-design">https://www.toptal.com/designers/ui/tv-ui-design</a></td></tr><tr><td>TV: viewing distance</td><td>Roblox: players "typically sitting 8–10 feet away". Recommends relative sizes over fixed pixels.</td><td><a href="https://create.roblox.com/docs/en-us/production/publishing/console-guidelines">https://create.roblox.com/docs/en-us/production/publishing/console-guidelines</a></td></tr><tr><td>Amazon Fire TV</td><td>Elements large and spaced for reading from a distance; minimise text.</td><td><a href="https://developer.amazon.com/docs/fire-tv/design-and-user-experience-guidelines.html">https://developer.amazon.com/docs/fire-tv/design-and-user-experience-guidelines.html</a></td></tr><tr><td>BDA (dyslexia) body text</td><td>Sans-serif at 12 pt or larger; some versions say 12-14 pt. Secondary sources only.</td><td>search results, not the BDA PDF</td></tr></tbody></table>
+<p>Derived (my arithmetic, not sourced): the Deck's 9px at 800 px tall is about 1.1% of screen height. At 30 cm and a 7-inch 1280x800 panel, 12px is about 2.3 mm tall. A 1080p monitor at arm's length needs a different pixel count for the same visual size. Use a physical-size target (mm or degrees of visual angle) rather than a pixel count across resolutions.</p>
+<h2 id="5-scaling-approaches-for-text-grid-and-custom-ui-games">5. Scaling approaches for text-grid and custom UI games</h2>
+<ul>
+<li><strong>Curses grids (CBN, Dwarf Fortress, Caves of Qud text mode):</strong> The grid is the layout. Scaling means changing the cell size or the grid-fit rule. DF's grid-fit (170x64 default) and Qud's Fit/Cover/Pixel Perfect are both documented examples of the trade-off between readability and fitting the screen.
+</li>
+<li><strong>Tile sets with fixed art:</strong> Scaling by integer multiples keeps the art crisp (Qud's Pixel Perfect). Aspect mismatch shows up as stretched UI (DF wiki: a tileset with a different aspect ratio stretches UI elements).
+</li>
+<li><strong>Immediate-mode GUI (ImGui):</strong> See section 6.
+</li></ul>
+<h2 id="6-imgui-font-scaling">6. ImGui font scaling</h2>
+<ul>
+<li>Verified (GitHub issue, SDL3 backend): the SDL3 backend reports FontScaleDpi=2.0 on a high-DPI display and gives crisp text. The SDL2 backend reported 2.881 and blurry text. Source: search result citing <a href="https://upd.dev/ocornut/imgui/issues/8756">https://upd.dev/ocornut/imgui/issues/8756</a> (SDL2 scale detection). Treat as a user report.
+</li>
+<li>Verified (issue #797 summary): text turned blurry under the built-in font scaling, even at 2x. Maintainers' guidance: a bitmap font stretched past its rendered size looks soft. Source: <a href="https://upd.dev/ocornut/imgui/issues/797">https://upd.dev/ocornut/imgui/issues/797</a> (search summary).
+</li>
+<li>Verified (ReShade forum): scaling only the overlay text leaves the shared atlas unchanged. Rebuilding the atlas at the target global font size fixes it. Source: <a href="https://www.reshade.me/forum/troubleshooting/8085-force-reshade-imgui-to-rebuild-font-atlas-for-given-size">https://www.reshade.me/forum/troubleshooting/8085-force-reshade-imgui-to-rebuild-font-atlas-for-given-size</a> (search result).
+</li>
+<li>Conflicting advice: some guides point to <code>io.DisplayFramebufferScale</code>, others to <code>io.FontScaleDpi</code>. <strong>UNVERIFIED</strong> which is right for your ImGui version. Check the imgui.h and imgui_impl_sdl3 source.
+</li>
+<li><strong>Could not verify:</strong> CDDA-specific ImGui blurry-font complaints. Searches turned up only an old CDDA forum thread on readability, with no ImGui mention. The likely cause is the same atlas-stretch problem above, but that is inference.
+</li></ul>
+<h2 id="7-layout-approaches-c-custom-drawn-ui">7. Layout approaches (C++ custom-drawn UI)</h2>
+<table><thead><tr><th>Approach</th><th>Description</th><th>Pros</th><th>Cons</th></tr></thead><tbody><tr><td>Anchor-based (Unity RectTransform)</td><td>Elements anchored to parent points (min/max anchors), with offsets. <strong>UNVERIFIED from memory:</strong> the docs fetch was redirected and not read.</td><td>Simple; scales with the parent; familiar to Unity users.</td><td>Anchors are hard to reason about for lists and wrapping text; needs a retained node tree.</td></tr><tr><td>Flexbox-style (Yoga)</td><td>Meta's embeddable C++ flexbox subset. Layout only, no drawing. MIT. Used by React Native, Qt Quick Layouts, ComponentKit.</td><td>Mature. Handles wrapping, alignment, and percentages. Fits a retained tree.</td><td>Pulls a dependency. Only a subset of CSS flexbox. Its C++ standard requirement differs between sources, so check the repo.</td></tr><tr><td>Flexbox-style (Clay)</td><td>Single-header C library by Nic Barker. Flexbox-like, immediate mode (rebuilt each frame), arena memory, no malloc. Emits render commands; you draw them.</td><td>Tiny; no dependencies; immediate mode is simple to host in an existing loop; scrolling and text wrapping included.</td><td>Young library. Its API is macro-based. You write the renderer.</td></tr><tr><td>Constraint-based</td><td>Elements placed by constraints (e.g. Cassowary). <strong>UNVERIFIED:</strong> not researched.</td><td>Expressive for resizing.</td><td>Solver cost and complexity. Usually more than a terminal-style game needs.</td></tr><tr><td>9-slice panels</td><td>Corners fixed, edges and centre stretched. <strong>UNVERIFIED:</strong> not researched beyond general knowledge.</td><td>Keeps frame borders crisp at any panel size.</td><td>Needs art prepared for it. Does not solve text layout.</td></tr><tr><td>Safe area</td><td><code>SDL_GetWindowSafeArea</code> (section 1).</td><td>Correct for TVs, notches, and overscan.</td><td>Only for the outer frame. Interior layout still needed.</td></tr><tr><td>Aspect-ratio handling</td><td>Logical presentation (section 1), or direct layout with pixel-based breakpoints. <strong>UNVERIFIED:</strong> 21:9 and 4:3 specifics not researched.</td><td>Simple with logical size.</td><td>Letterboxing wastes space on ultrawide. Overscan clips.</td></tr></tbody></table>
+<p>Recommendation (my view, not sourced): for a custom C++ UI, a flexbox-style layer (Clay, if you want no dependencies and immediate mode; Yoga if you want a retained tree and a proven engine) on top of a text-measurement function is a reasonable start. Keep the font scale as a single user setting that feeds the measurement step. This avoids logical presentation for text.</p>
+<h2 id="8-font-choices">8. Font choices</h2>
+<h3 id="opendyslexic">OpenDyslexic</h3>
+<ul>
+<li>Wery &amp; Diliberto (2016), Annals of Dyslexia. Single-case alternating-treatment design, about a dozen children aged 9-12. Compared OpenDyslexic with Arial and Times New Roman. "no improvement in reading rate or accuracy for individual students with dyslexia, as well as the group as a whole." No student preferred it. Source: <a href="https://link.springer.com/article/10.1007/s11881-016-0127-1">https://link.springer.com/article/10.1007/s11881-016-0127-1</a> (search result; the abstract was not fetched). The sample is too small to show no effect, only that no effect was found.
+</li>
+<li>An eye-tracking study (48 dyslexic readers, aged 11-50, per search summary): "OpenDyslexic did not lead to better or worse readability compared to standard fonts, and participants significantly preferred Verdana and Helvetica over OpenDyslexic." Same search summary: sans serif, monospaced, and roman styles beat serif, proportional, and italic. Source: <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5629233/">https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5629233/</a> is a different OpenDyslexic study cited in search results; the 48-reader study's URL was not confirmed. Treat the figures as search-summary claims.
+</li>
+<li>A review found no evidence that special dyslexia fonts give statistically significant speed gains (search summary of a literature review; not located).
+</li>
+<li>Verdict: no good evidence that OpenDyslexic improves reading speed or accuracy. Comprehension results are mixed and the studies are small.
+</li></ul>
+<h3 id="lexend">Lexend</h3>
+<ul>
+<li>A widely cited study reported a 19.8% reading-speed gain over Times New Roman. Google-financed. Commentators note it rests on one study of about 20 children. No peer-reviewed replication was found. Sources: <a href="https://teleprompter.com/blog/effectiveness-of-lexend-and-opendyslexic-fonts">https://teleprompter.com/blog/effectiveness-of-lexend-and-opendyslexic-fonts</a> and <a href="https://typedrawers.com/discussion/comment/43203">https://typedrawers.com/discussion/comment/43203</a> (search results, not primary).
+</li>
+<li>Verdict: unconfirmed. Do not claim it as evidence-backed without the original paper.
+</li></ul>
+<h3 id="atkinson-hyperlegible-next">Atkinson Hyperlegible (Next)</h3>
+<ul>
+<li>Designed by the Braille Institute for low-vision readers. Distinguishes similar glyphs (l, I, 1) by design. Developed with low-vision client feedback and legibility research. Source: <a href="https://en.wikipedia.org/wiki/Atkinson_Hyperlegible">https://en.wikipedia.org/wiki/Atkinson_Hyperlegible</a> (search result).
+</li>
+<li>A 2024 CSUN session described a quantitative study with low-vision readers, but the results were not found. <strong>Unverified</strong> beyond design rationale.
+</li>
+<li>Atkinson Hyperlegible Next (2025): variable weight, wider character set, and a monospaced variant. Source: search summary of the Braille Institute release.
+</li></ul>
+<h3 id="sans-serif-guidance-for-body-text">Sans-serif guidance for body text</h3>
+<ul>
+<li>BDA guidance (secondary sources): sans-serif such as Arial, Verdana, Tahoma, Century Gothic, Trebuchet, Calibri, Open Sans; 12 pt or larger. Not from the BDA PDF.
+</li></ul>
+<p>Recommendation: pick a sans-serif with clear glyph distinction (Atkinson Hyperlegible or Verdana/Helvetica-class) for body text. Do not rely on OpenDyslexic for legibility claims. Test with your own readers.</p>
+<h2 id="9-could-not-verify">9. Could not verify</h2>
+<ul>
+<li>SDL_WINDOW_HIGH_PIXEL_DENSITY's exact effect on back buffer size and its link to SDL_GetWindowPixelDensity. The fetched pages do not state it.
+</li>
+<li>Logical-presentation behaviour for 21:9 and 4:3 beyond the documented mode descriptions.
+</li>
+<li>SDL_ttf emoji (colour) support and CJK coverage specifics.
+</li>
+<li>SDF shader requirements and which engines support them.
+</li>
+<li>God of War and Diablo IV UI-scale ranges.
+</li>
+<li>Minimum sizes at 1080p, 1440p and 4K. Only the Steam Deck rule is official.
+</li>
+<li>Unity RectTransform anchor documentation (redirect not followed to content).
+</li>
+<li>Constraint-based layout and 9-slice details.
+</li>
+<li>CDDA's ImGui blurry-font complaints. Not found.
+</li>
+<li>Atkinson Hyperlegible low-vision study results (CSUN 2024).
+</li>
+<li>Lexend replication studies.
+</li>
+<li>BDA style guide primary text (font sizes differ between secondary sources: 12 pt vs 12-14 pt).
+</li>
+<li>Dwarf Fortress v50 interface-scale details beyond the community wiki.
+</li>
+<li>Caves of Qud's current menu names (sources are 2020-2022).
+</li></ul>
+</main>
+</body>
+</html>

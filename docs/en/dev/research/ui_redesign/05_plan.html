@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>05. Implementation plan</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="README.html">Summary</a><a href="01_pain_points.html">01 Pain points</a><a href="02_patterns.html">02 Patterns</a><a href="03_design.html">03 Design</a><a href="04_architecture.html">04 Architecture</a><a href="05_plan.html" class="current">05 Plan</a><a href="06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="05-implementation-plan">05. Implementation plan</h1>
+<p>Phased, ordered milestones. Effort is for one experienced developer working on this alone (S ≤ 1 week, M 2-3 weeks, L 4-6 weeks, XL &gt; 6 weeks); parallel streams are noted where a second person helps. "Files" are the likely touch points; new code lives under <code>src/ui/</code>. Every milestone ends with the full build of <code>cataclysm-bn-tiles</code> and <code>cata_test-tiles</code>, the <code>[r3d]</code> test run with <code>CATA_TEST_COMPUTE_ACCELERATION=cpu</code>, and the screenshot suite.</p>
+<p>Sequencing constraints set by the user: the 3D sidebar removal (M3) happens only after the HUD design in <code>03_design.md</code> §4.1 and §3.1 is approved, and with no stopgap HUD in between. Decisions of 2026-10-21 folded in: curses is retired (<code>BACKLOG.md</code> UI-02; milestone M1.5 and phase 3 inside M11; costs in <code>06_frontend_options.md</code> §4), the frontend stays SDL3 unless the decision gate at the end of M1 fails (<code>06_frontend_options.md</code> §3), and the Tutorial and Guided Play merge into one guided start (UI-01; milestone M9.5).</p>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="t-ms">
+<title id="t-ms">Milestone dependencies. Thick blue borders mark the critical path (M0 to M11); diamonds are gates that need a decision; dashed boxes run in parallel streams. M12 is optional.</title>
+<defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker></defs>
+<g font-size="12">
+  <!-- column 1 -->
+  <rect x="20" y="150" width="90" height="44" rx="6" class="d-box d-stroke-s1" stroke-width="2.5"/>
+  <text x="65" y="168" text-anchor="middle" class="d-text" font-weight="600">M0 spike</text><text x="65" y="184" text-anchor="middle" class="d-text-3">1 wk</text>
+
+  <rect x="140" y="150" width="100" height="44" rx="6" class="d-box d-stroke-s1" stroke-width="2.5"/>
+  <text x="190" y="168" text-anchor="middle" class="d-text" font-weight="600">M1 foundation</text><text x="190" y="184" text-anchor="middle" class="d-text-3">4-6 wk, Settings</text>
+  <!-- gate -->
+  <polygon points="190,206 212,228 190,250 168,228" class="d-box" stroke="var(--warn)" stroke-width="2"/>
+  <text x="190" y="232" text-anchor="middle" class="d-text" font-size="10">gate</text>
+  <text x="190" y="266" text-anchor="middle" class="d-text-3">accesskit-c works?</text>
+  <text x="190" y="280" text-anchor="middle" class="d-text-3">else re-cost Godot</text>
+
+  <!-- column 2 -->
+  <rect x="280" y="60" width="110" height="44" rx="6" class="d-box" stroke-dasharray="5 3"/>
+  <text x="335" y="78" text-anchor="middle" class="d-text" font-weight="600">M1.5 curses ph.1</text><text x="335" y="94" text-anchor="middle" class="d-text-3">1 wk</text>
+
+  <rect x="280" y="150" width="110" height="44" rx="6" class="d-box d-stroke-s1" stroke-width="2.5"/>
+  <text x="335" y="168" text-anchor="middle" class="d-text" font-weight="600">M2 input</text><text x="335" y="184" text-anchor="middle" class="d-text-3">2-3 wk, gamepad</text>
+
+  <rect x="280" y="240" width="110" height="44" rx="6" class="d-box" stroke-dasharray="5 3"/>
+  <text x="335" y="258" text-anchor="middle" class="d-text" font-weight="600">M4 config file</text><text x="335" y="274" text-anchor="middle" class="d-text-3">2 wk</text>
+
+  <!-- column 3 -->
+  <polygon points="460,110 482,132 460,154 438,132" class="d-box" stroke="var(--warn)" stroke-width="2"/>
+  <text x="460" y="136" text-anchor="middle" class="d-text" font-size="10">HUD ok?</text>
+  <rect x="420" y="160" width="110" height="44" rx="6" class="d-box d-stroke-s1" stroke-width="2.5"/>
+  <text x="475" y="178" text-anchor="middle" class="d-text" font-weight="600">M3 HUD + sidebar</text><text x="475" y="194" text-anchor="middle" class="d-text-3">4-5 wk</text>
+
+  <!-- column 4 -->
+  <rect x="560" y="60" width="110" height="44" rx="6" class="d-box" stroke-dasharray="5 3"/>
+  <text x="615" y="78" text-anchor="middle" class="d-text" font-weight="600">M6 char/journal/map</text><text x="615" y="94" text-anchor="middle" class="d-text-3">4-6 wk</text>
+
+  <rect x="560" y="160" width="110" height="44" rx="6" class="d-box d-stroke-s1" stroke-width="2.5"/>
+  <text x="615" y="178" text-anchor="middle" class="d-text" font-weight="600">M5 inventory</text><text x="615" y="194" text-anchor="middle" class="d-text-3">6-8 wk</text>
+
+  <rect x="560" y="250" width="110" height="44" rx="6" class="d-box" stroke-dasharray="5 3"/>
+  <text x="615" y="268" text-anchor="middle" class="d-text" font-weight="600">M8 accessibility</text><text x="615" y="284" text-anchor="middle" class="d-text-3">3 wk</text>
+
+  <rect x="560" y="340" width="110" height="44" rx="6" class="d-box" stroke-dasharray="5 3"/>
+  <text x="615" y="358" text-anchor="middle" class="d-text" font-weight="600">M9 ref/menus/new game</text><text x="615" y="374" text-anchor="middle" class="d-text-3">4-5 wk</text>
+
+  <!-- column 5 -->
+  <rect x="700" y="160" width="110" height="44" rx="6" class="d-box d-stroke-s1" stroke-width="2.5"/>
+  <text x="755" y="178" text-anchor="middle" class="d-text" font-weight="600">M7 craft/build/cursor</text><text x="755" y="194" text-anchor="middle" class="d-text-3">4-6 wk</text>
+
+  <rect x="700" y="340" width="110" height="44" rx="6" class="d-box" stroke-dasharray="5 3"/>
+  <text x="755" y="358" text-anchor="middle" class="d-text" font-weight="600">M9.5 UI-01 guided start</text><text x="755" y="374" text-anchor="middle" class="d-text-3">3 wk</text>
+
+  <!-- column 6 -->
+  <rect x="840" y="160" width="100" height="44" rx="6" class="d-box d-stroke-s1" stroke-width="2.5"/>
+  <text x="890" y="178" text-anchor="middle" class="d-text" font-weight="600">M10 vehicle</text><text x="890" y="194" text-anchor="middle" class="d-text-3">4-6 wk</text>
+
+  <rect x="840" y="250" width="100" height="44" rx="6" class="d-box d-stroke-s1" stroke-width="2.5"/>
+  <text x="890" y="268" text-anchor="middle" class="d-text" font-weight="600">M11 retire legacy</text><text x="890" y="284" text-anchor="middle" class="d-text-3">3 wk + curses ph.3</text>
+
+  <rect x="840" y="340" width="100" height="44" rx="6" class="d-box" stroke-dasharray="2 3"/>
+  <text x="890" y="358" text-anchor="middle" class="d-text" font-weight="600">M12 AccessKit</text><text x="890" y="374" text-anchor="middle" class="d-text-3">optional, gated</text>
+
+  <!-- arrows -->
+  <g class="d-line" marker-end="url(#ah3)">
+    <path d="M110,172 H138"/>
+    <path d="M240,172 H278"/>
+    <path d="M240,172 Q260,172 260,120 Q260,82 278,82"/>
+    <path d="M240,172 Q260,172 260,230 Q260,262 278,262"/>
+    <path d="M390,172 H418"/>
+    <path d="M530,182 H558"/>
+    <path d="M530,182 Q545,182 545,120 Q545,82 558,82"/>
+    <path d="M530,182 Q545,182 545,240 Q545,272 558,272"/>
+    <path d="M390,262 Q470,262 470,340 Q470,362 558,362"/>
+    <path d="M670,182 H698"/>
+    <path d="M670,362 H698"/>
+    <path d="M670,82 Q690,82 690,300 Q690,350 698,352"/>
+    <path d="M810,182 H838"/>
+    <path d="M890,204 V248"/>
+    <path d="M810,362 Q830,362 830,300 Q830,272 838,272"/>
+    <path d="M890,294 V338" stroke-dasharray="3 3"/>
+  </g>
+  <text x="20" y="420" class="d-text-3">Critical path about 26-34 weeks for one developer, 17-21 with two. Parallel streams: M1.5 + M2 + M4 after the gate; M5 + M6 + M8 after M3; M9 after M4.</text>
+</g>
+</svg>
+<figcaption></figcaption></figure>
+<h2 id="smallest-valuable-slice">Smallest valuable slice</h2>
+<p><strong>M1 + M2:</strong> the widget layer with the Settings screen and the Controls editor, and real gamepad support. It ships remapping of every device (fixing a verified defect: gamepad buttons do not work today), the command palette, UI scale and the narrator skeleton, without touching a single gameplay screen. It is the foundation every later screen needs, and it is testable on its own.</p>
+<h2 id="m0-decisions-and-spike-s-1-week">M0. Decisions and spike (S, 1 week)</h2>
+<p>Scope: get answers to the open questions below; spike the <code>ui::node</code> tree with one screen (Settings) on the SDL backend; measure text-engine glyph quality at 75/100/200 % and on a 1280x800 window; build the <code>accesskit-c</code> 0.23.1 <code>examples/sdl</code> program and attach a minimal tree from the spike screen, then try it with Orca (here), NVDA and VoiceOver (testers). Files: <code>src/ui/</code> (spike), <code>CMakeLists.txt</code> (pin SDL3_ttf tag; optional <code>accesskit-c</code> prebuilt). → verify: the spike screen renders; a scale change needs no restart; screenshot at 1280x800 has no glyph under 9 px; at least one screen reader reads the spike tree (gate input for M1). Risks: SDL3_ttf text engine behaviour on the software renderer; <code>accesskit-c</code> adapters are documented as best-effort.</p>
+<h2 id="m1-foundation-l-4-6-weeks-two-streams">M1. Foundation (L, 4-6 weeks; two streams)</h2>
+<p>Scope: <code>ui::node</code>, layout (box/flex, wrapping text), focus manager with spatial navigation, <code>menu</code> input context, theme tokens, SDL backend on <code>SDL_Renderer</code> + <code>TTF_TextEngine</code>, widgets (panel, stack, tabs, list, text, button, toggle, choice, slider, text field, progress, card), narrator core with a no-op speech backend, screenshot and transcript test harness. Deliver the <strong>Settings screen</strong> (39 options, six tabs) and <strong>Reference</strong> skeleton. Stream A: tree, layout, backend. Stream B: widgets, Settings screen, tests. Files: <code>src/ui/*</code>, <code>src/ui_manager.*</code> (register new adaptors), <code>src/options.cpp</code> (expose a curated list), <code>src/sdltiles.cpp</code> (present order), <code>tests/ui_*_test.cpp</code>, <code>tests/data/ui_snapshots/</code>. Depends on: M0. → verify: Settings opens from the pause menu; keyboard, mouse (hit-tested) and D-pad navigate it; snapshot tests pass at 100 % and 200 %; narrator transcript test speaks "Settings. 6 tabs." then each focused row. → <strong>Frontend decision gate</strong> (<code>06_frontend_options.md</code> §3): the Settings tree is exposed through <code>accesskit-c</code> and read by at least two of NVDA, VoiceOver, Orca. Pass: continue on SDL3. Fail after two weeks of effort: stop, re-cost option B (Godot) with the spike's findings, and get a user decision before M2. Risks: layout engine scope creep (keep to box/flex, adopt Yoga only on demonstrated need).</p>
+<h2 id="m1-5-curses-retirement-phase-1-s-1-week-parallel-with-m2">M1.5. Curses retirement, phase 1 (S, 1 week; parallel with M2)</h2>
+<p>Scope (<code>06_frontend_options.md</code> §4): delete <code>src/ncurses_def.cpp/.h</code> and <code>src/wincurse.cpp</code>; remove the <code>CURSES</code> option, <code>find_package(Curses)</code>, the macOS ncursesw bundling and the <code>tests/CMakeLists.txt</code> branch; delete the <code>linux-curses</code>, <code>dist-curses</code>, <code>osx-curses-*-dist</code> presets and the four curses CI jobs; drop the <code>cata_test</code> (curses) target; update the building guides, <code>ui_overhaul.md</code> and README. Keep <code>cursesport.cpp</code> and <code>cursesdef.h</code> (legacy screens still draw through them) and leave <code>#if defined(TILES)</code> guards in place in files this fork has not otherwise changed. Files: <code>CMakeLists.txt:33, 207-212, 646-660, 893-934</code>, <code>src/CMakeLists.txt:208-230</code>, <code>tests/CMakeLists.txt:37</code>, <code>CMakePresets.json</code>, <code>.github/workflows/{build,matrix,release}.yml</code>, <code>docs/en/dev/guides/building/*</code>, <code>docs/en/dev/guides/ui_overhaul.md</code>, <code>README.md</code>. Depends on: M0 (user decision recorded). → verify: <code>cmake --preset linux-full</code> and the MSVC preset configure; <code>rg CURSES CMakeLists.txt src/CMakeLists.txt tests/CMakeLists.txt CMakePresets.json .github/workflows</code> is empty; both binaries build; the full test run is unchanged; <code>--check-mods</code> passes. Risks: upstream merge friction in <code>CMakeLists.txt</code> and workflows (fork-only decision; see open question 1); the Android build must still configure (it uses the tiles path).</p>
+<h2 id="m2-input-gamepad-controls-editor-palette-m-2-3-weeks">M2. Input: gamepad, controls editor, palette (M, 2-3 weeks)</h2>
+<p>Scope: <code>SDL_Gamepad</code> migration with hot-plug, sticks, rumble, labels; <code>input_event</code> modifiers and device; context parent chain and the collapse to 12 contexts (legacy contexts mapped); Controls editor (search, three columns, capture with modifiers and middle mouse, conflicts, per-action hold/toggle, presets incl. Left-handed and One-handed); command palette; glyphs for the last device; on-screen keyboard for text entry. Files: <code>src/sdltiles.cpp</code> (event loop 1871-1935, 3277-3510), <code>src/input.h/.cpp</code> (<code>display_menu</code> replaced), <code>src/action.cpp</code>, <code>data/raw/keybindings/*.json</code> (context restructure, gamepad names), <code>src/ui/screens/controls.cpp</code>, <code>tests/input_test.cpp</code>. Depends on: M1. → verify: a gamepad's face buttons trigger actions (today they do not); <code>Ctrl+Shift+K</code> and middle mouse are capturable; rebinding movement keys does not break menu navigation (CDDA #45927 scenario as a test); the palette lists and runs every action; Deck rule "default config reaches all content" checked by a test that walks the play context. Risks: legacy context names used by mods and Lua (<code>input_context</code> ids); keep aliases.</p>
+<h2 id="m3-hud-and-sidebar-removal-in-3d-mode-l-4-5-weeks-after-hud-approval">M3. HUD and sidebar removal in 3D mode (L, 4-5 weeks; after HUD approval)</h2>
+<p>Scope: implement §4.1 of the design on the new layer: vitals strip with body figure, stamina and move mode; badge row with icons, words and trend; message ticker; hotbar (display only until M5 binds items); interaction prompt with primary verb and hold-list; safe-mode state; clock on the compass; edge-arrow chevrons and class glyphs; vehicle cluster; HUD modes Full / Minimal / Off; "Reduce motion" behaviour for fades and hit glow. Then remove the sidebar in 3D: <code>ui::sidebar_hidden()</code>, panel widths 0, <code>draw_panels</code> early return, terrain window at full width, re-anchor the five sidebar-relative placements, drop the pixel minimap in 3D, make <code>}</code> a no-op with a message, keep saved layouts loading for classic. Files: <code>src/r3d_hud.cpp/.h</code> (badges, arrows, compass remain; texts move to the new layer), <code>src/sdltiles.cpp:1611-1700</code>, <code>src/game.cpp:4690-4730, 4946-5000, 9576, 10082-10107, 10531-10539</code>, <code>src/panels.cpp/.h</code> (<code>get_width_*</code>, <code>show_adm</code>), <code>src/pixel_minimap.cpp</code>, <code>src/status_report.cpp</code> (add vehicle and noise sentences), <code>src/options.cpp</code> (HUD mode, Minimap), <code>src/ui/hud/*</code>, <code>tests/r3d_hud_test.cpp</code>, <code>tests/ui_hud_test.cpp</code>. Depends on: M1 (layer), M2 (prompt glyphs). Parallel with M4. → verify: in 3D the picture spans the window and no panel is drawn; every sidebar item in the §3.1 table is visible on the HUD, in <code>@</code>, or in F4 (a test walks the table: for each item, assert the HUD text or the F4 sentence); classic 2D is pixel-identical to before (snapshot); <code>[r3d]</code> passes; geometry snapshot unchanged; Xvfb smoke with a private save; interrupt popup still names the creature; Lua sidebar widgets appear as badges. Risks: hidden consumers of <code>TERRAIN_WINDOW_WIDTH</code> and sidebar width (grep lists 7 sites in <code>game.cpp</code>; there may be more in <code>overmap_ui.cpp</code>, <code>pickup.cpp</code>, <code>advanced_inv.cpp</code> via <code>PICKUP_POSITION</code>/<code>LOOKAROUND_POSITION</code>); runtime toggle of the renderer must re-run the resize callback; message visibility regression if the ticker lands later than the removal (they ship in the same milestone by rule).</p>
+<h2 id="m4-advanced-config-file-and-options-migration-m-2-weeks-parallel-with-m3">M4. Advanced config file and options migration (M, 2 weeks; parallel with M3)</h2>
+<p>Scope: <code>config/advanced.json</code> writer/reader with <code>&quot;//key&quot;</code> descriptions, validation and warnings, reload points, <code>--dump-advanced-options</code> generating <code>docs/en/user/advanced_options.md</code>, one-time migration from <code>options.json</code>, "Reset advanced settings" verb, world-option split (8 in the New game screen, rest in <code>worldoptions.json</code>). Files: <code>src/options.cpp/.h</code> (tag each option <code>ui | advanced | world_ui | world_file</code>), <code>src/main.cpp</code> (CLI flag), <code>docs/en/user/advanced_options.md</code> (generated), <code>tests/options_test.cpp</code>. Depends on: M1 (Settings screen shows the curated set). → verify: fresh install creates the file with every advanced key and description; a bad value logs a warning and uses the default; editing the file and closing Settings applies non-restart keys; the generated doc lists the same keys as the file; the Settings screen shows exactly 39 options (test counts them).</p>
+<p>Where each current option goes (by rule; the per-option list is produced by the tagging commit and checked by the count test):</p>
+<table><thead><tr><th>Current page</th><th>In-game (Settings tab)</th><th>Advanced file</th><th>Elsewhere</th></tr></thead><tbody><tr><td>general (5)</td><td>Master/Music/Effects/Ambient (Audio)</td><td><code>SOUNDPACKS</code></td><td></td></tr><tr><td>interface (57)</td><td><code>USE_LANG</code>, Units (merges 5), Confirmations (merges 3), Safe mode, Auto-pickup</td><td>the other 45 (<code>MESSAGE_*</code>, <code>SIDEBAR_*</code>, <code>AIM_*</code>, <code>*_POSITION</code>, <code>MENU_SCROLL</code>, <code>EDGE_SCROLL</code>, <code>HIDE_CURSOR</code>, vehicle view tweaks, ...)</td><td><code>ENABLE_JOYSTICK</code> → Controls: Gamepad; <code>CLOSE_ADV_INV</code>, <code>OPEN_DEFAULT_ADV_INV</code>, <code>NEW_PICKUP_MENU</code>, <code>MORALE_STYLE</code>, <code>HEALTH_STYLE</code>, <code>ITEM_SYMBOLS</code> removed with their screens</td></tr><tr><td>graphics (74)</td><td>Renderer (2D / 3D; <code>USE_TILES</code> is removed with curses), Tileset, Window, HUD, Minimap, Camera, FOV, Weather effects, Cutaway</td><td><code>ANIMATION_*</code>, <code>PIXEL_MINIMAP_*</code>, <code>R3D_FP_*</code> tuning, <code>R3D_VIEW_DEPTH</code>, <code>R3D_LEVEL_HEIGHT</code>, <code>R3D_THIN_WALLS</code>, <code>R3D_WALL_TEXTURES</code>, <code>R3D_VOXEL_ITEMS</code>, <code>R3D_AVATAR_SILHOUETTE</code>, <code>TEXTURE_STREAMING</code>, <code>RENDER_BATCHING</code>, <code>FRAMEBUFFER_ACCEL</code>, <code>VSYNC</code>, <code>SCALING_FACTOR</code>, <code>COMPUTE_ACCELERATION</code>, <code>TERMINAL_X/Y</code>, night-vision colours, <code>MEMORY_MAP_MODE</code>, loading-screen options</td><td><code>MODERN_MENUS</code> → theme file; <code>R3D_HUD</code> → HUD mode; <code>R3D_WASD</code> → movement preset; <code>R3D_FP_COMPASS/EDGE_ALERT/CROSSHAIR</code> → HUD mode</td></tr><tr><td>font page (3)</td><td>Readable font (Accessibility), UI scale (Accessibility)</td><td><code>FONT_*</code>, <code>USE_DRAW_ASCII_LINES_ROUTINE</code>, <code>FONT_BLENDING</code></td><td></td></tr><tr><td>world_default (47)</td><td>New game &gt; World: <code>CITY_SIZE</code>, <code>SPAWN_DENSITY</code>, <code>NPC_DENSITY</code>, <code>SEASON_LENGTH</code>, <code>MONSTER_UPGRADE_FACTOR</code>, <code>VEHICLE_SPAWNRATE</code>, <code>ITEM_SPAWNRATE</code>, <code>INITIAL_DAY</code></td><td></td><td>the other 39 in the world's <code>worldoptions.json</code>, documented</td></tr><tr><td>debug (24)</td><td>none</td><td>all</td><td></td></tr><tr><td>android (43)</td><td>none</td><td>all (Android build only)</td><td></td></tr></tbody></table>
+<h2 id="m5-inventory-xl-6-8-weeks-two-streams">M5. Inventory (XL, 6-8 weeks; two streams)</h2>
+<p>Scope: the unified Inventory screen in four modes; item card with summary, comparison, full info; sort with secondary key; category tabs; search that looks inside containers; chips (can use, needed, junk); marks and bulk move; worn order editing; quick-slot assignment; replace <code>game_menus::inv::*</code> call sites with Pick mode; loot mode from the prompt; trade mode from dialogue. Stream A: view model (grouping, sort, search, comparison deltas) with pure tests. Stream B: screen and call-site migration. Files: <code>src/inventory_ui.*</code>, <code>src/game_inventory.*</code>, <code>src/advanced_inv*.cpp</code>, <code>src/pickup.cpp</code>, <code>src/examine_item_menu.cpp</code>, <code>src/armor_layers.cpp</code>, <code>src/reload/reload_ui.cpp</code>, <code>src/trade_win.*</code>, <code>src/item.cpp</code> (<code>info()</code> sectioning for the card), <code>src/output.cpp</code> (<code>draw_item_info</code> consumers), <code>src/ui/screens/inventory*.cpp</code>, <code>tests/inventory_ui_test.cpp</code>. Depends on: M1, M2, M3 (hotbar). → verify: every former call site opens the new screen in the right mode (a test enumerates <code>game_menus::inv</code> entry points); sort is stable; search finds "apple juice" inside a bottle (BN #7280 scenario); comparison deltas match <code>item::info</code> numbers; drag-and-drop and keyboard produce the same result; transcript test for a loot sequence; snapshots at 200 %. Risks: <code>inventory_selector</code> presets are used by many call sites with custom predicates; keep the preset interface and feed it to the new model. Trade mode touches NPC economy code; keep <code>trade_win</code> logic, replace only presentation.</p>
+<h2 id="m6-character-journal-map-l-4-6-weeks-three-parallel-streams">M6. Character, Journal, Map (L, 4-6 weeks; three parallel streams)</h2>
+<p>Scope: Character (5 tabs, body figure, morale reasons, effects), Journal (Log, Missions, Lessons, Notes, Records), Map (layers, verbs, notes count and delete-in-view). Files: <code>src/character_display.cpp</code>, <code>src/mutation_ui.cpp</code>, <code>src/bionics_ui.cpp</code>, <code>src/perk_menu.cpp</code>, <code>src/morale.cpp</code>, <code>src/messages.cpp</code>, <code>src/mission_ui.cpp</code>, <code>src/diary_ui.cpp</code>, <code>src/scores_ui.cpp</code>, <code>src/onboarding.cpp</code> (checklist into Journal), <code>src/overmap/overmap_ui.cpp</code>, <code>src/ui/screens/{character,journal,map}*.cpp</code>. Depends on: M1, M2. → verify: each legacy key (<code>@ [ p Ctrl+P v P M Home ) m</code>) lands in the right tab; the F4 report and the Status tab agree on every number (test); map notes count matches the Notes tab; snapshots; transcripts. Risks: overmap drawing is cell-based (<code>overmap_ui.cpp</code> 2312 lines); keep its map drawing and replace only the chrome, or the milestone doubles.</p>
+<h2 id="m7-craft-build-cursor-mode-l-4-6-weeks-two-streams">M7. Craft, Build, Cursor mode (L, 4-6 weeks; two streams)</h2>
+<p>Scope: Craft with filters, tabs, search, component alternatives, pin; Build with Construct (placement stays open, copy-this, remembered selection) and Zones; Cursor mode merging look, target, throw, list items/monsters with the tile card and narrator reading. Files: <code>src/crafting_gui.cpp</code>, <code>src/construction.cpp</code>, <code>src/clzones.cpp</code>, <code>src/game.cpp</code> (<code>look_around</code> 10061-10200, zones manager 9548), <code>src/ranged.cpp</code> (targeting UI chrome), <code>src/salvage.cpp</code>, <code>src/ui/screens/{craft,build,cursor}*.cpp</code>. Depends on: M5 (Pick mode for components). → verify: "can craft" filter matches <code>recipe::can_make</code>; unknown recipes are counted not named; construction tab/selection survives reopen (BN #8299 scenario); cursor card transcript on a scripted scene; targeting still fires through the same <code>target_handler</code> code path. Risks: targeting UI is intertwined with aim mechanics in <code>ranged.cpp</code>; replace chrome only.</p>
+<h2 id="m8-accessibility-delivery-m-3-weeks-parallel-from-m3-onward">M8. Accessibility delivery (M, 3 weeks; parallel from M3 onward)</h2>
+<p>Scope: speech backends (NVDA client + SAPI, AVSpeechSynthesizer, libspeechd), narrator modes and keys, colour vision mode tables and 3D tints, high-contrast theme, WCAG/CVD tests, Reduce motion wiring across r3d, sound-cues-as-text subtitles, presets (Vision / Hearing / Motor), Steam Deck pass (glyph height, on-screen keyboard, default config walk). Files: <code>src/ui/speech_{windows,macos,linux}.*</code>, <code>src/ui/narrator.cpp</code>, <code>data/raw/colors_{deutan,protan,tritan}.json</code>, <code>data/raw/ui/themes/high_contrast.json</code>, <code>src/color_loader.h</code>, <code>src/cata_tiles.cpp:3406</code>, <code>src/r3d_hud.cpp</code>, <code>src/r3d_sky.cpp</code> (lightning), <code>src/sounds.cpp</code> (subtitle line), <code>tests/ui_a11y_test.cpp</code>. Depends on: M1 (tree), M3 (HUD events). → verify: on each OS the narrator speaks the Settings screen (manual, logged); transcript tests; CVD distance test passes for all tokens in all modes; lightning and hit glow measured ≤ 3 flashes/s; subtitle appears for a scripted sound; preset application changes exactly the documented options. Risks: macOS and Windows cannot be run here (unverified platforms per the renderer guide); needs a tester per OS.</p>
+<h2 id="m9-reference-onboarding-dialogue-main-menu-new-game-l-4-5-weeks">M9. Reference, onboarding, dialogue, main menu, new game (L, 4-5 weeks)</h2>
+<p>Scope: Reference (actions, lessons, handbook pages, concepts, F2 integration); Dialogue chrome on the new layer with attitude header and repeat key; Main menu (5), Pause (5), New game single screen with five steps, mods picker, world options split; Load. Files: <code>src/help.cpp</code>, <code>src/onboarding.cpp</code>, <code>src/npctalk.cpp</code> (chrome only), <code>src/dialogue_win.*</code>, <code>src/main_menu.cpp</code>, <code>src/newcharacter.cpp</code>, <code>src/worldfactory.cpp</code>, <code>src/ui/screens/{reference,dialogue,main_menu,new_game}*.cpp</code>. Depends on: M1, M2, M4. → verify: every action in the keybindings JSON has a Reference entry; Guided Play still starts with the kit; new game creates the same character as the legacy flow for a fixed seed (golden test); snapshots.</p>
+<h2 id="m9-5-ui-01-one-guided-start-m-3-weeks">M9.5. UI-01: one guided start (M, 3 weeks)</h2>
+<p>Scope (<code>BACKLOG.md</code> UI-01, decided 2026-10-21): the Tutorial becomes chapter one of the guided start and the separate Tutorial and Guided Play entries are removed from New game; guided is on automatically for the first-ever character on a profile and off afterwards, with one replay route (a single New game toggle "Guided start", default on for the first character); the tutorial's <code>tut_lesson</code> set merges into the JSON lesson data used by <code>onboarding_core</code>; chapter one runs inside the player's own world (the tutorial complex as a start location or overmap special, <code>g-&gt;gamemode</code> active until chapter one ends) because a character cannot move between worlds; existing guided-progress saves keep loading. Files: <code>src/gamemode_tutorial.cpp</code> (334), <code>src/gamemode.cpp</code>, <code>src/onboarding.cpp</code>, <code>src/onboarding_core.cpp</code>, <code>data/json/onboarding/*</code>, <code>src/main_menu.cpp</code> (entries), the New game screen from M9, the Journal Lessons tab from M6, scenario/start-location JSON, <code>lang/</code> (removed entries), <code>docs/en/dev/guides/guided_onboarding.md</code>. Depends on: M6 (Lessons tab), M9 (New game screen). Parallel with M10. → verify: a fresh profile's first character starts in chapter one and continues into the world with lessons active; a second character starts without it unless the toggle is set; a saved game from before the merge loads with its progress; the <code>[onboarding]</code> tests pass with the merged lesson set; no <code>TUTORIAL</code> special-world entry remains in New game; translations extract without the removed strings. Risks: how much <code>tutorial_game</code> depends on owning the whole world (to be measured first); start-location placement of the tutorial complex in a generated world.</p>
+<h2 id="m10-vehicle-l-4-6-weeks">M10. Vehicle (L, 4-6 weeks)</h2>
+<p>Scope: the Vehicle screen (part grid, card, 8 verbs) replacing <code>veh_interact</code>; driving controls on the wheel and HUD cluster. Files: <code>src/vehicle/veh_interact.*</code>, <code>src/vehicle/vehicle_display.cpp</code>, <code>src/vehicle/vehicle_preview.cpp</code>, <code>src/ui/screens/vehicle*.cpp</code>. Depends on: M5 (loot mode), M7. → verify: install/repair/remove paths produce identical vehicle state to the legacy screen for a scripted vehicle (golden test); snapshots. Risks: <code>veh_interact</code> mixes rules (skill checks, part validity) with drawing; extract the rules first.</p>
+<h2 id="m11-legacy-retirement-and-polish-m-3-weeks">M11. Legacy retirement and polish (M, 3 weeks)</h2>
+<p>Scope: delete replaced screens and contexts, remove options tagged "removed", keep the legacy path only for debug, Lua console, computer terminals, minigames and Defense mode (or cut per the user's decision); theme file for the classic look; translation pass; docs (<code>docs/en/dev/guides/ui_overhaul.md</code>, user docs). <strong>Curses retirement phase 3</strong> (M, 2 weeks, included): delete <code>src/cursesport.cpp/.h</code> and <code>src/cursesdef.h</code> once the remaining legacy screens are ported to the widget layer or dropped, remove the remaining <code>#if defined(TILES)</code> guards (230 in 66 files at the start; most go with their screens in M3-M10), <code>TERMINAL_X/Y</code>, the bitmap-font path if unused, and ncurses mentions in packaging. → verify: LOC removed ≥ 30k (audit counts); no <code>uilist</code> use outside the legacy list; <code>rg &quot;catacurses::|cursesport|defined\(TILES\)&quot; src/</code> is empty; all tests green; <code>--check-mods</code> passes.</p>
+<h2 id="m12-optional-gated-accesskit-bridge-m-3-weeks">M12 (optional, gated). AccessKit bridge (M, 3 weeks)</h2>
+<p>Scope: feed the <code>ui::node</code> tree to <code>accesskit-c</code>; platform adapters; CI toolchain for the Rust artefact or prebuilt binaries. → verify: NVDA/Orca/VoiceOver can navigate Settings and Inventory natively (manual per OS).</p>
+<h2 id="parallelisation-summary">Parallelisation summary</h2>
+<ul>
+<li>After M1 (gate passed): M1.5, M2 and M4 in parallel; M3 after M2 and HUD approval.
+</li>
+<li>After M3: M5 (two streams), M6 (three streams) and M8 in parallel.
+</li>
+<li>M7 after M5; M9 anytime after M4; M9.5 after M6 and M9; M10 last of the screens; M11 after all.
+</li>
+<li>Critical path: M0 → M1 → M2 → M3 → M5 → M7 → M10 → M11 ≈ 26-34 weeks for one developer (the cells backend's 15-20 % per-screen cost is gone; M1.5 and phase 3 add 3 weeks off the critical path); about 17-21 weeks with two.
+</li></ul>
+<h2 id="risks-whole-programme">Risks (whole programme)</h2>
+<ol>
+<li><strong>Two UIs for a long time.</strong> Mitigation: milestone order puts the most-used screens first; every new screen fully replaces its legacy screen in the same milestone (no half states, the CDDA lesson).
+</li>
+<li><strong>Upstream merge friction from the curses retirement.</strong> Every <code>#else</code> branch deleted in a file upstream still changes will conflict. Mitigation: delete guards only in files this fork already diverges in; keep the rest until the project decides whether upstream merges continue (open question 1).
+</li>
+<li><strong>Hidden sidebar consumers.</strong> Mitigation: M3 greps and tests; classic snapshots catch regressions.
+</li>
+<li><strong>Mods and Lua</strong> depend on context ids and <code>lua_sidebar_widgets</code>. Mitigation: aliases, and the badge API lands in M3.
+</li>
+<li><strong>Platforms unverified</strong> (macOS, Windows, Deck). Mitigation: per-OS testers before M8 is called done; speech backends fail to no-op.
+</li>
+<li><strong>Scope creep in the widget layer.</strong> Mitigation: the 12-widget list is the list; new widget types need a design note.
+</li></ol>
+<h2 id="open-questions-only-the-user-can-decide">Open questions only the user can decide</h2>
+<ol>
+<li><strong>Upstream merges:</strong> does this fork still merge from upstream Bright Nights? It decides how aggressively <code>#if defined(TILES)</code> guards are removed (<code>06_frontend_options.md</code> §4).
+</li>
+<li><strong>Approve the HUD design</strong> (§4.1 and §3.1 of <code>03_design.md</code>) before M3 starts, including the clock-on-compass gating by a watch and the single minimap.
+</li>
+<li><strong>Hotbar slot 1 = wielded item, fixed?</strong> Or all eight free, with the wielded item shown elsewhere in the vitals strip.
+</li>
+<li><strong>Default keyboard keys:</strong> keep the "Legacy" binding group on by default for veterans (longer Reference list) or off (clean 32-key default, veterans opt in)?
+</li>
+<li><strong>Feature cuts:</strong> Defense mode and minigames stay on the legacy path, or are cut at M11?
+</li>
+<li><strong>Lua sidebar widgets</strong> become HUD badges plus F4 text (proposed), or a dedicated on-demand "Mod" panel?
+</li>
+<li><strong>AccessKit phase (M12):</strong> fund it (adds a Rust toolchain or prebuilt binaries to CI) or stop at self-voicing?
+</li>
+<li><strong>Speech on Windows:</strong> NVDA client + SAPI (proposed) versus Tolk (covers JAWS too but is unmaintained, LGPL-3.0)?
+</li>
+<li><strong>Advanced file location and naming:</strong> <code>config/advanced.json</code> next to <code>options.json</code>, or a single <code>options.json</code> with the curated/advanced split only in the UI?
+</li>
+<li><strong>World options:</strong> 8 in the New game screen as proposed, or a different eight?
+</li>
+<li><strong>UI scale range:</strong> 75-200 % proposed; Steam Deck may need 110 % default at 1280x800.
+</li>
+<li><strong>Readable font licence check:</strong> Atkinson Hyperlegible (OFL) acceptable to ship?
+</li>
+<li><strong>Theme count:</strong> Dark, High contrast and Classic only, or also a Light theme (adds a contrast-test matrix row)?
+</li>
+<li><strong>Frontend gate outcome (end of M1):</strong> if <code>accesskit-c</code> fails with two of three screen readers, re-cost Godot (option B) or accept self-voicing only? <code>06_frontend_options.md</code> §3.
+</li>
+<li><strong>UI-01 replay route:</strong> a New game toggle "Guided start" (proposed) or an option in Settings &gt; Game?
+</li></ol>
+</main>
+</body>
+</html>

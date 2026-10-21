@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>04. Architecture: mapping the design onto the BN codebase</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="README.html">Summary</a><a href="01_pain_points.html">01 Pain points</a><a href="02_patterns.html">02 Patterns</a><a href="03_design.html">03 Design</a><a href="04_architecture.html" class="current">04 Architecture</a><a href="05_plan.html">05 Plan</a><a href="06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="04-architecture-mapping-the-design-onto-the-bn-codebase">04. Architecture: mapping the design onto the BN codebase</h1>
+<p>Facts about the current code were checked in this session unless marked otherwise; the fuller audits are <code>research/l_codebase_ui_audit.md</code> and <code>research/m_codebase_input_color_font_audit.md</code>.</p>
+<h2 id="1-what-exists-today">1. What exists today</h2>
+<ul>
+<li><strong>Windows and text:</strong> every screen draws into <code>catacurses::window</code> cells (<code>src/cursesdef.h</code>), through <code>mvwprintz</code>/<code>draw_border</code>/<code>uilist</code> (<code>src/output.cpp</code>, <code>src/ui.cpp</code>). In the tiles build the cells are rasterised by <code>CachedTTFFont</code> (SDL3_ttf, one glyph texture per character, fixed cell size) or a bitmap font (<code>src/sdl_font.cpp</code>); font sizes are fixed at startup (<code>FONT_*</code> options "require restart"). Total UI code about 90k LOC (64.9k screens, 25.5k primitives).
+</li>
+<li><strong>Redraw model:</strong> <code>ui_adaptor</code> stack in <code>src/ui_manager.cpp</code>; each screen runs its own blocking input loop; redraws happen on input and on explicit <code>ui_manager::redraw()</code>.
+</li>
+<li><strong>3D:</strong> <code>r3d::draw</code> renders with SDL_GPU into the <code>w_terrain</code> rectangle (<code>src/sdltiles.cpp:1684</code>), then <code>r3d::draw_hud</code> draws shapes with <code>SDL_Renderer</code> and queues <code>hud_text</code>s that <code>draw_r3d_hud_texts</code> rasterises in the map font (<code>sdltiles.cpp:1611</code>).
+</li>
+<li><strong>Input:</strong> <code>input_context</code> resolves action ids against <code>data/raw/keybindings/*.json</code> (585 actions, 61 contexts). <code>input_event</code> carries <code>keyboard | gamepad | mouse</code>. Gamepad is legacy <code>SDL_Joystick</code>: the hat becomes <code>JOY_*</code> gamepad events; <strong>buttons are emitted as keyboard events with the raw index</strong> (<code>sdltiles.cpp:3499-3500</code>), so <code>JOY_0</code>-style gamepad bindings cannot match them; axes are discarded. Mouse: left/right/wheel/move only; no hit-testing in <code>uilist</code>. The keybinding editor cannot capture modifiers or middle mouse.
+</li>
+<li><strong>Colour:</strong> <code>nc_color</code> is a curses pair id; 145 named colours map to a 16-entry RGB palette (<code>data/raw/colors.json</code> → <code>windowsPalette</code>, user-overridable <code>base_colors.json</code>, name remaps in <code>custom_colors.json</code>). No colour-vision or theme support.
+</li>
+<li><strong>Accessibility:</strong> none. The only screen-reader-related code is cursor placement so a terminal screen reader follows the caret (<code>ui_manager.h:41</code>, <code>string_input_popup.cpp:326</code>, <code>messages.cpp:887</code>).
+</li>
+<li>**No ImGui, no <code>data/json/ui</code>.** The CDDA fork's widget-JSON sidebar and ImGui material does not apply (research o §4).
+</li></ul>
+<h2 id="2-toolkit-decision">2. Toolkit decision</h2>
+<h3 id="2-1-candidates">2.1 Candidates</h3>
+<table><thead><tr><th>Option</th><th>Licence</th><th>SDL3 + SDL_GPU</th><th>Gamepad focus</th><th>Accessibility tree</th><th>Verdict</th></tr></thead><tbody><tr><td><strong>A. In-house retained widget layer</strong> on <code>SDL_Renderer</code> + SDL3_ttf text engine</td><td>n/a</td><td>yes (it is the existing overlay path)</td><td>we write it</td><td>we write it (the tree is the a11y tree; bridged to the OS through <code>accesskit-c</code>, whose repository ships an SDL example)</td><td><strong>Chosen</strong></td></tr><tr><td>B. RmlUi 6.3</td><td>MIT (verified)</td><td><code>Backends/RmlUi_Renderer_SDL_GPU.cpp</code> exists (verified via GitHub API)</td><td>not verified</td><td>none</td><td>Rejected: second text/font stack, no a11y, HTML/CSS layout is more than 23 screens need</td></tr><tr><td>C. Dear ImGui 1.93</td><td>MIT</td><td><code>imgui_impl_sdl3</code> + <code>imgui_impl_sdlgpu3</code> (verified)</td><td><code>NavEnableGamepad</code></td><td>none; issues #4122 open, #7131 closed "typically don't work" (verified)</td><td>Rejected: FAQ says it is not for game UIs; CDDA's migration produced a multi-year defect tail (P3); immediate mode makes a stable a11y tree awkward</td></tr><tr><td>D. Clay (layout only, zlib) or Yoga (flexbox, MIT) under option A</td><td>permissive</td><td>n/a</td><td>n/a</td><td>n/a</td><td>Deferred: start with a 500-line box/flex layout; adopt Yoga only if wrapping/flex cases outgrow it</td></tr><tr><td>E. Qt, Slint, Noesis, Gameface, Ultralight</td><td>LGPL/GPL/commercial</td><td>no SDL_GPU path</td><td>varies</td><td>Qt yes</td><td>Rejected on licence, size or integration</td></tr><tr><td>F. A different 3D frontend (Godot, Unity, Unreal, Bevy, web)</td><td>see <code>06_frontend_options.md</code></td><td>replaces it</td><td>engine's</td><td>Godot: AccessKit built in (experimental); others partial</td><td>Rejected on cost (20-30 weeks of renderer and embedding work for ~10 weeks of accessibility saving); decision gate at the end of M1</td></tr></tbody></table>
+<p>The decisive facts: no free library supplies the hard requirement (a controller focus model that also feeds a screen reader), and adopting one would still leave the game with two text renderers and two mouse models, which is what produced CDDA's bug tail. Option A costs more up front (estimate: 8-12k LOC for the layer plus screens) but each screen is then written once. Curses is retired (user decision 2026-10-21, <code>BACKLOG.md</code> UI-02), so the tree has one renderer; the retirement itself is costed in <code>06_frontend_options.md</code> §4.</p>
+<h3 id="2-2-layers">2.2 Layers</h3>
+<pre><code> game state ──&gt; view model (plain struct, no UI types) ──&gt; ui::node tree ──&gt; layout ──&gt; sdl backend
+                                                              │                      (SDL_Renderer + TTF_TextEngine)
+                                                              ├──&gt; narrator (speech backends)
+                                                              └──&gt; accesskit bridge (phase 2)
+ SDL events ──&gt; input_manager ──&gt; input_context (action ids) ──&gt; focus manager ──&gt; node handlers</code></pre>
+<figure class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-labelledby="t-layers">
+<title id="t-layers">Architecture layers: one widget tree feeds the renderer, the narrator and the OS accessibility bridge; input flows back through actions and focus.</title>
+<defs>
+  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker>
+</defs>
+<!-- presentation row -->
+<g font-size="13">
+  <rect x="20" y="60" width="130" height="54" rx="6" class="d-box"/>
+  <text x="85" y="83" text-anchor="middle" class="d-text" font-weight="600">Game state</text>
+  <text x="85" y="101" text-anchor="middle" class="d-text-3">avatar, map, items</text>
+
+  <rect x="190" y="60" width="140" height="54" rx="6" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="260" y="83" text-anchor="middle" class="d-text" font-weight="600">View model</text>
+  <text x="260" y="101" text-anchor="middle" class="d-text-3">plain structs, no UI types</text>
+
+  <rect x="370" y="60" width="140" height="54" rx="6" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="440" y="83" text-anchor="middle" class="d-text" font-weight="600">ui::node tree</text>
+  <text x="440" y="101" text-anchor="middle" class="d-text-3">role, name, value, state</text>
+
+  <rect x="550" y="60" width="110" height="54" rx="6" class="d-box"/>
+  <text x="605" y="83" text-anchor="middle" class="d-text" font-weight="600">Layout</text>
+  <text x="605" y="101" text-anchor="middle" class="d-text-3">box / flex, UI scale</text>
+
+  <rect x="700" y="60" width="240" height="54" rx="6" class="d-box"/>
+  <text x="820" y="83" text-anchor="middle" class="d-text" font-weight="600">SDL backend</text>
+  <text x="820" y="101" text-anchor="middle" class="d-text-3">SDL_Renderer + TTF_TextEngine, over the 3D frame</text>
+
+  <path d="M150,87 H188" class="d-line" marker-end="url(#ah)"/>
+  <path d="M330,87 H368" class="d-line" marker-end="url(#ah)"/>
+  <path d="M510,87 H548" class="d-line" marker-end="url(#ah)"/>
+  <path d="M660,87 H698" class="d-line" marker-end="url(#ah)"/>
+
+  <!-- branches from the tree -->
+  <path d="M440,114 V150 H300 V178" class="d-line" marker-end="url(#ah)"/>
+  <path d="M440,114 V150 H600 V178" class="d-line" marker-end="url(#ah)"/>
+
+  <rect x="200" y="180" width="200" height="54" rx="6" class="d-box d-stroke-s3" stroke-width="2"/>
+  <text x="300" y="203" text-anchor="middle" class="d-text" font-weight="600">Narrator (self-voicing)</text>
+  <text x="300" y="221" text-anchor="middle" class="d-text-3">reading order, queue, verbosity</text>
+
+  <rect x="500" y="180" width="200" height="54" rx="6" class="d-box d-stroke-s3" stroke-width="2" stroke-dasharray="6 3"/>
+  <text x="600" y="203" text-anchor="middle" class="d-text" font-weight="600">AccessKit bridge (phase 2)</text>
+  <text x="600" y="221" text-anchor="middle" class="d-text-3">accesskit-c, same tree</text>
+
+  <path d="M300,234 V262" class="d-line" marker-end="url(#ah)"/>
+  <path d="M600,234 V262" class="d-line" marker-end="url(#ah)"/>
+
+  <rect x="150" y="264" width="300" height="44" rx="6" class="d-box-soft"/>
+  <text x="300" y="282" text-anchor="middle" class="d-text-2">NVDA client / SAPI 5 (Windows)</text>
+  <text x="300" y="298" text-anchor="middle" class="d-text-2">AVSpeechSynthesizer (macOS), libspeechd (Linux)</text>
+
+  <rect x="460" y="264" width="280" height="44" rx="6" class="d-box-soft"/>
+  <text x="600" y="282" text-anchor="middle" class="d-text-2">UI Automation / NSAccessibility / AT-SPI</text>
+  <text x="600" y="298" text-anchor="middle" class="d-text-2">NVDA, JAWS, VoiceOver, Orca navigate natively</text>
+
+  <!-- input row -->
+  <text x="20" y="352" class="d-text-3">Input</text>
+  <rect x="60" y="334" width="110" height="36" rx="6" class="d-box-soft"/>
+  <text x="115" y="357" text-anchor="middle" class="d-text-2">SDL events</text>
+  <rect x="200" y="334" width="130" height="36" rx="6" class="d-box-soft"/>
+  <text x="265" y="357" text-anchor="middle" class="d-text-2">input_context</text>
+  <text x="265" y="384" text-anchor="middle" class="d-text-3">action ids, 12 contexts</text>
+  <rect x="360" y="334" width="130" height="36" rx="6" class="d-box-soft"/>
+  <text x="425" y="357" text-anchor="middle" class="d-text-2">focus manager</text>
+  <text x="425" y="384" text-anchor="middle" class="d-text-3">spatial nav, hold/toggle</text>
+  <rect x="520" y="334" width="140" height="36" rx="6" class="d-box-soft"/>
+  <text x="590" y="357" text-anchor="middle" class="d-text-2">node handlers</text>
+  <path d="M170,352 H198" class="d-line" marker-end="url(#ah)"/>
+  <path d="M330,352 H358" class="d-line" marker-end="url(#ah)"/>
+  <path d="M490,352 H518" class="d-line" marker-end="url(#ah)"/>
+  <path d="M660,352 H760 V118" class="d-line" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+  <text x="775" y="240" class="d-text-3">mouse hit-test and focus</text>
+  <text x="775" y="254" class="d-text-3">read the same tree</text>
+
+  <!-- seam label -->
+  <path d="M345,40 V125" class="d-line-soft" stroke-dasharray="3 3"/>
+  <text x="345" y="34" text-anchor="middle" class="d-text-3">view-model seam: a future frontend swap starts here</text>
+</g>
+</svg>
+<figcaption></figcaption></figure>
+<p>The view-model boundary is deliberate: it is also the seam a future frontend swap would use (<code>06_frontend_options.md</code> §1F), so it is kept free of UI and SDL types.</p>
+<ul>
+<li><code>src/ui/</code> new directory: <code>node.h</code> (tree, roles, a11y fields), <code>layout.cpp</code>, <code>focus.cpp</code>, <code>theme.cpp</code>, <code>text_engine.cpp</code>, <code>backend_sdl.cpp</code>, <code>narrator.cpp</code>, <code>speech_*.cpp</code> (per OS), widgets (<code>list.cpp</code>, <code>tabs.cpp</code>, <code>card.cpp</code>, <code>radial.cpp</code>, <code>body_figure.cpp</code>, <code>text_field.cpp</code>, ...). Each screen in <code>src/ui/screens/&lt;name&gt;.cpp</code> with its view model in a sibling <code>&lt;name&gt;_model.cpp</code> that has no UI includes (testable headless).
+</li>
+<li>Screens remain <code>ui_adaptor</code>s so the existing stack, resize and redraw model keep working and legacy screens can be opened from new ones during the migration.
+</li></ul>
+<h3 id="2-3-node-and-accessibility-fields">2.3 Node and accessibility fields</h3>
+<pre><code>enum class ui_role { panel, list, item, button, toggle, choice, slider, text, text_field, tab, tabs, progress, image, radial, card, heading };
+
+struct ui_node {
+    ui_role role;
+    std::string id;            // stable, for tests and bindings
+    std::string name;          // spoken label, translated
+    std::string value;         // spoken value when it differs from the text shown
+    std::string description;   // optional second sentence
+    ui_state state;            // focused, selected, disabled, expanded, marked
+    layout_box box;            // computed by layout
+    std::vector&lt;ui_node_ptr&gt; children;
+    std::function&lt;auto( const ui_event &amp; ) -&gt; bool&gt; on_event;
+};</code></pre>
+<p>The narrator and the phase-2 AccessKit bridge read exactly these fields; a screen that renders is therefore a screen that speaks. Tests assert the spoken transcript for a scripted input sequence.</p>
+<h2 id="3-text-rendering">3. Text rendering</h2>
+<ul>
+<li>New layer: SDL3_ttf <strong>text engine</strong> (<code>TTF_CreateRendererTextEngine</code>, <code>TTF_CreateText</code>, <code>TTF_DrawRendererText</code>), one <code>TTF_Font</code> per (family, size) in a cache, fallbacks via <code>TTF_AddFallbackFont</code> (unifont last, as today). Sizes derive from UI scale at layout time; changing scale rebuilds the font cache, no restart. Hinting light; SDF not used (needs a shader path; research i §2).
+</li>
+<li>Legacy screens and the map keep <code>CachedTTFFont</code> untouched. The HUD texts move from the map font to the text engine so they scale with the UI, not with the tileset.
+</li>
+<li>Readable font: Atkinson Hyperlegible (OFL) shipped in <code>data/font/</code>; selected by one option.
+</li>
+<li>Steam Deck: minimum glyph height check (≥ 9 px at 1280x800) is a unit test over the scale floor.
+</li>
+<li>Requires SDL3_ttf ≥ 3.0 (the CMake <code>FetchContent</code> for <code>SDL3_TTF</code> must be pinned to a tag; check <code>CMakeLists.txt:582-594</code> during M1).
+</li></ul>
+<h2 id="4-input-abstraction">4. Input abstraction</h2>
+<ul>
+<li>Replace <code>SDL_Joystick</code> with <code>SDL_Gamepad</code> in <code>sdltiles.cpp</code>: hot-plug (<code>SDL_EVENT_GAMEPAD_ADDED/REMOVED</code>), <code>SDL_EVENT_GAMEPAD_BUTTON_*</code>, axes with dead zones mapped to 8-way movement and to camera, rumble via <code>SDL_RumbleGamepad</code>, glyphs via <code>SDL_GetGamepadButtonLabel</code> / <code>SDL_GetGamepadType</code> (SDL 3.2+; system header 3.4.18 has it).
+</li>
+<li><code>input_event</code> gains modifier flags and a <code>device</code> so the editor can capture <code>Ctrl+Shift+K</code>, middle mouse, and <code>LT+A</code>. Binding storage stays JSON; gamepad bindings use <code>SDL_GamepadButton</code> names (<code>&quot;gamepad&quot;: &quot;south&quot;</code>), not <code>JOY_0</code> indices.
+</li>
+<li><code>input_context</code> gains a parent chain (<code>menu</code> ⊂ <code>inventory</code>); conflict detection walks the chain. The 61 contexts collapse to 12 by deleting per-screen navigation actions and binding them once in <code>menu</code>. Legacy contexts remain loadable for mods, mapped onto the new ones.
+</li>
+<li>"Last device used" drives glyphs everywhere (<code>ui::glyph( action )</code> returns text or an icon id). Steam Input is optional; SDL labels are enough for Deck Verified glyph rules if the default config is complete.
+</li>
+<li>Hold/toggle: a <code>holdable</code> attribute on the action; the focus manager turns press/release into begin/end or toggle per the setting.
+</li></ul>
+<h2 id="5-narrator-and-speech-backends">5. Narrator and speech backends</h2>
+<ul>
+<li><code>ui::narrator</code> has <code>announce( text, priority )</code>, <code>speak_node( node, verbosity )</code>, <code>repeat()</code>, <code>read_line( ±1 )</code>; a queue with interrupt priorities; settings: mode (Off / Menus / Menus and log), rate, volume.
+</li>
+<li><code>ui::speech</code> interface with one backend per OS, all loaded lazily and failing to a no-op:
+<ul>
+<li>Windows: <code>nvdaControllerClient</code> (LGPL-2.1, <code>LoadLibrary</code>) when NVDA responds, else SAPI 5 <code>ISpVoice</code> (COM, no licence concern).
+</li>
+<li>macOS: <code>AVSpeechSynthesizer</code> in <code>speech_macos.mm</code> (NSSpeechSynthesizer is obsoleted in macOS 14).
+</li>
+<li>Linux: <code>libspeechd</code> via <code>dlopen</code> (LGPL-2.1+, daemon required; Flatpak/SteamOS unverified).
+</li></ul>
+</li>
+<li>Phase 2: AccessKit (<code>accesskit-c</code>, Apache-2.0 or MIT per the repo's LICENSE files; GitHub metadata shows BSD-3-Clause because of Chromium-derived parts). Needs a Rust toolchain or prebuilt <code>accesskit-c</code> binaries in CI; adapters are marked incomplete by the project. Gated on a user decision. <code>accesskit-c</code> 0.23.1 (2026-09-26) ships <code>examples/sdl</code>, which is the starting point for the M0 spike (verified: repository listing).
+</li></ul>
+<h2 id="6-theming-and-colour">6. Theming and colour</h2>
+<ul>
+<li><code>data/raw/ui/themes/&lt;name&gt;.json</code>: semantic colour tokens, spacing scale, radius, border, font family. <code>ui::theme::get()</code> is the only source of colours for the new layer. The existing <code>ui_theme</code> (modern borders) is folded in.
+</li>
+<li>Colour vision modes: <code>data/raw/colors_&lt;mode&gt;.json</code> remap the 16-entry palette for everything legacy (hook in <code>color_loader&lt;SDL_Color&gt;::load</code> and <code>cata_tiles.cpp:3406</code> which reads the palette directly), plus token overrides for the new layer and 3D tints.
+</li>
+<li>CI tests: WCAG contrast of tokens; pairwise distance under simulated deutan/protan/tritan (Machado 2009 matrices implemented in a small test helper, no external dependency).
+</li></ul>
+<h2 id="7-classic-2d-and-curses">7. Classic 2D and curses</h2>
+<p><strong>Curses is retired</strong> (user decision 2026-10-21, <code>BACKLOG.md</code> UI-02). There is no character-cell backend in the new layer. The terminal (<code>ncurses_def.cpp</code>) and Windows-console (<code>wincurse.cpp</code>) backends, the <code>CURSES</code> build option, its presets and CI jobs go in retirement phase 1; the in-house cell canvas <code>cursesport.cpp</code> stays only as the drawing surface of legacy screens until the last one is replaced, then goes in phase 3. Scope, counts and risks (230 <code>TILES</code> guards in 66 files, 932 <code>catacurses::</code> references in 82 files, upstream merge friction) are in <code>06_frontend_options.md</code> §4.</p>
+<p>The classic 2D tiles mode (no 3D renderer) stays: it keeps <code>panels.cpp</code> as its sidebar and gets every new screen from the SDL backend at full fidelity, since it already draws through <code>SDL_Renderer</code>.</p>
+<p><strong>Frontend decision gate.</strong> The option of moving to another 3D frontend was evaluated in <code>06_frontend_options.md</code>; the recommendation is to stay on SDL3. The gate is the end of M1: the M0/M1 spike must show <code>accesskit-c</code> working from the SDL window with at least two of NVDA, VoiceOver and Orca, or the Godot option is re-costed.</p>
+<h2 id="8-rendering-order-and-integration">8. Rendering order and integration</h2>
+<p>Per frame in the tiles build: SDL_GPU 3D picture → legacy curses windows (unchanged) → new layer (HUD or the top modal screen, dimming the scene under a modal) → present. The new layer registers one <code>ui_adaptor</code> for the HUD (redraw on <code>game::draw</code>) and one per modal screen. <code>refresh_display()</code> ordering already used by the HUD fades is reused.</p>
+<p>The sidebar removal predicate <code>ui::sidebar_hidden()</code> is <code>RENDERER_3D &amp;&amp; use_tiles</code>; it is read by <code>panel_manager::get_width_*</code>, <code>game::draw_panels</code> and the five sidebar-relative placements listed in <code>03_design.md</code> §3.2.</p>
+<h2 id="9-data-driven-layouts-how-far">9. Data-driven layouts: how far</h2>
+<p>Screens are built in C++ from view models with theme tokens; there is no HTML/XML layout file. Reason: 23 screens, all bound to game data, no modder demand demonstrated, and a layout language is a second parser to maintain. What is data: themes, colour modes, keybindings, the advanced config, and a small Lua API (<code>ui.add_badge</code>, <code>ui.add_card</code>) that replaces <code>lua_sidebar_widgets</code> so mods can show text in the HUD and Journal.</p>
+<h2 id="10-testing-strategy">10. Testing strategy</h2>
+<ul>
+<li><strong>Pure tests (Catch2, no window):</strong> view models (inventory grouping, sort stability, recipe filters, delta computation), layout (wrapping, scale floors), focus navigation (spatial moves, tab order), narrator transcripts (scripted input → spoken lines), binding conflict detection, theme contrast and CVD distance, advanced config validation.
+</li>
+<li><strong>Screenshot tests:</strong> render each screen with the SDL software renderer into an offscreen surface at 100 % and 200 % scale, default and high-contrast themes, each colour mode, and compare PNGs with a tolerance; stored like the r3d geometry snapshot (<code>tests/data/ui_snapshots/</code>), regenerated with an env var and named in the commit.
+</li>
+<li><strong>Input tests:</strong> synthetic <code>SDL_Event</code> sequences through <code>sdltiles</code> for gamepad mapping and modifier capture (extends <code>tests/input_test.cpp</code>).
+</li>
+<li><strong>In-game smoke:</strong> the existing Xvfb/software-Vulkan private-save procedure (<code>docs/en/dev/guides/renderer_3d.md</code>) with the new HUD, plus <code>[r3d]</code> tests before any push.
+</li>
+<li><strong>Deck check:</strong> a 1280x800 run of the screenshot suite with the glyph-height assertion.
+</li></ul>
+<h2 id="11-performance-and-localisation">11. Performance and localisation</h2>
+<p>Retained tree with dirty flags; relayout only on scale/theme/resize or model change; redraw on input as today (no per-frame UI cost in a turn-based game). All strings through <code>_()</code>, including narrator phrases and glyph names; translators get the new strings via the normal extraction.</p>
+</main>
+</body>
+</html>

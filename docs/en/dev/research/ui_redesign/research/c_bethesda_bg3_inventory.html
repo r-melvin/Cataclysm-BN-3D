@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventory, crafting, trade and character-sheet UI: lessons from Bethesda RPGs and Baldur&#x27;s Gate 3</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="inventory-crafting-trade-and-character-sheet-ui-lessons-from-bethesda-rpgs-and-baldur-s-gate-3">Inventory, crafting, trade and character-sheet UI: lessons from Bethesda RPGs and Baldur's Gate 3</h1>
+<p>Research date: 2026-10-21. Scope: Fallout 4, Fallout 76, Skyrim (vanilla and SkyUI), Starfield, Baldur's Gate 3.</p>
+<h2 id="method-and-reliability">Method and reliability</h2>
+<ul>
+<li>Sources were found with web search, then opened with WebFetch. WebFetch passes the page through a small summarising model, so quoted text marked <strong>[fetched]</strong> is what that model returned. It is close to the page but not guaranteed character-exact. Re-check any quote against the live page before publishing it.
+</li>
+<li>Quotes marked <strong>[snippet]</strong> appear only in search-result summaries. They were not confirmed on the page.
+</li>
+<li>Nexus Mods pages (SkyUI 12604, FallUI, StarUI 16378) and most Steam discussion pages returned HTTP 403 or a content-warning wall. Nothing below is quoted from those pages.
+</li>
+<li>Steam discussion threads are mostly 2015 to 2019 (Fallout 4) and 2023 (BG3, Starfield). Patches may have fixed the issues. None of the claims were checked against current patch notes.
+</li>
+<li>The Reddit threads named in the brief were not reachable. Reddit mirrors were blocked, or redirected to an auth page.
+</li>
+<li>Quotes are as found. Handles and dates are given only where the fetched page showed them.
+</li></ul>
+<h2 id="fallout-4-pip-boy-transfer-menu-workshop">Fallout 4 (Pip-Boy, transfer menu, workshop)</h2>
+<p><strong>Complaints</strong></p>
+<ul>
+<li><strong>[fetched]</strong> F4TES, Steam, 1 Dec 2015 (<a href="https://steamcommunity.com/app/377160/discussions/0/492379159717872389">https://steamcommunity.com/app/377160/discussions/0/492379159717872389</a>): "Why oh why couldn't they give us a quick &amp; easy way to sort our inventory?"
+</li>
+<li><strong>[fetched]</strong> F4TES, same thread: "When I'm in Pip Boy, I have all those types categorised, but not in transfer (R) !"
+</li>
+<li><strong>[fetched]</strong> F4TES, same thread: "to be able to mark the exact amount you need &amp; then be notified when you've got enough of it."
+</li>
+<li><strong>[fetched]</strong> F4TES, follow-up, 1 Dec 2015 12:07pm, same thread: "I should be allowed to deposit that either where I got it from", about a 7 wt quest coat that forced them to "watch my weight constantly."
+</li>
+<li><strong>[fetched]</strong> CoffeeGecko8, Steam, 19 Nov 2015 (scrap/Enter thread, <a href="https://steamcommunity.com/app/377160/discussions/0/496881136908404402">https://steamcommunity.com/app/377160/discussions/0/496881136908404402</a>): "I couldn't believe how badly the UI was messed up for PC that it is misleading in a number of areas."
+</li>
+<li><strong>[fetched]</strong> CoffeeGecko8, same thread: "there's no scroll bar in a trade/container menu, you have to manually cycle down with the mouse wheel"
+</li>
+<li><strong>[fetched]</strong> CoffeeGecko8, same thread: "I'm hoping for a mod to re-haul the UI."
+</li>
+<li><strong>[fetched]</strong> leftharted, same thread, 13 Nov 2015: "tap E instead of enter."
+</li>
+<li><strong>[fetched]</strong> Dionysus, same thread, 24 Dec 2018: "the Enter/E issue isn't even bad controls, just bad UI."
+</li>
+<li><strong>[fetched]</strong> Celvas, Steam Pip-Boy thread, 6 Dec 2015 (<a href="https://steamcommunity.com/app/377160/discussions/0/496881136917737588">https://steamcommunity.com/app/377160/discussions/0/496881136917737588</a>): "Turns out I had two invisible items cluttering about." Weight shown on the Pip-Boy did not match visible items. Same thread, BOYCOTT S-T-E-A-M!, 24 Nov 2015: "I see two different current weights for my character." Same thread, kalebkeen, 6 Dec 2015: "I can confirm that i do in fact have a ♥♥♥♥ ton of invis items in my inventory." (censored text as returned)
+</li>
+<li><strong>[fetched]</strong> Spooks, Steam workshop thread, 30 Aug 2016 (<a href="https://steamcommunity.com/app/377160/discussions/0/350540780273587833">https://steamcommunity.com/app/377160/discussions/0/350540780273587833</a>): "They're in the workshop menu and everything, they're just iconless"
+</li>
+<li><strong>[fetched]</strong> Spooks, same thread, 1 Sep 2016: "we're still missing things from the workshop menu"
+</li>
+<li><strong>[snippet]</strong> A 2024 thread asked why junk at a workbench cannot be broken down in bulk. A 2016 thread complained about scrapping junk one item at a time. (search summary only)
+</li>
+<li><strong>[fetched, Fallout 76 not Fallout 4]</strong> See the Fallout 76 section below for the sort-order bug. It was wrongly attributed in the first search; it is a r/fo76 post.
+</li></ul>
+<p><strong>Praise / what works</strong></p>
+<ul>
+<li><strong>[snippet]</strong> A Steam reply says the Pip-Boy tagging system lets you flag junk so you do not collect unneeded items. From the junk tab, you pick components to search for. (search summary, paraphrased)
+</li>
+<li><strong>[snippet]</strong> Pip-Boy categories are used to group items when viewing your inventory in the Pip-Boy, as the F4TES quote above implies, but the transfer menu (R) does not keep the same categories.
+</li></ul>
+<p><strong>Item comparison / weight and value sort</strong></p>
+<ul>
+<li>Not found. No source in this run confirmed a Fallout 4 comparison-arrow or delta tooltip. The first search summary claimed one; it was not confirmed. Mark it <strong>UNVERIFIED</strong> if reused.
+</li>
+<li>Built-in sort: F4TES says the built-in sort helps only a little, and only by niche categories (paraphrase from the summary of the 2015 thread).
+</li></ul>
+<h2 id="fallout-76-sort-pip-boy-ordering">Fallout 76 (sort, Pip-Boy ordering)</h2>
+<ul>
+<li><strong>[fetched]</strong> r/fo76 post, titled with "[2019]", about Pip-Boy ordering (<a href="https://devtrackers.gg/fallout/p/37d9b210-item-sort-orders-bug">https://devtrackers.gg/fallout/p/37d9b210-item-sort-orders-bug</a>): "the order of items in the pip-boy randomly changing when scrapping or dropping items"
+</li>
+<li><strong>[fetched]</strong> Same post, on the cause: "when the items being re-ordered all are equivalent based on the currently selected sort"
+</li>
+<li><strong>[fetched]</strong> Same post, on the fix: "including a unique field at a lower priority as an input to the sort function" and the example "sorted by weight + name instead of just weight"
+</li></ul>
+<p>This is a real, specific, sortable-list lesson: when sorting by one key, add a secondary key (name, id) so equal items do not reshuffle.</p>
+<h2 id="skyrim-vanilla-and-skyui">Skyrim (vanilla and SkyUI)</h2>
+<p><strong>Why SkyUI exists (complaints about vanilla)</strong></p>
+<ul>
+<li><strong>[snippet]</strong> A Nexus or Steam post (source URL not resolved from search): "The favorites hotkeys are awful, they only allow you to equip one item per key, making it impossible to equip more than one weapon or armor."
+</li>
+<li><strong>[snippet]</strong> Same source: "Sorting the items alphabetically was my biggest beef with the vanilla favorites menu."
+</li>
+<li><strong>[snippet]</strong> Same source: "Changing my weapons in combat is so unintuitive when you want to equip two different items in your hands."
+</li>
+<li><strong>[snippet]</strong> Steam user: "vanilla favourites is not very detailed and once you've got loads of favourited items it's a real pain to navigate." (<a href="https://steamcommunity.com/app/72850/discussions/0/...">https://steamcommunity.com/app/72850/discussions/0/...</a> search result; exact URL not resolved)
+</li>
+<li><strong>[snippet]</strong> Another user found the default categories too broad for a mage build: "since there's one category for magic. All magic." They wanted more categories, not only SkyUI's group boxes.
+</li></ul>
+<p><strong>SkyUI praise / features</strong></p>
+<ul>
+<li><strong>[snippet]</strong> The SkyUI Special Edition Nexus page (mod 12604) describes a "powerful, categorized favourites menu" and "eight customizable hotkey groups" with an MCM configuration menu and a "feature-rich inventory panel with search and sorting." Wording comes from a search summary, not the page. <strong>UNVERIFIED wording.</strong> Nexus returned 403.
+</li>
+<li><strong>[snippet]</strong> SkyUI's group keys are F1 to F4. Numbers handle item and spell hotkeys. Items must be favourited before they can be bound. Forum threads show new players often miss this step.
+</li>
+<li><strong>[snippet]</strong> A commenter: "skyui now comes with its own favorites menu, which I find to be better than most others out there."
+</li></ul>
+<p><strong>SkyUI complaints (also reasons players leave it)</strong></p>
+<ul>
+<li><strong>[snippet]</strong> A user went back to vanilla because "SkyUI is slow, and takes a few extra seconds over the vanilla menu."
+</li>
+<li><strong>[snippet]</strong> Some controller users report SkyUI hotkeys and button prompts do not work reliably, and one said it does not support their DS4 controller.
+</li>
+<li><strong>[snippet]</strong> Mod 175109 (a controlmap tweak) exists to make SkyUI favourites groups usable with a controller (Nexus page, 403 on fetch).
+</li></ul>
+<h2 id="starfield">Starfield</h2>
+<p><strong>Complaints</strong></p>
+<ul>
+<li><strong>[snippet]</strong> Steam thread, September 2023: the inventory UI is poor and the weight limit adds only tedious management. Outpost containers have low capacities, so base-building becomes a chore.
+</li>
+<li><strong>[snippet]</strong> A Steam reply says storage-chest carry weight cannot be changed through the console and needs a mod. Another reply says the console can raise carry weight.
+</li>
+<li><strong>[snippet]</strong> One Steam thread blames weapon-swap and scanner lag on total stack count, not weight. This is an unverified theory from one player.
+</li>
+<li><strong>[snippet]</strong> Kotaku (opinion; page did not load): players are "consistently confused by the menus". The main menu was called visually noisy. The page could not be fetched; treat as <strong>UNVERIFIED</strong> wording.
+</li></ul>
+<p><strong>Developer response</strong></p>
+<ul>
+<li><strong>[fetched]</strong> Pete Hines, Bethesda head of publishing, 21 Aug 2023 (<a href="https://www.purexbox.com/news/2023/08/bethesda-exec-responds-to-unprofessional-criticism-of-starfields-menu-screen;">https://www.purexbox.com/news/2023/08/bethesda-exec-responds-to-unprofessional-criticism-of-starfields-menu-screen;</a> same reply in <a href="https://www.pcgamesn.com/starfield/menu-response">https://www.pcgamesn.com/starfield/menu-response</a>): "Or they designed what they wanted and that's been our menu for years and was one of the first things we settled on."
+</li>
+<li><strong>[fetched]</strong> Same reply: "Questioning out a developer's 'care' because you would have done it different is highly unprofessional"
+</li>
+<li>The reply was about the main menu screen, not the inventory. It did not respond to inventory sorting or weight.
+</li></ul>
+<p><strong>Redesign and mods (what the community did instead)</strong></p>
+<ul>
+<li><strong>[fetched]</strong> Gamewave (French, 6 Sep 2023, <a href="https://gamewave.fr/starfield/starfield-un-joueur-reimagine-l-interface-de-l-inventaire-bien-mieux-que-l-originale/">https://gamewave.fr/starfield/starfield-un-joueur-reimagine-l-interface-de-l-inventaire-bien-mieux-que-l-originale/</a>). Original: "La publication de ce concept a récolté près de 10 000 avis positifs". Gloss: the post drew nearly 10,000 positive reactions.
+</li>
+<li><strong>[fetched]</strong> Gamewave, same article. Original: "qui est principalement conçue pour que les utilisateurs consoles ne soient pas trop perdus en naviguant à la manette". Gloss: the interface is mainly designed so console users do not get lost navigating with a controller. This is a complaint about PC players being stuck with a controller-first layout.
+</li>
+<li><strong>[snippet]</strong> The redesign was an r/Starfield post by u/turbokacperel, titled "I redesigned Starfield inventory UI" (per Gamewave). Prima's article (<a href="https://primagames.com/?p=173229">https://primagames.com/?p=173229</a>) was not fetchable.
+</li>
+<li><strong>[fetched]</strong> MP1st, Jack Breitenbach, 5 Sep 2023 (<a href="https://mp1st.com/news/starfield-ui-mod-provides-much-needed-improvements-to-inventory-system">https://mp1st.com/news/starfield-ui-mod-provides-much-needed-improvements-to-inventory-system</a>), on the StarUI Inventory mod:
+<ul>
+<li>"Lists can be sorted by properties with a simple click of the respective column"
+</li>
+<li>"Categories now show the combined mass of all items within them"
+</li>
+<li>"More compact view of categories and items"
+</li>
+<li>Its listed inputs are keyboard shortcuts and mouse wheel settings. The article does not mention a controller.
+</li></ul>
+</li>
+<li><strong>[snippet]</strong> Nexus mod 662 adds a sort by total mass (mass times quantity). This catches stacks of light items that add up.
+</li>
+<li><strong>[snippet]</strong> ArmadaUI (Nexus 16378) is an inventory-only rebuild with controller support and a more compact view.
+</li></ul>
+<h2 id="baldur-s-gate-3-inventory-camp-radial-menu">Baldur's Gate 3 (inventory, camp, radial menu)</h2>
+<p><strong>Inventory and sorting complaints</strong></p>
+<ul>
+<li><strong>[fetched]</strong> Ashlee Manalang, Gfinity Esports, 2 Apr 2025 (<a href="https://www.gfinityesports.com/article/why-baldurs-gate-3s-inventory-needs-a-simpler-system">https://www.gfinityesports.com/article/why-baldurs-gate-3s-inventory-needs-a-simpler-system</a>): "There's no decent sorting option that groups similar gear together in a logical way."
+</li>
+<li><strong>[fetched]</strong> Same article: "The moment I swap someone out, I lose access to everything they were carrying."
+</li>
+<li><strong>[fetched]</strong> Same article: "Even sending things to camp doesn't really solve the problem."
+</li>
+<li><strong>[fetched]</strong> Same article: "tooltips take just long enough to load that it slows the whole process down."
+</li>
+<li><strong>[fetched]</strong> Same article, on Steam Deck: "scrolling through tiny item icons, waiting for tooltips to load, and dealing with sluggish navigation make it even worse."
+</li>
+<li><strong>[snippet]</strong> Steam thread, 2023 (BG3 discussion, handle not resolved): "Filter buttons for different categories have to be placed on the main UI interface, not be hidden behind a "Sort by..." button!" and "In this game it needs 2 mouse clicks to get the inventory sorted."
+</li>
+<li><strong>[snippet]</strong> Steam thread, same era: "Items will not appear until I use a filter", and the "Show All" filter "does not actually show all the items."
+</li>
+<li><strong>[snippet]</strong> Steam thread: "The code can't be called optimized when it takes next to one second to switch from one character's inventory to another one's."
+</li>
+<li><strong>[snippet]</strong> Steam threads report that sorting by category does not group potions as expected, sorting the Traveler's Chest mixed swords, daggers and food, and sorting failed on some characters.
+</li>
+<li><strong>[snippet]</strong> A Steam post reports a crash while sorting a large camp chest.
+</li>
+<li><strong>[snippet]</strong> Steam thread, 2021, comparing Divinity: Original Sin 2: one player says that UI "is a lot better for the most part" and praises that it "automatically sorts and gives proper information on item stats." (search snippet; the "praises" wording is the summary's, so treat as paraphrase.)
+</li></ul>
+<p><strong>Camp and Traveler's Chest</strong></p>
+<ul>
+<li>Players report they cannot view a character's inventory at camp unless that character is active. <strong>UNVERIFIED</strong> (search summary).
+</li>
+<li>Players build their own sorting with categorised containers, and one player's camp chest needed a self-made system to stay usable. <strong>UNVERIFIED</strong> paraphrase of search summaries.
+</li>
+<li>No rename or item-tag feature for containers was confirmed. A 2024-era review said there is "no way to rename containers or tag items" (paraphrased in search summary, <strong>UNVERIFIED</strong> wording).
+</li></ul>
+<p><strong>Radial menu (controller)</strong></p>
+<ul>
+<li><strong>[snippet]</strong> r/BaldursGate3 post, Sep 2023 (teddit mirror, blocked on fetch): "How to fix controller default radial headache." Search summary of the thread: slots re-arrange on their own, and "the game will swap my radial wheels around at random." Removing a radial is "unreliable" per Dec 2023 r/BaldursGate3 comment. Mirrors were blocked; treat as <strong>UNVERIFIED</strong> wording.
+</li>
+<li><strong>[snippet]</strong> Steam post, Aug 2023: LT with the left stick, which previously opened the rest/camp wheel, opened inventory or the Reactions menu after an update. RT still opens the wheel.
+</li>
+<li><strong>[snippet]</strong> Steam user on Steam Deck: disarm and rearm "ends up redesigning the radial menu layout, which defeats the muscle-memory purpose of a radial."
+</li>
+<li><strong>Mouse-specific radial complaints</strong>: not found in this run.
+</li></ul>
+<p><strong>Larian forums</strong>: no Larian forum thread was reachable. Nothing here reflects a Larian response.</p>
+<h2 id="patterns-worth-adopting">Patterns worth adopting</h2>
+<p>Each pattern is tagged with the complaint it answers. Items are grounded in sources above unless marked otherwise.</p>
+<ol>
+<li><strong>Sort by column, with a visible control</strong> (Starfield/StarUI; BG3 two-click complaint). Clicking a column header sorts. Keyboard: press a letter or key to cycle sort key, and show the active sort. Controller: bumper cycles sort key, one press.
+</li>
+<li><strong>Secondary sort key</strong> (FO76 devtrackers). Sort by weight then name, so equal items do not reshuffle. Applies to Cataclysm's existing sort modes too.
+</li>
+<li><strong>Filter and sort controls on the main screen</strong> (BG3 complaint, sort hidden behind a button). Put category tabs and sort on the visible header, not one extra menu deep. Keyboard: number or letter keys for tabs. Controller: shoulder buttons.
+</li>
+<li><strong>Category totals</strong> (StarUI "combined mass" per category). Show the sum of weight and count per category header, so a light stack that adds up is visible.
+</li>
+<li><strong>Favourites with numbered hotkey groups</strong> (SkyUI groups F1 to F4 and 1 to 8 for items, per search summary). Bind several items per key, so swapping between weapons is one press. Keyboard: number keys bind. Controller: radial-style or group picker.
+</li>
+<li><strong>Favourites must be explicitly set before binding</strong> (SkyUI forum complaint). If you bind from a favourites list, make that obvious at the bind point.
+</li>
+<li><strong>Junk tagging</strong> (FO4 tagging; F4TES wanted "mark the exact amount you need" and be notified). Mark junk and set target quantities. Auto-pickup of marked items only (Steam suggestion, FO4).
+</li>
+<li><strong>Transfer-all and category-preserving transfer</strong> (F4TES: categories kept in Pip-Boy, lost in transfer menu). Transfer keeps the same categories, and a single action moves all matching items.
+</li>
+<li><strong>Scrollbar on long lists</strong> (CoffeeGecko8: no scrollbar, mouse wheel only). Show a scrollbar in trade and container lists.
+</li>
+<li><strong>One confirm key that matches the label</strong> (FO4 "Enter" vs "E" thread). Label the actual key shown.
+</li>
+<li><strong>Show invisible or broken item state</strong> (FO4 invisible items, phantom weight). Count only items that exist. The Pip-Boy weight must match the visible list.
+</li>
+<li><strong>Tooltip latency</strong> (BG3 Gfinity and Steam: tooltips too slow). Tooltips should show without a delay, or cache on first hover.
+</li>
+<li><strong>Stable radial layout</strong> (BG3 radial slots reordering). Keep radial slot positions fixed across sessions and do not rebuild them on unequip or rearm.
+</li>
+<li><strong>Character inventory switch without lag</strong> (BG3 one-second switch). Switching characters should take well under a second.
+</li>
+<li><strong>Multi-character access</strong> (BG3 Gfinity: losing access on swap). Let the user see a non-active character's stash at camp, or show a shared stash view.
+</li>
+<li><strong>Item comparison deltas</strong>: no source in this run supports a specific comparison-arrow design. <strong>UNVERIFIED</strong>; do not treat as researched.
+</li>
+<li><strong>Compact list view</strong> (StarUI and ArmadaUI). A dense mode for many items, with a scrollable category column.
+</li></ol>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li>Fallout 4 Pip-Boy comparison tooltips or weight/value delta arrows. No source found. The first search summary claimed a weight-comparison tooltip; this was not confirmed.
+</li>
+<li>Reddit threads (r/fo4, r/skyrimmods, r/BaldursGate3, r/Starfield). Reddit and its mirrors were blocked or redirected to auth pages. Reddit-attributed claims are search-summary or <strong>UNVERIFIED</strong>.
+</li>
+<li>The text of the SkyUI Nexus page (403). Its feature list is from a search summary.
+</li>
+<li>Kotaku's Starfield article (page did not load).
+</li>
+<li>Prima's Starfield redesign article (not fetchable).
+</li>
+<li>Most Steam discussion threads for BG3, Starfield and Skyrim (content-warning gate; no posts loaded). Quotes from them are <strong>[snippet]</strong> only.
+</li>
+<li>Whether any complaint above was fixed in later patches. No patch notes were checked.
+</li>
+<li>Larian forum threads. None reachable.
+</li>
+<li>Whether any Bethesda or Larian team responded to inventory-specific feedback. Only the Starfield menu reply (Pete Hines, 21 Aug 2023) was confirmed, and it concerns the main menu.
+</li>
+<li>Mouse-specific BG3 radial complaints. None found.
+</li>
+<li>Fallout 4 build-mode complaints beyond the Steam threads above (missing or iconless workshop items, load lag, unallied settlements). These come from 2015 to 2019 threads and are not confirmed for current patches.
+</li></ul>
+</main>
+</body>
+</html>

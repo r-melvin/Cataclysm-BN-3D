@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Other frontends and accessibility routes for a large C++ game (research)</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="other-frontends-and-accessibility-routes-for-a-large-c-game-research">Other frontends and accessibility routes for a large C++ game (research)</h1>
+<p>Date of research: 2026-10-21. Scope: alternative engines, web/WASM, thin-client splits, and SDL3 + RmlUi + AccessKit.</p>
+<p>Labels: <strong>VERIFIED</strong> = checked in a primary source this session (URL given). <strong>NOT VERIFIED</strong> = not checked, or a search snippet only, or a source could not be read. <strong>NOT FOUND</strong> = searched, nothing relevant located.</p>
+<p>Tool limits hit during research: the GitHub API rate limit (5,000/hr shared) was exhausted partway through, and the WebSearch budget (200 per session) ran out before the last searches. Items that depended on those calls are marked NOT VERIFIED.</p>
+<hr>
+<h2 id="summary-table">Summary table</h2>
+<table><thead><tr><th>Option</th><th>Licence (verified?)</th><th>C++ path</th><th>Screen-reader / accessibility</th><th>Linux / macOS</th><th>Health (last push / release)</th><th>Verdict for this project</th></tr></thead><tbody><tr><td>O3DE</td><td>Apache-2.0 and MIT licence files in repo; GitHub reports NOASSERTION (VERIFIED)</td><td>Native C++ engine, Gems (VERIFIED: <code>Gems/</code> dir exists)</td><td>No screen-reader code found by code search; not exhaustive (NOT FULLY VERIFIED)</td><td>NOT VERIFIED</td><td>Pushed 2026-10-21; latest release 2605.0 published 2026-05-27 (VERIFIED)</td><td>Engine switch: very high cost. Not a fit for a UI-only problem.</td></tr><tr><td>Flax Engine</td><td>Custom Flax EULA; 4% royalty above $250,000 per calendar quarter per game (VERIFIED, flaxengine.com/faq)</td><td>C++ and C# (NOT VERIFIED beyond search snippet)</td><td>None stated on FAQ (VERIFIED: page has no a11y statements)</td><td>Linux and macOS listed (VERIFIED, FAQ)</td><td>Latest release 1.13.7012, 2026-10-21 (VERIFIED)</td><td>Custom licence plus engine switch. Not recommended.</td></tr><tr><td>Stride</td><td>MIT (VERIFIED, LICENSE.md)</td><td>C# only (VERIFIED, README describes C# engine)</td><td>No UI screen-reader support found; the search hit was in a scripting file (NOT VERIFIED what it is)</td><td>Runtime builds on Linux Vulkan/OpenGL (VERIFIED, README badge); editor on Linux NOT VERIFIED</td><td>Pushed 2026-10-21; latest release 4.4.1, 2026-10-17 (VERIFIED)</td><td>Wrong language for a C++ codebase. Not recommended.</td></tr><tr><td>CDDA Emscripten/WASM</td><td>n/a</td><td>Emscripten build, abandoned</td><td>n/a</td><td>n/a</td><td>Build script self-declares UNSUPPORTED (VERIFIED)</td><td>Evidence that the WASM route is hard to keep alive.</td></tr><tr><td>Browser DOM/ARIA UI</td><td>n/a</td><td>Emscripten + JS/DOM UI</td><td>ARIA exposes semantics to AT (VERIFIED, W3C ARIA 1.2)</td><td>n/a</td><td>n/a</td><td>Plausible for a menu/UI layer; the 3D view is the weak point (see section 4).</td></tr><tr><td>Tauri (Rust) + WebView</td><td>MIT/Apache (NOT VERIFIED)</td><td>Rust shell + C++ core (NOT VERIFIED)</td><td>Per-OS a11y in webview: NOT VERIFIED</td><td>n/a</td><td>n/a</td><td>Adds a second toolchain. Accessibility per engine not verified.</td></tr><tr><td>Thin client (DFHack / NetHack / Brogue)</td><td>n/a</td><td>n/a</td><td>n/a</td><td>n/a</td><td>n/a</td><td>Pattern exists; specific examples NOT VERIFIED (fetches failed).</td></tr><tr><td>AccessKit C bindings + SDL example</td><td>Apache-2.0 OR MIT (README VERIFIED); GitHub licence field reports BSD-3-Clause (VERIFIED, conflict noted)</td><td>C API via cbindgen (search snippet only, NOT VERIFIED in repo)</td><td>Windows, macOS, Unix (AT-SPI) adapters (VERIFIED, accesskit.dev)</td><td>Unix/AT-SPI adapter exists; known caveats (VERIFIED)</td><td>Adapter releases 2026-09-25; core 0.23.1 on 2026-09-26 (VERIFIED)</td><td>The most relevant option. An <code>sdl</code> example folder exists in accesskit-c (VERIFIED). Quality NOT VERIFIED.</td></tr></tbody></table>
+<hr>
+<h2 id="1-o3de-apache-2-0">1. O3DE (Apache-2.0)</h2>
+<ul>
+<li><strong>Licence.</strong> The repo contains <code>LICENSE_APACHE2.TXT</code> and <code>LICENSE_MIT.TXT</code>. GitHub's licence field reads NOASSERTION (a dual-licence layout). Apache-2.0 text confirmed in <code>LICENSE_APACHE2.TXT</code>. <strong>VERIFIED</strong> via <code>gh api repos/o3de/o3de/contents/LICENSE_APACHE2.TXT</code>.
+</li>
+<li><strong>Health.</strong> Last push 2026-10-21 (VERIFIED). Latest release <code>2605.0</code>, published 2026-05-27 (VERIFIED). ~9,768 stars (VERIFIED).
+</li>
+<li><strong>C++ integration.</strong> O3DE is C++ with a Gems plugin system. <code>Gems/</code> exists with about 83 entries (VERIFIED). Build burden and CI cost: <strong>NOT VERIFIED</strong>.
+</li>
+<li><strong>Accessibility.</strong>
+<ul>
+<li>A code search for "narrator" plus "accessibility screen reader" returned 0 results. GitHub code search is incomplete, so this is <strong>NOT FULLY VERIFIED</strong> as an absence.
+</li>
+<li>Titles of three accessibility-labelled issues (2021 to 2022) concern cursor settings and editor/sub-object accessibility, not screen readers (VERIFIED from issue titles).
+</li>
+<li>Web search returned nothing on O3DE screen-reader support (<strong>NOT FOUND</strong> by search; search coverage weak).
+</li></ul>
+</li>
+<li><strong>Platform support (Linux/macOS/Windows).</strong> <strong>NOT VERIFIED</strong> in this session.
+</li>
+<li><strong>Assessment.</strong> Adopting O3DE would replace the engine. It offers nothing on accessibility, so it doesn't address the problem. Not recommended.
+</li></ul>
+<h2 id="2-flax-engine">2. Flax Engine</h2>
+<ul>
+<li><strong>Licence and revenue share.</strong>
+<ul>
+<li>The FAQ page states: "When you're making a commercial product you have to pay a 4% royalty on earnings exceeding $250,000 per calendar quarter." Also: royalty "due 45 days after the close of each calendar quarter." <strong>VERIFIED</strong> (<a href="https://flaxengine.com/faq/,">https://flaxengine.com/faq/,</a> fetched).
+</li>
+<li>Non-commercial and educational use is free (VERIFIED, FAQ).
+</li>
+<li>A search snippet quoted the 1.0 release notes as raising the threshold from $3,000 to $25,000 per quarter. The current FAQ says $250,000. <strong>Conflict</strong>: the FAQ is the more current source, but the release notes were not fetched (NOT VERIFIED).
+</li>
+<li>Source licence: the search snippet says Flax Editor and source are under the Flax EULA. <strong>NOT VERIFIED</strong> beyond the snippet. GitHub's licence field reads NOASSERTION (VERIFIED, <code>gh api repos/FlaxEngine/FlaxEngine</code>).
+</li></ul>
+</li>
+<li><strong>C++ scripting.</strong> The search snippets say C++ and C# are both supported, with a visual scripting system (NOT VERIFIED from a primary doc).
+</li>
+<li><strong>Platforms.</strong> FAQ: "Flax currently supports Windows, Linux, Android, macOS, iOS, PlayStation 4, PlayStation 5, Xbox One" (VERIFIED). The same page lists Xbox Series X/S, Web and Switch, with a formatting error (VERIFIED as listed).
+</li>
+<li><strong>Accessibility.</strong> The FAQ contains no accessibility statements (VERIFIED). No other source checked: <strong>NOT VERIFIED</strong>.
+</li>
+<li><strong>Health.</strong> Latest release <code>1.13.7012</code>, published 2026-10-21 (VERIFIED, <code>gh api</code>). Active.
+</li>
+<li><strong>Assessment.</strong> Custom licence with a revenue share, and an engine switch. Not recommended for a UI accessibility problem.
+</li></ul>
+<h2 id="3-stride-mit-c">3. Stride (MIT, C#)</h2>
+<ul>
+<li><strong>Licence.</strong> MIT, "Copyright (c) 2021 .NET Foundation and Contributors" (VERIFIED, <code>LICENSE.md</code>).
+</li>
+<li><strong>Health.</strong> Pushed 2026-10-21; latest release <code>releases/4.4.1</code>, 2026-10-17 (VERIFIED, <code>gh api</code>).
+</li>
+<li><strong>Language.</strong> C# engine, with the Game Studio editor (VERIFIED, README).
+</li>
+<li><strong>Linux.</strong> The Linux runtime workflow exists (<code>build-linux-runtime.yml</code>), and the README shows a "Linux Vulkan/OpenGL" build badge (VERIFIED). Linux editor support: <strong>NOT VERIFIED</strong>. The workflow runs on <code>windows-2025-vs2026</code> (VERIFIED), which is a separate concern.
+</li>
+<li><strong>Accessibility.</strong> One code-search hit in <code>sources/engine/Stride.Assets/Scripts/Accessibility.cs</code>. I did not open it, so its meaning is <strong>NOT VERIFIED</strong> (it may be C# member access modifiers, not UI accessibility). The rate-limited search for "narrator/UIA/AccessKit" returned no result (NOT VERIFIED).
+</li>
+<li><strong>Assessment.</strong> MIT is attractive, but C# doesn't fit a C++ codebase. Not recommended.
+</li></ul>
+<h2 id="4-web-frontend-emscripten-wasm-dom-aria-tauri-electron-steam-deck">4. Web frontend (Emscripten/WASM, DOM/ARIA, Tauri/Electron, Steam Deck)</h2>
+<h3 id="4a-cdda-wasm-build">4a. CDDA WASM build</h3>
+<ul>
+<li>**CDDA repo <code>build-scripts/build-emscripten.sh</code>** opens with: "UNSUPPORTED: this build cannot currently succeed. The target was abandoned in 2025. The PR CI leg was commented out on 2025-07-14 in commit f530407bda (PR #81827)... SDL2 support has since been removed... Emscripten does ship an SDL3 port (3.4.2)... but no SDL3_image or SDL3_mixer port." (VERIFIED via <code>gh api repos/CleverRaven/Cataclysm-DDA/contents/build-scripts/build-emscripten.sh</code>.)
+</li>
+<li><strong>CDDA release workflow.</strong> The "WebAssembly Bundle" matrix entry is commented out (<code>release.yml</code>, lines 191-198) (VERIFIED). A separate build step remains (line 485-489) for <code>matrix.wasm</code> (VERIFIED, but not run).
+</li>
+<li><strong>Open issue</strong> #76956 "Emscripten Build link broken", created 2024-10-11, last updated 2025-07-20, still open (VERIFIED).
+</li>
+<li><strong>nornagon.</strong> The search returned nothing about nornagon and CDDA wasm. Claim <strong>NOT VERIFIED</strong> and treated as unconfirmed; the user's "cdda wasm" recollection could not be confirmed. The play.cataclysmdda URL was not checked (NOT VERIFIED).
+</li>
+<li><strong>Cataclysm-BN.</strong> A local grep of the BN repo for "emscripten" in <code>*.sh</code>, <code>*.txt</code>, <code>*.cmake</code>, <code>*.yml</code> found no matches (VERIFIED, local).
+</li></ul>
+<h3 id="4b-browser-limits-threads-memory">4b. Browser limits (threads, memory)</h3>
+<p>From the Emscripten pthreads doc (<a href="https://emscripten.org/docs/porting/pthreads.html,">https://emscripten.org/docs/porting/pthreads.html,</a> fetched):</p>
+<ul>
+<li>Multithreading uses SharedArrayBuffer, which browsers gate behind COOP and COEP headers (VERIFIED).
+</li>
+<li>"Pthreads code will not work in deployed environment unless these headers are correctly set" (VERIFIED).
+</li>
+<li>The doc states pthreads builds "currently only work in the Firefox Nightly channel", describing SharedArrayBuffer as "still in an experimental research stage" (VERIFIED as written in the doc). <strong>Currency of that claim NOT VERIFIED</strong>: the doc date is unknown and this may be out of date for 2026.
+</li>
+<li>Pthreads with memory growth "currently causes JS accessing the Wasm memory to be slow" (VERIFIED as written; currency NOT VERIFIED).
+</li>
+<li>Firefox Nightly caps threads at 20 per domain by default (VERIFIED as written; currency NOT VERIFIED).
+</li></ul>
+<h3 id="4c-aria-and-accessibility-of-canvas">4c. ARIA and accessibility of canvas</h3>
+<ul>
+<li>W3C WAI-ARIA 1.2 says ARIA "provides a framework to improve the accessibility and interoperability of web content" (VERIFIED, <a href="https://www.w3.org/TR/wai-aria-1.2/">https://www.w3.org/TR/wai-aria-1.2/</a>).
+</li>
+<li>"When WAI-ARIA roles override host language semantics, there are no changes in the DOM, only in the accessibility tree" (VERIFIED, Section 4.1).
+</li>
+<li><strong>Correction to my assumption.</strong> ARIA does not only change the accessibility tree. Section 4.3.2 requires user agents to handle focus and keyboard events for <code>aria-activedescendant</code> (VERIFIED). So ARIA can affect keyboard behavior, not only what is exposed.
+</li>
+<li>MDN <code>HTMLCanvasElement</code> fetch returned no accessibility text. A canvas-is-opaque-to-AT claim is <strong>NOT VERIFIED</strong> from that page.
+</li>
+<li>WebGL/WebGPU for 3D: <strong>NOT VERIFIED</strong> (not researched this session).
+</li></ul>
+<h3 id="4d-tauri-and-electron-wrappers">4d. Tauri and Electron wrappers</h3>
+<ul>
+<li>Tauri webview engines (search snippet, not fetched): WebView2 on Windows, WKWebView on macOS, webkit2gtk on Linux (VERIFIED as snippet only).
+</li>
+<li>Accessibility of those webviews per OS: <strong>NOT VERIFIED</strong>. The search returned only the engine list.
+</li>
+<li>Electron, Steam integration, Steam Deck: <strong>NOT VERIFIED</strong> (not researched).
+</li></ul>
+<h2 id="5-hybrid-thin-client-architectures">5. Hybrid thin-client architectures</h2>
+<ul>
+<li><strong>DFHack remote.</strong> Fetches of the DFHack Lua API docs failed (404 on the original URL, then a 404 on the redirect target). Whether DFHack exposes a remote protocol: <strong>NOT VERIFIED</strong>.
+</li>
+<li><strong>NetHack window port.</strong> Fetch of the NetHack wiki page failed (404). Claims about the core/window-port split: <strong>NOT VERIFIED</strong>.
+</li>
+<li><strong>Brogue platform layer.</strong> Web search was blocked by the session budget. <strong>NOT VERIFIED</strong>.
+</li>
+<li><strong>Factorio, latency numbers, Lua implications.</strong> <strong>NOT RESEARCHED / NOT VERIFIED</strong>.
+</li>
+<li><strong>Relevance to this codebase.</strong> Cataclysm-BN already separates <code>cata_tiles</code> from the core via SDL. I did not inspect that separation in this session; claims about it are <strong>NOT VERIFIED</strong>.
+</li></ul>
+<h2 id="6-sdl3-rmlui-accesskit">6. SDL3 + RmlUi + AccessKit</h2>
+<h3 id="6a-accesskit-repo-and-licence">6a. AccessKit repo and licence</h3>
+<ul>
+<li>The AccessKit README says: "AccessKit is licensed under the Apache License, Version 2.0 or the MIT license, at your option." It also says "Significant portions of AccessKit are derived from Chromium" (VERIFIED, <code>README.md</code> via WebFetch of GitHub). <strong>Licence conflict</strong>: GitHub's licence field for <code>AccessKit/accesskit</code> and <code>AccessKit/accesskit-c</code> reads BSD-3-Clause (VERIFIED, <code>gh api</code>). The README covers the derived Chromium portions as BSD-style. The two readings need resolving before shipping; for now: Apache-2.0 OR MIT for AccessKit's own code (VERIFIED from README), with Chromium-derived BSD-3 portions.
+</li>
+<li>Meson build files are LGPL-2.1 (VERIFIED, README).
+</li></ul>
+<h3 id="6b-accesskit-c-examples">6b. accesskit-c examples</h3>
+<ul>
+<li><code>examples/</code> in <code>accesskit-c</code> contains two directories: <code>sdl</code> and <code>windows</code> (VERIFIED, <code>gh api repos/AccessKit/accesskit-c/contents/examples</code>). So an SDL example exists. Whether it compiles and what it covers: <strong>NOT VERIFIED</strong> (not built or read).
+</li>
+<li>The accesskit-c README says the C bindings have "header file, pre-built libraries, examples, and source code" (VERIFIED, accesskit.dev).
+</li>
+<li>The README's cross-compiling notes mention Windows, Linux and ARM, and require Rust 1.87 or higher and CMake 3.20 or higher (VERIFIED, README).
+</li>
+<li>A FreeBSD port listed accesskit-c 0.17.1 (search snippet). That is an old version; current version NOT VERIFIED.
+</li></ul>
+<h3 id="6c-platform-adapter-completeness">6c. Platform adapter completeness</h3>
+<ul>
+<li>accesskit.dev lists three adapters: "macOS adapter," "Unix adapter," and "Windows adapter" (VERIFIED). Android, iOS and other platforms: NOT FOUND on that page. There is an <code>accesskit_ios</code> release (<code>v0.2.1</code>, 2026-09-25) (VERIFIED, <code>gh api</code>).
+</li>
+<li><code>ARCHITECTURE.md</code> says: "Adapters are best-effort implementations and may not cover all the accessibility APIs of their platform." and "Accesskit is currently sparsely documented." (VERIFIED, WebFetch of GitHub <code>ARCHITECTURE.md</code>).
+</li>
+<li><code>README-APPLICATION-DEVELOPERS.md</code> calls itself "a work in progress and will be expanded over time" (VERIFIED).
+</li>
+<li>Linux AT-SPI caveat: accerciser does not display AccessKit trees unless the ATSPI bus is enabled (running a screen reader or <code>busctl</code> enables it) (VERIFIED, <code>README-APPLICATION-DEVELOPERS.md</code>).
+</li>
+<li>Open-issues "not supported" lists: <strong>NOT VERIFIED</strong> (the <code>gh api</code> budget ran out before issues were checked).
+</li></ul>
+<h3 id="6d-release-cadence-and-funding">6d. Release cadence and funding</h3>
+<ul>
+<li>Core crate releases: 0.22.2 (2026-06-15), 0.22.3 (2026-07-14), 0.23.0 (2026-09-07), 0.23.1 (2026-09-26) (VERIFIED, <code>gh api repos/AccessKit/accesskit/releases</code>).
+</li>
+<li>Per-adapter releases on 2026-09-25: winit 0.34.1, windows 0.35.1, unix 0.24.0, macos 0.27.1, ios 0.2.1 (VERIFIED).
+</li>
+<li>Funding: accesskit.dev links to a "Sponsor the project" page (GitHub Sponsors). Who funds the project and in what amounts: <strong>NOT VERIFIED</strong>. The org description is "Accessibility infrastructure for UI toolkits", with 7 public repos (VERIFIED).
+</li></ul>
+<h3 id="6e-rmlui-accesskit">6e. RmlUi + AccessKit</h3>
+<ul>
+<li>No integration found. Search for RmlUi with AccessKit returned none (<strong>NOT FOUND</strong>, search-based).
+</li>
+<li>RmlUi's own accessibility support: <strong>NOT VERIFIED</strong> (search returned only generic ARIA pages).
+</li>
+<li>Searching for "any project wired to AccessKit C" returned no concrete downstream project (<strong>NOT FOUND</strong>).
+</li></ul>
+<h3 id="6f-this-repo">6f. This repo</h3>
+<ul>
+<li>A local grep for <code>accesskit|tolk|nvda|screen.?reader|narrator</code> in <code>src</code>, <code>CMakeLists.txt</code> and <code>cmake</code> returned matches in <code>src/string_input_popup.cpp</code>, <code>src/status_report.h</code>, <code>src/ui_manager.h</code>, <code>src/game.cpp</code>, <code>src/messages.cpp</code> and <code>src/overmap/overmap_ui.cpp</code>. I did not open these, so their content is <strong>NOT VERIFIED</strong>. No AccessKit dependency was found in the build (VERIFIED by grep of <code>CMakeLists.txt</code> and <code>cmake/</code>).
+</li></ul>
+<hr>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li>O3DE: Linux/macOS/Windows support, build and CI burden, accessibility beyond code search, project health details beyond push date and release.
+</li>
+<li>Flax: source licence terms beyond the EULA snippet, release-notes threshold conflict ($25,000 vs $250,000), accessibility, C++ scripting docs.
+</li>
+<li>Stride: Linux editor, meaning of the <code>Accessibility.cs</code> hit, any UI accessibility.
+</li>
+<li>CDDA: nornagon's involvement, the play.cataclysmdda site, the current status of the Emscripten pthreads claims, and the current state of the SDL3 port in Emscripten.
+</li>
+<li>Browser: MDN canvas accessibility, WebGL/WebGPU, performance numbers, Electron, Steam and Steam Deck.
+</li>
+<li>Tauri: accessibility of WebView2, WKWebView and webkit2gtk per OS.
+</li>
+<li>Thin client: DFHack remote protocol, NetHack window port details, Brogue platform layer, Factorio, latency numbers.
+</li>
+<li>AccessKit: whether the SDL example builds, adapter "not supported" lists from open issues, full funding picture, Android support, and the licence conflict (Apache/MIT vs BSD-3 in GitHub's field).
+</li>
+<li>RmlUi: any AccessKit or accessibility integration.
+</li>
+<li>Local: content of the grep matches in <code>src/</code> and whether the codebase has any existing a11y hooks.
+</li></ul>
+<hr>
+<h2 id="sources">Sources</h2>
+<ul>
+<li>O3DE: <a href="https://github.com/o3de/o3de">https://github.com/o3de/o3de</a> (licence files, release 2605.0)
+</li>
+<li>Flax FAQ: <a href="https://flaxengine.com/faq/">https://flaxengine.com/faq/</a>
+</li>
+<li>Flax 1.0 notes (search snippet, not fetched): <a href="https://docs.flaxengine.com/manual/release-notes/1_0/index.html">https://docs.flaxengine.com/manual/release-notes/1_0/index.html</a>
+</li>
+<li>Stride licence: <a href="https://github.com/stride3d/stride/blob/master/LICENSE.md">https://github.com/stride3d/stride/blob/master/LICENSE.md</a>
+</li>
+<li>CDDA Emscripten script: <a href="https://github.com/CleverRaven/Cataclysm-DDA/blob/master/build-scripts/build-emscripten.sh">https://github.com/CleverRaven/Cataclysm-DDA/blob/master/build-scripts/build-emscripten.sh</a>
+</li>
+<li>CDDA issue #76956: <a href="https://github.com/CleverRaven/Cataclysm-DDA/issues/76956">https://github.com/CleverRaven/Cataclysm-DDA/issues/76956</a>
+</li>
+<li>Emscripten pthreads: <a href="https://emscripten.org/docs/porting/pthreads.html">https://emscripten.org/docs/porting/pthreads.html</a>
+</li>
+<li>W3C WAI-ARIA 1.2: <a href="https://www.w3.org/TR/wai-aria-1.2/">https://www.w3.org/TR/wai-aria-1.2/</a>
+</li>
+<li>AccessKit README: <a href="https://github.com/AccessKit/accesskit/blob/main/README.md">https://github.com/AccessKit/accesskit/blob/main/README.md</a>
+</li>
+<li>AccessKit ARCHITECTURE: <a href="https://github.com/AccessKit/accesskit/blob/main/ARCHITECTURE.md">https://github.com/AccessKit/accesskit/blob/main/ARCHITECTURE.md</a>
+</li>
+<li>AccessKit developer notes: <a href="https://github.com/AccessKit/accesskit/blob/main/README-APPLICATION-DEVELOPERS.md">https://github.com/AccessKit/accesskit/blob/main/README-APPLICATION-DEVELOPERS.md</a>
+</li>
+<li>accesskit-c README: <a href="https://github.com/AccessKit/accesskit-c">https://github.com/AccessKit/accesskit-c</a>
+</li>
+<li>accesskit.dev: <a href="https://accesskit.dev">https://accesskit.dev</a>
+</li>
+<li>Tauri webview versions (search snippet): <a href="https://v2.tauri.app/reference/webview-versions/">https://v2.tauri.app/reference/webview-versions/</a>
+</li></ul>
+</main>
+</body>
+</html>

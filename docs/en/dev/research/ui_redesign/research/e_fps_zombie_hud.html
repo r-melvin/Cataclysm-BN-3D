@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FPS / zombie / survival HUD conventions: research notes</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="fps-zombie-survival-hud-conventions-research-notes">FPS / zombie / survival HUD conventions: research notes</h1>
+<p>Scope: first- and third-person zombie, survival and FPS games, as requested. Date of research: 2026-10-21.</p>
+<h2 id="method-and-caveats-read-first">Method and caveats (read first)</h2>
+<ul>
+<li>Quotes below were fetched with WebFetch, which runs the page through a small model that extracts text. Each quote was checked against the fetch summary only, not against a raw copy of the page. <strong>Spot-check any quote before reusing it in a design doc.</strong>
+</li>
+<li>Where a fetch was blocked (HTTP 403, redirect loops, TLS errors), the claim is marked as search-snippet only, or as UNVERIFIED.
+</li>
+<li>Most Steam and forum quotes are from threads whose handle and date were visible in the extracted text. Where no handle/date was visible, that is stated.
+</li>
+<li>Several requested sources (Game UI Database, interfaceingame.com, Can I Play That reviews for most titles, GDC talks on Dying Light, L4D2 and DRG) were not reached, or returned nothing relevant. See "Could not verify".
+</li></ul>
+<hr>
+<h2 id="per-game-sections">Per-game sections</h2>
+<h3 id="the-long-dark-strongest-source-set">The Long Dark (strongest source set)</h3>
+<p>Quotes (gamedeveloper.com blog, by Iuliana U, 12 Jan 2021: <a href="https://www.gamedeveloper.com/design/long-dark-survival-game-hud-ui">https://www.gamedeveloper.com/design/long-dark-survival-game-hud-ui</a>):</p>
+<ul>
+<li>"Many Heads-Up Display elements are contextual and some can even be set to fade out over time."
+</li>
+<li>"Health zone is one of the only persistent UI elements on the screen"
+</li>
+<li>"the 5 status indicators are crucial to player survival in the game."
+</li>
+<li>"red for damage, yellow for warning, white for minor importance."
+</li>
+<li>"Numbers take more time to read, when all the player needs to understand is if a certain condition is high/low"
+</li>
+<li>"Predator attraction icon is bigger and more prominent than wind protection icon to indicate importance."
+</li></ul>
+<p>Player reaction (Steam discussion, General Discussions, 2016-2023: <a href="https://steamcommunity.com/app/305620/discussions/0/405694115206941426">https://steamcommunity.com/app/305620/discussions/0/405694115206941426</a>):</p>
+<ul>
+<li>KOTN Baby-Eating Dingo, 12 Mar 2016 9:17am: "I really hate this change."
+</li>
+<li>Scoundrel, 12 Mar 2016 2:49pm: "I like the newer version of the HUD since it only displayes when there is something for you to deal with."
+</li>
+<li>Scoundrel, 12 Mar 2016 2:49pm: "I have never felt like I had to 'spam' TAB to keep on top of my status."
+</li>
+<li>Creation, 12 Mar 2016 9:06am: "The minimalist HUD is supposed to help with the immersion i dont understand."
+</li>
+<li>ScrapyardBob, 12 Mar 2016 4:18pm: "I'd like to see a settings slider for how sensitive those icons are in the lower-left corner."
+</li>
+<li>ZzozZ, 3 May 2017 10:17am: "let the Hud Open plz or put a On/Off switch...that informations are SO important in a survival game."
+</li>
+<li>SirunSong, 4 Nov 2023 3:37pm: "This was a poor decision to place crucial information in that form."
+</li></ul>
+<p>Takeaway: the contextual-icon HUD split the player base. Fans said it reduced TAB-spamming; critics said it hid information that is critical in a survival game. The fix players asked for was a sensitivity or on/off option, not a return to the old HUD.</p>
+<p>Affliction and condition facts (Long Dark Wiki, search snippet only, UNVERIFIED beyond snippet): frostbite reduces max Condition by 10% per application (up to 5); burns reduce max Condition by 15% temporarily; one archived page says 75% for burns. The sources conflict.</p>
+<h3 id="dying-light-2-techland">Dying Light 2 (Techland)</h3>
+<p>Quotes:</p>
+<ul>
+<li>Techland UI producer, as reported by VideoGamer (Ben Borthwick, page "Last Updated December 21, 2021": <a href="https://www.videogamer.com/news/dying-light-2-stay-human-developers-talk-ui-and-accessibility-in-latest-video/">https://www.videogamer.com/news/dying-light-2-stay-human-developers-talk-ui-and-accessibility-in-latest-video/</a>): "you'll be able to switch on and off many HUD elements as you see fit."
+</li>
+<li>NME, Georgina Young, 22 Dec 2021 (<a href="https://www.nme.com/news/dying-light-2-will-have-accessibility-options-and-a-fully-customisable-hud-3125013">https://www.nme.com/news/dying-light-2-will-have-accessibility-options-and-a-fully-customisable-hud-3125013</a>): players complained that HUD elements, including "health bars and hints, were constantly visible," and Techland's response was to give players "the option to remove them."
+</li>
+<li>NME (same article): the developer's stated position is that "user preference comes first."
+</li>
+<li>Can I Play That, Ben Bayliss, 4 Feb 2022 (<a href="https://caniplaythat.com/2022/02/04/dying-light-2-stay-human-to-receive-accessibility-improvements/">https://caniplaythat.com/2022/02/04/dying-light-2-stay-human-to-receive-accessibility-improvements/</a>): "perhaps some button choices for activating Survivor Sense" could be added; a console bug where Survivor Sense did not trigger on press is noted.
+</li>
+<li>Techland dev blog #9, dated 2024-04-15 (<a href="https://outpost.dyinglightgame.com/news/dev-blog-9,">https://outpost.dyinglightgame.com/news/dev-blog-9,</a> reached via redirect): "the stamina management system, which we called Tactical Stamina"; "it also gets restored more slowly"; Nightmare Mode "removes the majority of HUD elements"; players should "rely on your eyes and ears, instead of checking the UI markers".
+</li></ul>
+<p>Stamina design intent (Multiplayer.it, Italian, search snippet only, UNVERIFIED): a 2018 interview said stamina should matter during chases and high-pressure areas, not for crossing the city.</p>
+<p>Weapon durability (search results, guides, not fetched in full): durability carries over from DL1; scrap weapons break quickly; mods restore durability (about 50 per mod). Guides disagree on whether weapons can be repaired. Treat the mod-based account as the better-supported one.</p>
+<p>Survivor Sense: no source found that explains the mechanic in detail. A GGRecon guide titled "Dying Light 2 Survivor Sense Not Working" suggests a known bug. Contents not verified.</p>
+<p>Player-sentiment gap: no Reddit or Steam thread about DL2 stamina or Survivor Sense was reached.</p>
+<h3 id="left-4-dead-2">Left 4 Dead 2</h3>
+<p>No official Valve design source or GDC talk was reached. Evidence is from Steam Workshop HUD mods (community, not Valve):</p>
+<ul>
+<li>Commenter on an avHUD 2 page: the temp-health display "made how much temp health I have easier to read at a glance." (Steam Workshop, commenter handle not verified in the fetch.)
+</li>
+<li>Changelog (avHUD 2): "fix for green temp health not being animated"; blinking when low, faster when critical.
+</li>
+<li>Requests: vertical health bar, an option to hide the numeric HP. (Steam Workshop comments, search snippet.)
+</li>
+<li>Modder note: "All the HUDs you see in the workshop have the same base! Only the sprites (images) and their placements on the screen are modified." (search snippet, Steam Workshop.)
+</li></ul>
+<p>These show what players tweak, not what Valve intended. Teammate outline and prompt conventions for L4D2 are UNVERIFIED (memory only).</p>
+<h3 id="dead-island-2">Dead Island 2</h3>
+<ul>
+<li>Zombie health bars can be turned off; PCInvasion/Prima guide says this "adds more immersion" (search snippet; article fetch returned 403/redirect loop). UNVERIFIED for verbatim wording.
+</li>
+<li>UI preset "Dynamic" hides map status icons such as health and reticle until a weapon is drawn or the player is damaged (Dot Esports, search snippet; fetch returned 403).
+</li>
+<li>No Reddit complaint thread about the HUD was reached.
+</li></ul>
+<h3 id="the-division-2016-and-resurgence-2026">The Division (2016) and Resurgence (2026)</h3>
+<p>Quotes (HUDs and Guis, Jono Yuen, 26 Jun 2013: <a href="https://www.hudsandguis.com/home/2013/06/26/tom-clancys-the-division-interface-design">https://www.hudsandguis.com/home/2013/06/26/tom-clancys-the-division-interface-design</a>):</p>
+<ul>
+<li>"instead of framing the screen with game information, the UI is incorporated into the environment"
+</li>
+<li>"Everything that carries the story along looks like it plays out in the game's environment."
+</li>
+<li>The wrist UI "features a carousel type UI that wraps around the character's wrist"; the only criticism: "I'm not sure how the character scrolls through different options though"
+</li></ul>
+<p>NeoGAF commenter (search snippet, not fetched; handle not visible): the AR concept was promising but the execution was "overblown and distracting."</p>
+<p>Resurgence (2026, Steam): reviewers called the UI "the most distracting, convoluted, overcomplicated on purpose" (search snippet, PC Gamer/Player One). Most negative reviews cited monetisation and performance, not only the UI. UNVERIFIED as a UI-only complaint.</p>
+<h3 id="deep-rock-galactic">Deep Rock Galactic</h3>
+<p>Quotes (Steam discussion 3057363335741893276, 25 Jun 2021: <a href="https://steamcommunity.com/app/548430/discussions/3/3057363335741893276">https://steamcommunity.com/app/548430/discussions/3/3057363335741893276</a>):</p>
+<ul>
+<li>Eri (Nuwa_Eri), topic opener: "Like more specific pings"
+</li>
+<li>Eri, 2:01am: "I can't assume that everyone playing the game would be able to understand the signal"
+</li>
+<li>Fact Got Ferret, 1:50am, quoting Femboy Thighs: "The pointer works BECAUSE it's simple."
+</li>
+<li>Fact Got Ferret, 1:50am: "I think a couple ping options would be nice. We don't need a whole lot."
+</li>
+<li>BezaoBuilder, 9:27am: "just pinging the usual way will make a generic ping, but you have options for more specific pings"
+</li>
+<li>BottomScorer (Banned), 5:37pm: "I need commands like "watch this way", "be around this spot", "cover me"."
+</li>
+<li>BottomScorer, 5:35pm: "Player icons are quite small, especially from a distance."
+</li>
+<li>Chibbity, 5:41pm: "No you don't." followed by "K.I.S.S."
+</li></ul>
+<p>Takeaway: the debate is simple generic ping versus more command types. The simple ping works because most pingable things have one obvious meaning. The thread did not mention a radial wheel. Terrain scanner and radial-wheel design: UNVERIFIED (not found).</p>
+<h3 id="escape-from-tarkov">Escape from Tarkov</h3>
+<p>Quotes (Shacknews, Timo Reinecke, 30 Aug 2024: <a href="https://www.shacknews.com/article/141231/tarkov-healing">https://www.shacknews.com/article/141231/tarkov-healing</a>):</p>
+<ul>
+<li>"Unlike other games, Escape from Tarkov distributes your character's HP to every limb."
+</li>
+<li>"Each limb has to be patched up individually and can get into various states of distress depending on the injury."
+</li>
+<li>"If your head or thorax reaches 0 health you'll drop dead instantly while your arms and legs can be "blacked out"."
+</li>
+<li>"A blacked-out limb loses all function and will affect the way you walk, run, and aim until it's addressed."
+</li></ul>
+<p>Limb UI: the article does not describe the on-screen display of a blacked-out limb. One guide (AFKGaming, search snippet) says the limb "turns black on the UI." UNVERIFIED beyond snippet. Reddit feedback on the limb UI: not found.</p>
+<h3 id="days-gone">Days Gone</h3>
+<ul>
+<li>No official option to hide the whole HUD (search results). A community "Toggle HUD" mod on Nexus Mods exists; it also hides menus, prompts and subtitles. The author says the weapon wheel had to be bound separately. (Nexus, search snippet.)
+</li>
+<li>Official accessibility page (Bend Studio, fetch returned 403): persistent centre dot and a High Contrast HUD option, per search snippet. UNVERIFIED wording.
+</li>
+<li>Nexus forum user (search snippet): asked for finer control, especially over the quest marker.
+</li></ul>
+<h3 id="metro-exodus">Metro Exodus</h3>
+<ul>
+<li>Hard difficulty disables the HUD; the watch shows time and radiation information (search snippet, article). UNVERIFIED wording.
+</li>
+<li>Lemmy post (lemmy.dayl.in/post/140428/1274003; fetch failed with TLS error): describes the game as a strong no-HUD example because the map and filter timer are shown through diegetic elements. Quote not verified.
+</li></ul>
+<h3 id="resident-evil-4-2023-remake">Resident Evil 4 (2023 remake)</h3>
+<p>Quote (Steam discussion 3827536762640406899, Shapely Twig, 25 Mar 2023: <a href="https://steamcommunity.com/app/2050650/discussions/0/3827536762640406899">https://steamcommunity.com/app/2050650/discussions/0/3827536762640406899</a>):</p>
+<ul>
+<li>"I also despise the generic crosshairs introduced with the RE2 Remake but I simply disable the HUD to remedy that."
+</li>
+<li>Reply, 10:21pm: "the removal of the shakey laser aim"
+</li></ul>
+<p>Other points (search snippets): the attaché-case grid inventory is kept and is treated as a weapon-choice constraint; the demo let players toggle the HUD and the red damage borders.</p>
+<h3 id="stalker-2-heart-of-chornobyl">STALKER 2 (Heart of Chornobyl)</h3>
+<p>Quotes (Steam discussion 4626981579416274293, Mormoloc, 1 Dec 2024: <a href="https://steamcommunity.com/app/1643320/discussions/0/4626981579416274293">https://steamcommunity.com/app/1643320/discussions/0/4626981579416274293</a>):</p>
+<ul>
+<li>"Annoying stash. I mean... the inventory is small enough , but the stash is stupid."
+</li>
+<li>"If you get too close to an NPC you cannot talk to them as the F menu dissapears."
+</li>
+<li>"a black screen would do." (on the death screen overlay)
+</li></ul>
+<p>Other points (search snippets, not verbatim): a developer said the HUD can be hidden entirely or individual elements switched off. A user said hit markers and a compass full of arrows and quest PoIs "kind of kills the atmosphere." Fans asked for a hardcore mode with no HUD or hints; GSC has not ruled it out.</p>
+<h3 id="state-of-decay-2">State of Decay 2</h3>
+<ul>
+<li>Reviewers praised the menus (Easy Allies, Game Informer, search snippets). One reviewer reported the HUD flashing in and out, making text unreadable and the mini-map useless (2017-2018 launch coverage).
+</li>
+<li>Fatigue and stamina: Asian Age (search snippet) called fatigue "probably more infuriating." Stevivor explained that caffeine restores the stamina pool.
+</li>
+<li>Verbatim fetches were not done. Treat as UNVERIFIED beyond snippet.
+</li></ul>
+<h3 id="cross-game-ui-theory-usable-background">Cross-game UI theory (usable background)</h3>
+<p>Quotes (Game Developer, "Game UI Discoveries: What Players Want," Marcus Andrews, 23 Feb 2010: <a href="https://www.gamedeveloper.com/design/game-ui-discoveries-what-players-want">https://www.gamedeveloper.com/design/game-ui-discoveries-what-players-want</a>):</p>
+<ul>
+<li>A customisable interface "seems to greatly increase the tolerability of traditional 2D HUD elements even when the screen gets cluttered." (about WoW)
+</li>
+<li>"when given the choice, players want more information and more UI to aid them reach optimal play performance."
+</li>
+<li>Intrusive non-diegetic interfaces are "tolerated and even appreciated if they aid the player to perform his task."
+</li>
+<li>Far Cry 2's fading HUD creates "a complete lack of control for the player."
+</li></ul>
+<p>Hit markers (PC Gamer, "Hit markers are an FPS crutch," <a href="https://www.pcgamer.com/games/fps/hit-markers-are-an-fps-crutch/">https://www.pcgamer.com/games/fps/hit-markers-are-an-fps-crutch/</a>): the headline was verified by fetch, but the article was truncated and the argument was not. Snippet-level claim: hit markers are useful in PvP but can become the only cue players watch; the author prefers impact animations and wound effects. Author and date not visible. UNVERIFIED beyond headline.</p>
+<hr>
+<h2 id="patterns-worth-adopting">Patterns worth adopting</h2>
+<p>Mechanics described as they appear in sources; each is tied to the evidence above.</p>
+<ol>
+<li><strong>Contextual, fading HUD with an option to keep it.</strong> The Long Dark's icons show only when they need attention and can fade over time. Players praised this, and others asked for a sensitivity slider or an on/off switch. Ship a default that is contextual plus a persistent-mode option. (Long Dark sources; DL2 NME.)
+</li>
+<li><strong>Icon-first status, with numbers only on demand.</strong> The Long Dark article argues numbers take longer to read than a high/low icon. Keep numbers in a detail view (TAB-style) rather than on the main HUD. (Long Dark gamedeveloper article.)
+</li>
+<li><strong>Colour and size encode priority.</strong> Red for damage, yellow for warning, white for minor; larger icon for more important status. (Long Dark article.) Relevant to a status strip.
+</li>
+<li><strong>Persistent minimum set.</strong> The Long Dark article calls the health zone "one of the only persistent UI elements." The rest appears when needed. (Long Dark article.)
+</li>
+<li><strong>Stamina as a risk, not just a bar.</strong> Dying Light 2's Tactical Stamina: running out makes the restore slower, so depletion is costly. Show the stamina bar only when it is being used or is low. (Dev blog #9; Dead Island 2 "Dynamic" preset, snippet.)
+</li>
+<li><strong>Dynamic UI preset.</strong> Dead Island 2's preset hides map status icons until a weapon is drawn or the player takes damage (Dot Esports snippet). This is the same idea as 1 and 5.
+</li>
+<li><strong>Full HUD off, with prompts kept.</strong> RE4, STALKER 2 and Metro Exodus all allow hiding the HUD. The Days Gone mod that hides everything also hides prompts and subtitles, which players found a problem. Keep interaction prompts and subtitles when the rest is hidden.
+</li>
+<li><strong>Generic ping with optional specific commands.</strong> The DRG thread supports one generic ping plus a few specific commands ("watch this way", "cover me"). The ping works because most targets have one clear meaning. (DRG Steam thread.)
+</li>
+<li><strong>Limb-level health as a body state, not a number.</strong> Tarkov spreads HP across limbs; a blacked-out limb loses function (walk, run, aim). Show function loss in the model, not only the number. Verify the on-screen display before copying (see Could not verify).
+</li>
+<li><strong>Diegetic information in the world.</strong> The Division's world-anchored UI and wrist carousel were praised in 2013. The complaint was the wrist controls. Keep the wrist or in-world information with simple controls. (HUDs and Guis.)
+</li>
+<li><strong>Hold-to-confirm with one radial fill.</strong> Unity's input docs describe a radial hold indicator that resets on early release. Use one progress signal, not two competing rings. (Unity docs URL <a href="https://docs.unity3d.com/Packages/com.unity.inputsystem@0.2/manual/Interactions.html">https://docs.unity3d.com/Packages/com.unity.inputsystem@0.2/manual/Interactions.html</a> is an old 0.2 package doc; the pattern is standard but the source is dated.) Motion UI guidance: "one fill, no competing ring - the sole progress signal" (search snippet, web-UI context).
+</li>
+<li><strong>Hit feedback: cue, not crutch.</strong> PC Gamer argues hit markers can become the only cue. Prefer target reactions and impact effects alongside any hit marker. (Snippet-level; UNVERIFIED beyond headline.)
+</li>
+<li><strong>Directional damage indicator.</strong> Common implementation: a screen-edge indicator that points toward the attacker, relative to the camera's facing. Sources are implementation guides and mod pages, not design studies. (Unreal forum, Unity guide, search snippets.)
+</li>
+<li><strong>Customisation that is explicit.</strong> Dying Light 2 said "user preference comes first" and added HUD toggles after complaints. Build the toggles in from the start, rather than adding them after complaints. (NME.)
+</li>
+<li><strong>Accessibility toggles that reduce visual noise.</strong> Days Gone's persistent centre dot and high-contrast HUD option (snippet, unverified wording). Captions size and colour options also appear in DL2's accessibility list (VideoGamer).
+</li></ol>
+<hr>
+<h2 id="could-not-verify">Could not verify</h2>
+<ul>
+<li><strong>Game UI Database (gameuidatabase.com) and interfaceingame.com</strong>: not reached in the searches. No HUD screenshots or annotations used.
+</li>
+<li><strong>Can I Play That</strong>: only the Dying Light 2 page was reached. No reviews checked for other titles.
+</li>
+<li><strong>GDC or developer talks</strong>: none found for Dying Light, L4D2, DRG (terrain scanner, radial wheel), or Dead Island 2. The DRG radial wheel is not sourced.
+</li>
+<li><strong>Dying Light 2 Survivor Sense</strong>: no mechanic explanation found; the only item is a bug-guide title.
+</li>
+<li><strong>Dying Light 2 stamina and durability complaints on Reddit or Steam</strong>: none reached.
+</li>
+<li><strong>Dead Island 2 Reddit complaints</strong>: not found; Dot Esports and PCInvasion/Prima fetches returned 403 or redirect loops.
+</li>
+<li><strong>Days Gone Bend accessibility page and Reddit threads</strong>: fetch returned 403. Option names are from search snippets.
+</li>
+<li><strong>Metro Exodus Lemmy post</strong>: fetch failed with a TLS error. The no-HUD claims are from search snippets.
+</li>
+<li><strong>Escape from Tarkov limb UI</strong>: the on-screen appearance of a blacked-out limb and Reddit limb-UI feedback are not verified.
+</li>
+<li><strong>L4D2 official teammate outlines, prompts and temp-health rules</strong>: no official source reached. Memory only, UNVERIFIED.
+</li>
+<li><strong>State of Decay 2 and STALKER 2 HUD reviews</strong>: no full-text fetch; only snippets.
+</li>
+<li><strong>Hit markers, compass strip, objective distance markers, minimap vs compass debate, limb health diagrams, HUD auto-hide options across games</strong>: only the general sources above touch these. Not sourced per game.
+</li>
+<li><strong>The Division Resurgence reviews</strong>: attribution to UI alone is not established; the same reporting cites monetisation and performance.
+</li>
+<li><strong>Quote count</strong>: 25+ quotes are listed above with URLs and handle or date where visible. Each was taken from a WebFetch extraction and should be spot-checked.
+</li></ul>
+</main>
+</body>
+</html>

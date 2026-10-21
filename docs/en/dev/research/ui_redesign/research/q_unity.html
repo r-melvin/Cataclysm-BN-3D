@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unity 6 as a frontend for a large C++ game: research</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fcfcfb; --fg: #0b0b0b; --fg-2: #52514e; --fg-3: #8a8985;
+  --line: #d9d8d3; --panel: #f1f0ec; --code-bg: #f1f0ec; --link: #1f5fb0;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s7: #6250d6; --s8: #e34948;
+  --good: #006300; --warn: #8a5a00; --serious: #b43a00; --critical: #a1151d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+    --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+    --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a19; --fg: #f0efec; --fg-2: #c3c2b7; --fg-3: #8f8e86;
+  --line: #3a3a37; --panel: #242422; --code-bg: #242422; --link: #7fb2f0;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s7: #9085e9; --s8: #e66767;
+  --good: #4cbb4c; --warn: #e0a84a; --serious: #ef7d4a; --critical: #ef6b6b;
+}
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+nav.top { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+  padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; z-index: 2; }
+nav.top a { color: var(--fg-2); text-decoration: none; }
+nav.top a.current { color: var(--fg); font-weight: 600; border-bottom: 2px solid var(--s1); }
+main { max-width: 960px; margin: 0 auto; padding: 16px 16px 64px; }
+h1 { font-size: 1.9em; line-height: 1.2; margin: 0.6em 0 0.4em; }
+h2 { font-size: 1.4em; margin: 1.6em 0 0.5em; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h3 { font-size: 1.15em; margin: 1.3em 0 0.4em; }
+h4 { font-size: 1em; margin: 1.1em 0 0.3em; color: var(--fg-2); }
+a { color: var(--link); }
+code { font: 0.92em/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px; overflow-x: auto; font-size: 13px; line-height: 1.35; }
+pre code { background: none; padding: 0; font-size: inherit; }
+blockquote { margin: 0.8em 0; padding: 4px 14px; border-left: 3px solid var(--s1);
+  background: var(--panel); color: var(--fg-2); }
+blockquote p { margin: 0.3em 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 14px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; vertical-align: top; text-align: left; }
+th { background: var(--panel); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+figure.diagram { margin: 1.2em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+figure.diagram svg { width: 100%; height: auto; display: block; font: 13px/1.3 system-ui, sans-serif; }
+figure.diagram figcaption { color: var(--fg-2); font-size: 13px; margin-top: 8px; }
+.tag { font-size: 12px; color: var(--fg-3); }
+/* diagram tokens */
+.d-box { fill: var(--bg); stroke: var(--fg-2); stroke-width: 1.2; }
+.d-box-soft { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.d-text { fill: var(--fg); }
+.d-text-2 { fill: var(--fg-2); }
+.d-text-3 { fill: var(--fg-3); font-size: 11px; }
+.d-line { stroke: var(--fg-2); stroke-width: 1.4; fill: none; }
+.d-line-soft { stroke: var(--line); stroke-width: 1; fill: none; }
+.d-arrow { fill: var(--fg-2); }
+.d-s1 { fill: var(--s1); } .d-s2 { fill: var(--s2); } .d-s3 { fill: var(--s3); }
+.d-s4 { fill: var(--s4); } .d-s7 { fill: var(--s7); } .d-s8 { fill: var(--s8); }
+.d-stroke-s1 { stroke: var(--s1); } .d-stroke-s2 { stroke: var(--s2); } .d-stroke-s3 { stroke: var(--s3); }
+.d-stroke-s8 { stroke: var(--s8); }
+.d-good { fill: var(--good); } .d-warn { fill: var(--warn); } .d-critical { fill: var(--critical); }
+.d-hatch { fill: url(#hatch); }
+@media (max-width: 600px) { body { font-size: 15px; } main { padding: 12px 16px 48px; } }
+</style>
+</head>
+<body>
+<nav class="top"><a href="../README.html">Summary</a><a href="../01_pain_points.html">01 Pain points</a><a href="../02_patterns.html">02 Patterns</a><a href="../03_design.html">03 Design</a><a href="../04_architecture.html">04 Architecture</a><a href="../05_plan.html">05 Plan</a><a href="../06_frontend_options.html">06 Frontends</a></nav>
+<main>
+<h1 id="unity-6-as-a-frontend-for-a-large-c-game-research">Unity 6 as a frontend for a large C++ game: research</h1>
+<p>Date of research: 2026-10-21. Tags: <strong>VERIFIED</strong> = read on an official page in this session (docs.unity3d.com, unity.com, github.com) or a forum post where stated. <strong>NOT VERIFIED</strong> = from search snippets only, from memory, or unreachable. The WebSearch quota for the session was reached partway through (the tool reported the shared limit as used up, not the count), so later items rely on WebFetch of known URLs only.</p>
+<p>Repo facts used below were checked locally: <code>README.md</code> line 177-181 says the project is CC BY-SA 3.0 and that some code is under other software licences.</p>
+<hr>
+<h2 id="1-accessibility">1. Accessibility</h2>
+<table><thead><tr><th>Claim</th><th>Tag</th><th>Source</th></tr></thead><tbody><tr><td>The <code>AssistiveSupport</code> / <code>AccessibilityHierarchy</code> APIs are the entry point for screen readers. Unity's own UI is not accessible to assistive tech by default.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html">https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html</a> (search snippet of the same page family: <a href="https://docs.unity3d.com/ScriptReference/Accessibility.AccessibilityHierarchy.html">https://docs.unity3d.com/ScriptReference/Accessibility.AccessibilityHierarchy.html</a>)</td></tr><tr><td>The hierarchy is UI-system agnostic (UI Toolkit, uGUI, custom, non-UI objects). Screen readers "cannot detect GameObject components or UI elements directly", so you must build the hierarchy.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html">https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html</a></td></tr><tr><td>The hierarchy is activated via <code>AssistiveSupport.activeHierarchy</code> and dropped when the screen reader turns off, so it must be reassigned on each screen-reader status change.</td><td>VERIFIED (snippet of 6000.7 AssistiveSupport reference)</td><td><a href="https://docs.unity.com/en-us/engine/6000.7/script-reference/unityengine/accessibility/assistivesupport">https://docs.unity.com/en-us/engine/6000.7/script-reference/unityengine/accessibility/assistivesupport</a></td></tr><tr><td>The module is enabled by default and can be enabled from Package Manager &gt; Built-in.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html">https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html</a></td></tr><tr><td>The guide lists <strong>Android (TalkBack), iOS and macOS (VoiceOver), Windows (Narrator)</strong> as the platforms to test on. The page states no per-platform limitations and no roadmap.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html">https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html</a></td></tr><tr><td>An older snippet of the 6000.7 AssistiveSupport reference names <strong>Android 8.0 (API 26)</strong> as the only platform. This conflicts with the 6.6 guide above. The conflict is unresolved; the Windows and macOS docs were not read directly for the versions in question.</td><td>VERIFIED (conflict)</td><td><a href="https://docs.unity.com/en-us/engine/6000.7/script-reference/unityengine/accessibility/assistivesupport">https://docs.unity.com/en-us/engine/6000.7/script-reference/unityengine/accessibility/assistivesupport</a></td></tr><tr><td>Unity 6.3 brings "native screen reader support to Windows and macOS" via the new APIs. This is from a Unity forum post dated 2025-02-07, not an official page.</td><td>NOT VERIFIED (forum only)</td><td><a href="https://discussions.unity.com/t/unity-for-people-with-visual-impairments/361660">https://discussions.unity.com/t/unity-for-people-with-visual-impairments/361660</a></td></tr><tr><td>The <code>invoked</code> event was renamed from <code>selected</code> in Unity 6.3.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html">https://docs.unity3d.com/Manual/accessibility/screen-readers-get-started.html</a></td></tr><tr><td>The introduction version of the Accessibility module is not stated.</td><td>NOT VERIFIED</td><td>(no source found)</td></tr><tr><td><strong>Unity Accessibility Plugin (UAP)</strong>, mikrima/UnityAccessibilityPlugin: Apache-2.0 licence (Example folder excluded). Platforms per README: Android, iOS, Windows (SAPI and NVDA), Mac, WebGL (some limitations). Tested only up to Unity 2020.1. Uses text-to-speech and "reimplements the functionality of VoiceOver"; it does not expose Unity UI to native readers. Latest commit date not visible; 27 commits, no releases.</td><td>VERIFIED</td><td><a href="https://github.com/mikrima/UnityAccessibilityPlugin">https://github.com/mikrima/UnityAccessibilityPlugin</a></td></tr><tr><td>UAP is "partially" a fix: screen-reader users must turn their own screen reader off to play, per a forum post.</td><td>VERIFIED (forum)</td><td><a href="https://discussions.unity.com/t/unity-for-people-with-visual-impairments/361660">https://discussions.unity.com/t/unity-for-people-with-visual-impairments/361660</a></td></tr><tr><td>NVDA controller client is LGPL 2.1 (usable, not modifiable).</td><td>VERIFIED</td><td><a href="https://github.com/mikrima/UnityAccessibilityPlugin">https://github.com/mikrima/UnityAccessibilityPlugin</a></td></tr><tr><td>UAP maintenance status (active or abandoned) is <strong>NOT VERIFIED</strong>; the repo page does not state it.</td><td>NOT VERIFIED</td><td><a href="https://github.com/mikrima/UnityAccessibilityPlugin">https://github.com/mikrima/UnityAccessibilityPlugin</a></td></tr><tr><td>Built-in colour-blind mode in Unity: <strong>NOT VERIFIED</strong> (not searched or fetched).</td><td>NOT VERIFIED</td><td>(no source)</td></tr><tr><td>Text scaling via UI Toolkit Panel Settings: scale modes <code>ConstantPixelSize</code> (0), <code>ConstantPhysicalSize</code> (1), <code>ScaleWithScreenSize</code> (2). <code>ConstantPhysicalSize</code> uses Reference DPI vs actual screen DPI, with Fallback DPI when DPI is unknown.</td><td>VERIFIED (snippet)</td><td><a href="https://docs.unity3d.com/Documentation/ScriptReference/UIElements.PanelSettings-referenceDpi.html">https://docs.unity3d.com/Documentation/ScriptReference/UIElements.PanelSettings-referenceDpi.html</a> ; <a href="https://docs.unity3d.com/Manual/UIE-Runtime-Panel-Settings.html">https://docs.unity3d.com/Manual/UIE-Runtime-Panel-Settings.html</a></td></tr><tr><td>Panel Settings page on 6.0 manual could not be fetched (404). Whether Panel Settings reads the OS text-size preference: <strong>NOT VERIFIED</strong>.</td><td>NOT VERIFIED</td><td><a href="https://docs.unity3d.com/6000.0/Documentation/Manual/UIE-PanelSettings.html">https://docs.unity3d.com/6000.0/Documentation/Manual/UIE-PanelSettings.html</a> (404)</td></tr><tr><td>Input System: <code>InputActionRebindingExtensions.PerformInteractiveRebinding()</code>, <code>SaveBindingOverridesAsJson</code> and <code>LoadBindingOverridesFromJson</code> exist for runtime rebinding.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Packages/com.unity.inputsystem@1.14/manual/ActionBindings.html">https://docs.unity3d.com/Packages/com.unity.inputsystem@1.14/manual/ActionBindings.html</a></td></tr><tr><td>Display strings: <code>GetBindingDisplayString</code> / <code>InputBinding.ToDisplayString</code> / <code>InputControlPath.ToHumanReadableString</code>. The page does not show glyph art. Gamepad glyph artwork support: <strong>NOT VERIFIED</strong>.</td><td>VERIFIED (strings); NOT VERIFIED (glyphs)</td><td><a href="https://docs.unity3d.com/Packages/com.unity.inputsystem@1.14/manual/ActionBindings.html">https://docs.unity3d.com/Packages/com.unity.inputsystem@1.14/manual/ActionBindings.html</a></td></tr></tbody></table>
+<p><strong>Assessment.</strong> Unity's built-in screen reader support is mobile-first with desktop added in 6.3 per a forum post. Anything desktop (Windows and Linux) for a text-heavy game like this one still needs either a native path or UAP. Linux is not covered by any Unity accessibility API found. This is a material gap for a roguelike whose UI is mostly text.</p>
+<hr>
+<h2 id="2-embedding-c">2. Embedding C++</h2>
+<table><thead><tr><th>Claim</th><th>Tag</th><th>Source</th></tr></thead><tbody><tr><td>IL2CPP converts IL to C++ and compiles it to native code. Cross-compilation is generally not supported. Linux is the exception: building Linux Players on other desktop platforms is supported.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/il2cpp-introduction.html">https://docs.unity3d.com/Manual/il2cpp-introduction.html</a></td></tr><tr><td>IL2CPP build time and binary size increase compared to Mono ("generally increases both the build time and the size").</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/il2cpp-introduction.html">https://docs.unity3d.com/Manual/il2cpp-introduction.html</a></td></tr><tr><td>IL2CPP is supported on all platforms; Linux and QNX allow LTO mode changes.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/il2cpp-introduction.html">https://docs.unity3d.com/Manual/il2cpp-introduction.html</a></td></tr><tr><td>Native plugins are unmanaged libraries; managed code calls them via <code>DllImport</code>; both precompiled libraries and source can be used.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/NativePlugins.html">https://docs.unity3d.com/Manual/NativePlugins.html</a> (redirects to <a href="http://docs.unity3d.com/Manual/plug-ins-native.html">http://docs.unity3d.com/Manual/plug-ins-native.html</a>)</td></tr><tr><td>Unity's API is not thread-safe; use it only from the main thread. Development builds throw "can only be called from the main thread"; live builds do not check and may crash.</td><td>VERIFIED (quoted in search snippets from the Unity multithreading page; the exact page was not fetched)</td><td><a href="https://docs.unity.com/en-us/engine/6000.6/manual/scripting/programming-distribute-work-threads/async-await-support/async-awaitable-continuations">https://docs.unity.com/en-us/engine/6000.6/manual/scripting/programming-distribute-work-threads/async-await-support/async-awaitable-continuations</a></td></tr><tr><td><code>Awaitable.BackgroundThreadAsync()</code> moves work off the main thread, and continuation resumes on the main thread.</td><td>VERIFIED (snippet)</td><td><a href="https://docs.unity.com/en-us/engine/6000.6/manual/scripting/programming-distribute-work-threads/async-await-support/async-awaitable-continuations">https://docs.unity.com/en-us/engine/6000.6/manual/scripting/programming-distribute-work-threads/async-await-support/async-awaitable-continuations</a></td></tr><tr><td>Native plugin callbacks: which thread they fire on, <code>[MonoPInvokeCallback]</code> / AOT attribute requirements, <code>IUnityInterfaces</code>, calling <code>Debug.Log</code> from native code, and "Call functions" rules.</td><td>NOT VERIFIED (the landing page points to sub-topics that were not fetched)</td><td><a href="https://docs.unity3d.com/Manual/plug-ins-native.html">https://docs.unity3d.com/Manual/plug-ins-native.html</a></td></tr><tr><td>P/Invoke marshaling follows .NET rules with a few unsupported types.</td><td>VERIFIED (snippet)</td><td><a href="https://docs.unity3d.com/2020.1/Documentation/Manual/windowsstore-plugins-il2cpp.html">https://docs.unity3d.com/2020.1/Documentation/Manual/windowsstore-plugins-il2cpp.html</a></td></tr><tr><td>Source-level C++ compiled into the IL2CPP player, and <code>&quot;__Internal&quot;</code> linking.</td><td>VERIFIED (snippet; the page is an old UWP-era guide)</td><td><a href="https://docs.unity3d.com/2020.1/Documentation/Manual/windowsstore-plugins-il2cpp.html">https://docs.unity3d.com/2020.1/Documentation/Manual/windowsstore-plugins-il2cpp.html</a></td></tr><tr><td>Known C++ engine to Unity frontend case studies: <strong>none found</strong>. Not searched further (budget).</td><td>NOT VERIFIED</td><td>(no source)</td></tr></tbody></table>
+<p><strong>Design implications (analysis, not sourced).</strong></p>
+<ul>
+<li>A blocking simulation loop must not run on the Unity main thread. Run the C++ sim on its own thread, and marshal state to Unity via a snapshot or double-buffer, pulled once per frame. Unity's main-thread rule (above) applies to Unity objects, not to raw native memory.
+</li>
+<li>Callbacks from C++ into C# need a static function with the attribute required for IL2CPP (per the native-plugin pages, NOT VERIFIED here) and must not throw across the boundary.
+</li>
+<li>Debugging across the boundary means two debuggers (Visual Studio/Rider for C#, GDB/LLDB for C++). Cost: significant. This is analysis, not a verified claim.
+</li></ul>
+<hr>
+<h2 id="3-licensing-2025-2026">3. Licensing 2025-2026</h2>
+<table><thead><tr><th>Claim</th><th>Tag</th><th>Source</th></tr></thead><tbody><tr><td>Personal (free): revenue and funding up to $200,000 in the most recent 12 months; measured on each day of use; above that, Personal cannot be used at all.</td><td>VERIFIED</td><td><a href="https://unity.com/products/pricing-updates">https://unity.com/products/pricing-updates</a> ; <a href="https://unity.com/legal/editor-terms-of-service/software">https://unity.com/legal/editor-terms-of-service/software</a></td></tr><tr><td>Pro is required above $200,000 total annual revenue and funding (wording "over").</td><td>VERIFIED</td><td><a href="https://unity.com/products/pricing-updates">https://unity.com/products/pricing-updates</a></td></tr><tr><td>Enterprise is required above $25M annual revenue.</td><td>VERIFIED</td><td><a href="https://unity.com/products/pricing-updates">https://unity.com/products/pricing-updates</a></td></tr><tr><td>Pro price 2026: $2,310 per seat per year prepaid, or $210 per seat per month.</td><td>VERIFIED (official page); a Nov 2025 trade report says a 5% rise effective 12 Jan 2026 (NOT VERIFIED beyond snippet)</td><td><a href="https://unity.com/products/pricing-updates">https://unity.com/products/pricing-updates</a> ; <a href="https://www.cgchannel.com/?p=171673">https://www.cgchannel.com/?p=171673</a></td></tr><tr><td>Runtime Fee cancelled: decided 12 Sept 2024, "effective immediately", and "No new or existing Unity games have been, or will be, subject to the Runtime Fee."</td><td>VERIFIED</td><td><a href="https://unity.com/runtime-fee">https://unity.com/runtime-fee</a></td></tr><tr><td>Splash screen optional for Personal with Unity 6.</td><td>VERIFIED</td><td><a href="https://unity.com/products/pricing-updates">https://unity.com/products/pricing-updates</a></td></tr><tr><td>Havok Physics is no longer included with Pro from Unity 6.3.</td><td>NOT VERIFIED (snippet only)</td><td><a href="https://unity.com/products/pricing-updates">https://unity.com/products/pricing-updates</a></td></tr><tr><td>Unity 6 and earlier projects get royalty-free runtime distribution, conditional on continuing Tier Eligibility. Industry Customers need express authorisation.</td><td>VERIFIED</td><td><a href="https://unity.com/legal/editor-terms-of-service/software">https://unity.com/legal/editor-terms-of-service/software</a> (section 2.2)</td></tr><tr><td>Editor source code: "Read Only" for internal troubleshooting; modifications may not be published or distributed with a project.</td><td>VERIFIED (snippet)</td><td><a href="https://unity.com/en/legal/editor-source-code-terms">https://unity.com/en/legal/editor-source-code-terms</a></td></tr><tr><td>Open-source project exemption from the Personal terms: <strong>none found</strong> in the Editor Terms. Free use under Personal would rely on the revenue threshold, which a free open-source project meets.</td><td>NOT VERIFIED (absence in the text checked)</td><td><a href="https://unity.com/legal/editor-terms-of-service/software">https://unity.com/legal/editor-terms-of-service/software</a></td></tr></tbody></table>
+<p><strong>Licence conflict analysis (not legal advice).</strong></p>
+<ul>
+<li>Cataclysm is CC BY-SA 3.0 (repo <code>README.md</code> lines 177-181). The CC FAQ states: "We recommend against using Creative Commons licenses for software." It suggests FSF/OSI software licences, and says CC0 is acceptable for software (VERIFIED: <a href="https://creativecommons.org/faq/#can-i-apply-a-creative-commons-license-to-software">https://creativecommons.org/faq/#can-i-apply-a-creative-commons-license-to-software</a>). The repo already mixes licences for code. A Unity port inherits the same mix.
+</li>
+<li>Unity Runtime distribution does not conflict with CC BY-SA: the Runtime is proprietary but is a separate component licensed to you under section 2.2; the game's own licence governs your code and content. Confirmed only at the level of the text read.
+</li>
+<li>Unity project files (YAML scenes, <code>.meta</code> files) are human-readable but not a source-code form suited to CC BY-SA attribution. This is analysis; not verified against any Unity or CC guidance.
+</li>
+<li>Editor source access is read-only and cannot be redistributed. A fork of the Unity Editor is not needed for this project.
+</li></ul>
+<hr>
+<h2 id="4-platforms-and-ci">4. Platforms and CI</h2>
+<table><thead><tr><th>Claim</th><th>Tag</th><th>Source</th></tr></thead><tbody><tr><td>Linux editor is supported on Ubuntu only ("Unity provides Linux support only for Ubuntu").</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/6000.4/Documentation/Manual/linux.html">https://docs.unity3d.com/6000.4/Documentation/Manual/linux.html</a></td></tr><tr><td>Linux standalone players can be built and run on Linux systems supported by Unity.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/6000.4/Documentation/Manual/linux.html">https://docs.unity3d.com/6000.4/Documentation/Manual/linux.html</a></td></tr><tr><td>Ubuntu versions listed: 22.04 and 24.04 (Unity 6.0 system requirements); Unity 6 Beta listed 20.04 and 22.04. Wayland details vary by release (6.6 page says supported on AMD and Nvidia 550+).</td><td>NOT VERIFIED (search snippets; system-requirements pages not fetched)</td><td><a href="https://docs.unity.com/en-us/engine/6000.6/manual/get-started/install-and-upgrade/getting-started-installing-unity/system-requirements">https://docs.unity.com/en-us/engine/6000.6/manual/get-started/install-and-upgrade/getting-started-installing-unity/system-requirements</a></td></tr><tr><td>Batch mode: <code>-batchmode</code> runs without human interaction. <code>-nographics</code> means "Unity doesn't initialize the graphics device". <code>-quit</code>, <code>-executeMethod</code>, <code>-logFile</code>, <code>-buildTarget</code>, <code>-projectPath</code> all exist.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/EditorCommandLineArguments.html">https://docs.unity3d.com/Manual/EditorCommandLineArguments.html</a></td></tr><tr><td>Test Framework: <code>-runTests</code>, <code>-testPlatform</code> (EditMode default, PlayMode, or a build target), <code>-testResults</code> (NUnit XML), <code>-testFilter</code>, <code>testCategory</code> (note: documented as <code>testCategory</code>, not <code>-category</code>).</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Packages/com.unity.test-framework@1.4/manual/reference-command-line.html">https://docs.unity3d.com/Packages/com.unity.test-framework@1.4/manual/reference-command-line.html</a></td></tr><tr><td><code>-nographics</code> does not work for automated input without a focused window; GI baking not supported.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/EditorCommandLineArguments.html">https://docs.unity3d.com/Manual/EditorCommandLineArguments.html</a></td></tr><tr><td>GameCI (<code>game-ci/unity-builder@v4</code>) activation: free licence stored as <code>UNITY_LICENSE</code> (<code>.ulf</code> file) plus <code>UNITY_EMAIL</code> and <code>UNITY_PASSWORD</code>; Pro uses <code>UNITY_SERIAL</code>. A floating licence server can be used.</td><td>VERIFIED</td><td><a href="https://game.ci/docs/github/activation/">https://game.ci/docs/github/activation/</a></td></tr><tr><td>Whether personal-licence activation works on free GitHub runners without a paid plan, and the licence's terms for CI: <strong>NOT VERIFIED</strong> (the GameCI page does not say).</td><td>NOT VERIFIED</td><td><a href="https://game.ci/docs/github/activation/">https://game.ci/docs/github/activation/</a></td></tr><tr><td>Steam Deck support: <strong>NOT VERIFIED</strong> (not searched).</td><td>NOT VERIFIED</td><td>(no source)</td></tr><tr><td>Build sizes for a C++ backed game: not measured; no Unity figure found.</td><td>NOT VERIFIED</td><td>(no source)</td></tr><tr><td>This repo runs no GitHub Actions per <code>AGENTS.md</code>, so CI here is local only.</td><td>VERIFIED (project file)</td><td>/home/richard/Projects/Cataclysm-BN-3D/AGENTS.md</td></tr></tbody></table>
+<hr>
+<h2 id="5-rendering">5. Rendering</h2>
+<table><thead><tr><th>Claim</th><th>Tag</th><th>Source</th></tr></thead><tbody><tr><td><code>Graphics.RenderMeshInstanced</code> draws instanced meshes from script with a prebuilt material that has "Enable GPU Instancing".</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/GPUInstancing.html">https://docs.unity3d.com/Manual/GPUInstancing.html</a></td></tr><tr><td>Under URP or HDRP, custom shaders need the SRP Batcher disabled or the shader made incompatible with it. Under the Built-in Render Pipeline, Shader Graph shaders do not support GPU instancing.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/GPUInstancing.html">https://docs.unity3d.com/Manual/GPUInstancing.html</a></td></tr><tr><td>Instancing benefit depends on the platform and the GPU, and is larger on mobile than desktop.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/Manual/GPUInstancing.html">https://docs.unity3d.com/Manual/GPUInstancing.html</a></td></tr><tr><td><code>Graphics.RenderMeshIndirect(ref RenderParams, Mesh, GraphicsBuffer argsBuffer, int commandCount, int startCommand)</code> draws many instances of one mesh from a GPU args buffer, with multiple commands per call.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/ScriptReference/Graphics.RenderMeshIndirect.html">https://docs.unity3d.com/ScriptReference/Graphics.RenderMeshIndirect.html</a></td></tr><tr><td><code>RenderMeshIndirect</code> "only works on platforms that support compute shaders."</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/ScriptReference/Graphics.RenderMeshIndirect.html">https://docs.unity3d.com/ScriptReference/Graphics.RenderMeshIndirect.html</a></td></tr><tr><td><code>RenderMeshIndirect</code> needs the <code>UNITY_INDIRECT_DRAW_ARGS</code> define, <code>UnityIndirect.cginc</code>, and <code>InitIndirectDrawArgs(0)</code> in the shader.</td><td>VERIFIED</td><td><a href="https://docs.unity3d.com/ScriptReference/Graphics.RenderMeshIndirect.html">https://docs.unity3d.com/ScriptReference/Graphics.RenderMeshIndirect.html</a></td></tr><tr><td>The Mesh API (<code>Mesh.SetVertices</code>, <code>SetIndices</code> with <code>MeshUpdateFlags</code>) for dynamic per-frame mesh generation: <strong>NOT VERIFIED</strong> (not fetched).</td><td>NOT VERIFIED</td><td>(no source)</td></tr><tr><td>2D sprite billboards in a 3D world: <strong>NOT VERIFIED</strong> as a Unity-documented technique. Analysis: a camera-facing quad per sprite, instanced via <code>RenderMeshInstanced</code>, is the usual approach.</td><td>NOT VERIFIED</td><td>(no source)</td></tr><tr><td>The current renderer (<code>src/r3d_*</code>) is an existing C++ path; a port would replace it with Unity draw calls. The cost is analysis-only here.</td><td>VERIFIED (repo)</td><td>/home/richard/Projects/Cataclysm-BN-3D/AGENTS.md (r3d reference)</td></tr></tbody></table>
+<hr>
+<h2 id="summary-table">Summary table</h2>
+<table><thead><tr><th>Area</th><th>Status in one line</th><th>Tags</th></tr></thead><tbody><tr><td>Accessibility (screen readers)</td><td>Built-in path exists; mobile-first, Windows/macOS added in 6.3 per forum only; UAP is Apache-2.0 but stale (tested to 2020.1).</td><td>VERIFIED / NOT VERIFIED mixed</td></tr><tr><td>Text scaling / input</td><td>Panel Settings DPI modes and Input System rebinding confirmed.</td><td>VERIFIED</td></tr><tr><td>Colour-blind</td><td>No built-in found.</td><td>NOT VERIFIED</td></tr><tr><td>Native C++ embedding</td><td>IL2CPP and P/Invoke confirmed; threading and callback rules not confirmed.</td><td>VERIFIED / NOT VERIFIED mixed</td></tr><tr><td>Licensing</td><td>Personal below $200K; Runtime Fee cancelled; Unity 6 runtime distribution royalty-free; CC BY-SA is not a software licence.</td><td>VERIFIED</td></tr><tr><td>Linux</td><td>Editor on Ubuntu only; Linux player supported; IL2CPP cross-builds to Linux allowed.</td><td>VERIFIED</td></tr><tr><td>CI</td><td>GameCI activation documented; free-runner behaviour not verified.</td><td>VERIFIED / NOT VERIFIED mixed</td></tr><tr><td>Rendering</td><td>Instancing and RenderMeshIndirect confirmed; Mesh API and billboards not verified.</td><td>VERIFIED / NOT VERIFIED mixed</td></tr></tbody></table>
+<hr>
+<h2 id="could-not-verify">Could not verify</h2>
+<ol>
+<li>Unity 6.3 native Windows and macOS screen reader API (only a 2025 forum post).
+</li>
+<li>Which Unity version introduced the Accessibility module.
+</li>
+<li>UAP maintenance status after 2020.1.
+</li>
+<li>Colour-blind support in Unity.
+</li>
+<li>Whether Panel Settings follows the OS text-size preference (6.0 page returned 404).
+</li>
+<li>Gamepad glyph artwork support in the Input System.
+</li>
+<li>Native plugin threading and callback rules (<code>[MonoPInvokeCallback]</code>, <code>IUnityInterfaces</code>, Debug.Log from native).
+</li>
+<li>Known C++-engine-to-Unity case studies (none found).
+</li>
+<li>Ubuntu versions per Unity 6 release (search snippets only).
+</li>
+<li>Whether GameCI personal-licence activation works on free GitHub runners.
+</li>
+<li>Steam Deck support.
+</li>
+<li>Build sizes for this game.
+</li>
+<li>Havok Physics removal in Unity 6.3 (snippet only).
+</li>
+<li>The exact Pro price change from 12 Jan 2026 (only a trade-report snippet).
+</li>
+<li>The Unity Mesh API details for per-frame mesh generation.
+</li>
+<li>Billboard sprite technique in Unity.
+</li>
+<li>Unity's automated-input behaviour with <code>-nographics</code> for test automation beyond the statement quoted above.
+</li></ol>
+<p>The WebSearch quota was reached partway through; items that needed a search were checked with WebFetch only where a URL was known.</p>
+</main>
+</body>
+</html>

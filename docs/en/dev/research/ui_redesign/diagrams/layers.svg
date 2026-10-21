@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-labelledby="t-layers">
+<title id="t-layers">Architecture layers: one widget tree feeds the renderer, the narrator and the OS accessibility bridge; input flows back through actions and focus.</title>
+<defs>
+  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-arrow"/></marker>
+</defs>
+<!-- presentation row -->
+<g font-size="13">
+  <rect x="20" y="60" width="130" height="54" rx="6" class="d-box"/>
+  <text x="85" y="83" text-anchor="middle" class="d-text" font-weight="600">Game state</text>
+  <text x="85" y="101" text-anchor="middle" class="d-text-3">avatar, map, items</text>
+
+  <rect x="190" y="60" width="140" height="54" rx="6" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="260" y="83" text-anchor="middle" class="d-text" font-weight="600">View model</text>
+  <text x="260" y="101" text-anchor="middle" class="d-text-3">plain structs, no UI types</text>
+
+  <rect x="370" y="60" width="140" height="54" rx="6" class="d-box d-stroke-s1" stroke-width="2"/>
+  <text x="440" y="83" text-anchor="middle" class="d-text" font-weight="600">ui::node tree</text>
+  <text x="440" y="101" text-anchor="middle" class="d-text-3">role, name, value, state</text>
+
+  <rect x="550" y="60" width="110" height="54" rx="6" class="d-box"/>
+  <text x="605" y="83" text-anchor="middle" class="d-text" font-weight="600">Layout</text>
+  <text x="605" y="101" text-anchor="middle" class="d-text-3">box / flex, UI scale</text>
+
+  <rect x="700" y="60" width="240" height="54" rx="6" class="d-box"/>
+  <text x="820" y="83" text-anchor="middle" class="d-text" font-weight="600">SDL backend</text>
+  <text x="820" y="101" text-anchor="middle" class="d-text-3">SDL_Renderer + TTF_TextEngine, over the 3D frame</text>
+
+  <path d="M150,87 H188" class="d-line" marker-end="url(#ah)"/>
+  <path d="M330,87 H368" class="d-line" marker-end="url(#ah)"/>
+  <path d="M510,87 H548" class="d-line" marker-end="url(#ah)"/>
+  <path d="M660,87 H698" class="d-line" marker-end="url(#ah)"/>
+
+  <!-- branches from the tree -->
+  <path d="M440,114 V150 H300 V178" class="d-line" marker-end="url(#ah)"/>
+  <path d="M440,114 V150 H600 V178" class="d-line" marker-end="url(#ah)"/>
+
+  <rect x="200" y="180" width="200" height="54" rx="6" class="d-box d-stroke-s3" stroke-width="2"/>
+  <text x="300" y="203" text-anchor="middle" class="d-text" font-weight="600">Narrator (self-voicing)</text>
+  <text x="300" y="221" text-anchor="middle" class="d-text-3">reading order, queue, verbosity</text>
+
+  <rect x="500" y="180" width="200" height="54" rx="6" class="d-box d-stroke-s3" stroke-width="2" stroke-dasharray="6 3"/>
+  <text x="600" y="203" text-anchor="middle" class="d-text" font-weight="600">AccessKit bridge (phase 2)</text>
+  <text x="600" y="221" text-anchor="middle" class="d-text-3">accesskit-c, same tree</text>
+
+  <path d="M300,234 V262" class="d-line" marker-end="url(#ah)"/>
+  <path d="M600,234 V262" class="d-line" marker-end="url(#ah)"/>
+
+  <rect x="150" y="264" width="300" height="44" rx="6" class="d-box-soft"/>
+  <text x="300" y="282" text-anchor="middle" class="d-text-2">NVDA client / SAPI 5 (Windows)</text>
+  <text x="300" y="298" text-anchor="middle" class="d-text-2">AVSpeechSynthesizer (macOS), libspeechd (Linux)</text>
+
+  <rect x="460" y="264" width="280" height="44" rx="6" class="d-box-soft"/>
+  <text x="600" y="282" text-anchor="middle" class="d-text-2">UI Automation / NSAccessibility / AT-SPI</text>
+  <text x="600" y="298" text-anchor="middle" class="d-text-2">NVDA, JAWS, VoiceOver, Orca navigate natively</text>
+
+  <!-- input row -->
+  <text x="20" y="352" class="d-text-3">Input</text>
+  <rect x="60" y="334" width="110" height="36" rx="6" class="d-box-soft"/>
+  <text x="115" y="357" text-anchor="middle" class="d-text-2">SDL events</text>
+  <rect x="200" y="334" width="130" height="36" rx="6" class="d-box-soft"/>
+  <text x="265" y="357" text-anchor="middle" class="d-text-2">input_context</text>
+  <text x="265" y="384" text-anchor="middle" class="d-text-3">action ids, 12 contexts</text>
+  <rect x="360" y="334" width="130" height="36" rx="6" class="d-box-soft"/>
+  <text x="425" y="357" text-anchor="middle" class="d-text-2">focus manager</text>
+  <text x="425" y="384" text-anchor="middle" class="d-text-3">spatial nav, hold/toggle</text>
+  <rect x="520" y="334" width="140" height="36" rx="6" class="d-box-soft"/>
+  <text x="590" y="357" text-anchor="middle" class="d-text-2">node handlers</text>
+  <path d="M170,352 H198" class="d-line" marker-end="url(#ah)"/>
+  <path d="M330,352 H358" class="d-line" marker-end="url(#ah)"/>
+  <path d="M490,352 H518" class="d-line" marker-end="url(#ah)"/>
+  <path d="M660,352 H760 V118" class="d-line" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+  <text x="775" y="240" class="d-text-3">mouse hit-test and focus</text>
+  <text x="775" y="254" class="d-text-3">read the same tree</text>
+
+  <!-- seam label -->
+  <path d="M345,40 V125" class="d-line-soft" stroke-dasharray="3 3"/>
+  <text x="345" y="34" text-anchor="middle" class="d-text-3">view-model seam: a future frontend swap starts here</text>
+</g>
+</svg>
