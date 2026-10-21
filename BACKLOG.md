@@ -524,8 +524,8 @@ Decisions (owner, 2026-10-21):
 - The Tutorial becomes chapter one of the guided start; the separate Tutorial and
   Guided Play New Game entries go away. The same character continues into the real
   world with the guided lessons.
-- Baseline: guided is on automatically for the first-ever character on a profile,
-  off afterwards.
+- Guided play opens on the first New Game. A dialog offers to turn it off; once off it
+  stays off for later New Games (stored with the profile, not the character).
 
 Known obstacles to settle before building:
 - The tutorial is a separate special world (`TUTORIAL`, `special_game_type::TUTORIAL`,
@@ -533,7 +533,7 @@ Known obstacles to settle before building:
   must run inside the player's own world, e.g. the tutorial complex as a start location
   or overmap special, with `g->gamemode` active only until it is finished. Check how
   much of `tutorial_game` depends on owning the whole world.
-- First-ever-only leaves no way to replay. Keep one replay route (an option or a
+- Once turned off there must be a way back on: keep one replay route (an option or a
   single New Game toggle) so removing the entries does not remove the feature.
 - The tutorial's lessons (`tut_lesson`) and the guided lessons (`onboarding_core`,
   `data/json/onboarding/`) overlap; merge them into the JSON lesson set rather than
@@ -556,6 +556,22 @@ Consequences to cost before starting:
 - Every screen is still written against the cell grid (`cursesport`); retirement happens
   screen by screen as the new widget layer replaces them, not as one deletion.
 - Fork-only decision: upstream keeps curses, so expect merge friction in the touched files.
+
+## UI-03: Frontend decision and repo scope
+
+**Status: decided (owner, 2026-10-21).** Recorded here so the UI redesign and the repo trim
+share one set of constraints.
+- Stay on SDL3 + SDL_GPU. The M1 gate in docs/en/dev/research/ui_redesign/ (an `accesskit-c`
+  SDL spike) decides whether to fall back to Godot; the fallback conditions in 06_frontend_options
+  are accepted.
+- Keep Windows, macOS and Android build support (their packaging files stay).
+- Drop deno and the docs site (done on `chore/drop-deno`; the scripts are kept on the
+  `archive/deno-tooling` branch). Release workflows that still call deno are inert on this fork
+  and need replacing before releases are built from it.
+- Keep translations, tilesets and sound. Research docs go to an archive branch and player guides
+  to the wiki.
+- Upstream merges take game logic only, not renderer work: see
+  docs/en/dev/guides/upstream_sync.md and `tools/upstream_sync/check.sh`.
 
 ## Audit references and completed foundations
 
