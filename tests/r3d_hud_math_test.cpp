@@ -87,6 +87,20 @@ TEST_CASE("r3d_fog_grows_with_sight_penalty_and_distance", "[r3d]") {
     CHECK(r3d::fog_amount(200.0f, d) > 0.99f);
 }
 
+TEST_CASE("r3d_wind_band_ignores_flicker_across_an_edge", "[r3d]") {
+    CHECK(r3d::wind_band(0, -1) == 0);
+    CHECK(r3d::wind_band(3, -1) == 1);
+    CHECK(r3d::wind_band(30, -1) == 3);
+    // Hovering at the 13 mph edge keeps the band last reported.
+    CHECK(r3d::wind_band(12, 2) == 2);
+    CHECK(r3d::wind_band(13, 1) == 1);
+    CHECK(r3d::wind_band(14, 1) == 1);
+    // A clear step past it changes the band.
+    CHECK(r3d::wind_band(15, 1) == 2);
+    CHECK(r3d::wind_band(10, 2) == 1);
+    CHECK(r3d::wind_band(0, 2) == 0);
+}
+
 TEST_CASE("r3d_bearings_match_the_camera", "[r3d]") {
     CHECK(approx(r3d::map_bearing(0.0f, -1.0f), 0.0f));      // north
     CHECK(approx(r3d::map_bearing(1.0f, 0.0f), 1.5707963f)); // east

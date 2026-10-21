@@ -420,10 +420,9 @@ auto draw_compass( const draw_compass_options &options ) -> void
     }
 }
 
-// Badges for needs and conditions that are not normal, along the bottom left of the view. Which
-// widgets become badges, and their text and colour, come from the "r3d_status_row" widget in
-// data/json/ui/sidebar-r3d.json: the thresholds stay in the widgets' own clauses. A widget whose
-// text is empty or shown in a "fine" colour (white, green) is normal and has no badge.
+// Badges for needs and conditions that are not normal, along the bottom left of the view. Text and
+// colour come from the character's own sidebar descriptions, so the thresholds stay BN's. A need
+// whose text is empty or shown in a "fine" colour (white, green) is normal and has no badge.
 auto add_status_badges( const hud_frame &frame, std::vector<hud_text> &texts ) -> void
 {
     const auto &you = get_avatar();

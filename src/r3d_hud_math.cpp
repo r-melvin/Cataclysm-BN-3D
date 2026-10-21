@@ -1,6 +1,7 @@
 #include "r3d_hud_math.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace r3d
@@ -165,6 +166,29 @@ auto place_edge_mark( const place_edge_mark_options &options ) -> edge_mark
     m.y = y * t;
     m.angle = std::atan2( y, x );
     return m;
+}
+
+namespace
+{
+// Bands of wind speed (mph) that are worth a message when the wind moves between them.
+constexpr auto wind_band_edges = std::array{ 3, 13, 25 };
+// The wind must pass an edge by this much to change band, so a wind hovering at an edge stays quiet.
+constexpr auto wind_band_margin = 2;
+
+} // namespace
+
+auto wind_band( int mph, int previous ) -> int
+{
+    const auto band_at = [&]( int speed ) {
+        return static_cast<int>( std::ranges::count_if( wind_band_edges, [speed]( int edge ) { return speed >= edge; } ) );
+    };
+    const auto band = band_at( mph );
+    // Leaving the previous band takes a clear step past its edge, not a flicker across it.
+    if( previous >= 0 && band != previous &&
+        band_at( mph + ( band > previous ? -1 : 1 ) * wind_band_margin ) == previous ) {
+        return previous;
+    }
+    return band;
 }
 
 } // namespace r3d

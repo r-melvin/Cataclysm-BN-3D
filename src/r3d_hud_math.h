@@ -61,6 +61,12 @@ auto fog_density( float sight_penalty ) -> float;
 /// That fraction.
 auto fog_amount( float distance, float density ) -> float;
 
+/**
+ * Band of wind speed (0 calm .. 3 gale) worth a message when it changes. previous is the band last
+ * reported, or -1 for none: the speed must pass an edge by a margin to leave it.
+ */
+auto wind_band( int mph, int previous ) -> int;
+
 /// Map bearing of a map offset (dx east, dy south); 0 for no offset.
 auto map_bearing( float dx, float dy ) -> float;
 /// Map bearing the orbit camera looks along, for camera::yaw.

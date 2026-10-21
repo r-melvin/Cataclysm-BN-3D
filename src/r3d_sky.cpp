@@ -3,6 +3,7 @@
 #include "r3d_sky.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -295,19 +296,22 @@ auto sky_bodies( int view_z, const atmosphere &air ) -> std::vector<sky_body>
     return out;
 }
 
-namespace
-{
-// Bands of wind speed (mph) that are worth a message when the wind moves between them.
-auto wind_band( int mph ) -> int
-{ return mph < 3 ? 0 : mph < 13 ? 1 : mph < 25 ? 2 : 3; }
-} // namespace
-
 auto report_weather_changes() -> void
 {
-    static auto last_weather = weather_type_id( weather_type_id( "weather_null" ) );
-    static auto last_band = static_cast<int>( -1 );
+    static auto last_weather = weather_type_id( "weather_null" );
+    static auto last_band = -1;
+    static auto last_turn = calendar::before_time_starts;
     const auto &weather = get_weather();
     const auto &you = get_avatar();
+    // Check once per turn. Anything but the next turns (a loaded save, 3D switched off for a while)
+    // only records the current state: the character did not watch it change.
+    if( calendar::turn == last_turn ) { return; }
+    const auto watched = calendar::turn > last_turn && calendar::turn - last_turn <= 1_hours;
+    last_turn = calendar::turn;
+    if( !watched ) {
+        last_weather = weather_type_id( "weather_null" );
+        last_band = -1;
+    }
     // Only what the character can tell: the weather overhead, from outdoors or a window.
     if( you.bub_pos().z() < 0 || !!g->is_sheltered( you.bub_pos() ) ) {
         return;
@@ -319,7 +323,7 @@ auto report_weather_changes() -> void
         }
         last_weather = weather.weather_id;
     }
-    const auto band = static_cast<int>( wind_band( weather.windspeed ) );
+    const auto band = wind_band( weather.windspeed, last_band );
     if( band != last_band ) {
         if( last_band >= 0 ) {
             if( band == 0 ) {
