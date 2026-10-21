@@ -515,6 +515,33 @@ Shadow/reflection passes must respect BN visibility and not introduce gameplay
 light. R3D-12 covers camera-only first person; these effects imply no real-time
 movement. Source: [Dramatic Shape review](docs/en/dev/research/dramatic_shape_voxel_review.md).
 
+## UI-01: One guided start (tutorial as chapter one)
+
+**Status: decided, not started.** Combine the built-in Tutorial Game and Guided Play
+into one path, with guided play as the baseline.
+
+Decisions (owner, 2026-10-21):
+- The Tutorial becomes chapter one of the guided start; the separate Tutorial and
+  Guided Play New Game entries go away. The same character continues into the real
+  world with the guided lessons.
+- Baseline: guided is on automatically for the first-ever character on a profile,
+  off afterwards.
+
+Known obstacles to settle before building:
+- The tutorial is a separate special world (`TUTORIAL`, `special_game_type::TUTORIAL`,
+  `gamemode_tutorial.cpp`). A character cannot move between worlds, so chapter one
+  must run inside the player's own world, e.g. the tutorial complex as a start location
+  or overmap special, with `g->gamemode` active only until it is finished. Check how
+  much of `tutorial_game` depends on owning the whole world.
+- First-ever-only leaves no way to replay. Keep one replay route (an option or a
+  single New Game toggle) so removing the entries does not remove the feature.
+- The tutorial's lessons (`tut_lesson`) and the guided lessons (`onboarding_core`,
+  `data/json/onboarding/`) overlap; merge them into the JSON lesson set rather than
+  running two systems. Existing guided progress saves must keep loading.
+- Translations of the removed menu entries and lesson text change.
+- Coordinate with the UI redesign (docs/en/dev/research/ui_redesign/) for the checklist
+  and hint presentation.
+
 ## Audit references and completed foundations
 
 - [Renderer review](docs/en/dev/research/r3d_review_2026_10.md): wheel/depth/roof/
