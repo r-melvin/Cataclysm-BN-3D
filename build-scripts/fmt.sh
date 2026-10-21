@@ -6,7 +6,7 @@ cd "$repo_root"
 
 usage() {
     cat >&2 <<'USAGE'
-usage: build-scripts/fmt.sh [--all|cpp [--all|files...]|json [--all|files...]|docs|lua]
+usage: build-scripts/fmt.sh [--all|cpp [--all|files...]|json [--all|files...]]
 USAGE
 }
 
@@ -18,7 +18,7 @@ case "${1:-}" in
         mode=all
         shift
         ;;
-    cpp|json|docs|lua)
+    cpp|json)
         mode="$1"
         shift
         ;;
@@ -46,16 +46,6 @@ if [[ "$mode" == json ]]; then
         shift
     fi
     build-scripts/format-json.sh "$@"
-    exit 0
-fi
-
-if [[ "$mode" == docs ]]; then
-    deno fmt
-    exit 0
-fi
-
-if [[ "$mode" == lua ]]; then
-    deno task dprint fmt
     exit 0
 fi
 
@@ -91,15 +81,9 @@ if [[ "$mode" == staged ]]; then
                     append_stage_file "$file"
                 fi
                 ;;
-            *.md|*.ts|*.lua)
-                append_stage_file "$file"
-                ;;
-        esac
+                    esac
     done < <(git diff --cached --name-only --diff-filter=ACMR -z)
 fi
-
-deno fmt
-deno task dprint fmt
 
 if [[ "$mode" == all ]]; then
     build-scripts/format-cpp.sh

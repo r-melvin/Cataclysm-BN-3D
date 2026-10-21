@@ -33,7 +33,6 @@ For each selected document group:
 Treat the selected source files and all of their English, Korean, and Japanese counterparts as one requested change. Unless the user requests separate commits, stage and commit all of them together; a pre-existing selected source change is not a reason to omit it.
 
 ```sh
-deno fmt <touched Markdown files>
 git diff --check
 ```
 

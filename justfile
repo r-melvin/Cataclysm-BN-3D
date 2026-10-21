@@ -15,12 +15,6 @@ fmt-json *FILES:
 fmt-return *PATHS:
     build-scripts/format-trailing-return.sh {{PATHS}}
 
-fmt-docs:
-    build-scripts/fmt.sh docs
-
-fmt-lua:
-    build-scripts/fmt.sh lua
-
 lint: lint-json lint-dialogue
 
 lint-json:
@@ -31,10 +25,5 @@ lint-dialogue:
 
 hooks-setup:
     prek install
-
-# Download and launch a PR tiles build: just playtest [--os OS] <PR URL>.
-[positional-arguments]
-playtest *args:
-    deno run --allow-read --allow-write --allow-run --allow-env scripts/playtest.ts "$@"
 
 check: lint
