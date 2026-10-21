@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 
 #include "r3d_math.h"
 
@@ -84,6 +85,7 @@ struct camera {
     float tween_yaw = 0.0f;    // the turn still to be shown while a turn is eased, display only
     float tilt_pitch = 0.0f;   // looking at another level (look mode), display only
     float fovx = 1.5708f;      // horizontal field of view, 90 degrees
+    std::optional<float> exact_fp_yaw;
 
     auto first_person() const -> bool {
         return mode == camera_mode::first_person;

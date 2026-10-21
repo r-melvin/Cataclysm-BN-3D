@@ -92,6 +92,8 @@ struct entity_view {
     /// First person: sprites stand upright facing the screen (no lean, no depth pull), items are
     /// small stands, markers are posts, and the viewer's own sprite is left out.
     bool upright_billboards = false;
+    /// Tile currently hovered by the mouse cursor for 3D item highlighting.
+    std::optional<tripoint_bub_ms> hovered{};
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.

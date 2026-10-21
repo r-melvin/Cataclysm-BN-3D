@@ -346,8 +346,8 @@ auto parse_option_group_definition( const JsonObject &jo ) -> option_group_defin
     return option_group_definition{
         .id = id,
         .page = jo.get_string( "page" ),
-        .title = read_translation_member( jo, "title", no_translation( id ) ),
-        .desc = read_translation_member( jo, "desc", no_translation( "" ) ),
+                  .title = read_translation_member( jo, "title", no_translation( id ) ),
+                  .desc = read_translation_member( jo, "desc", no_translation( "" ) ),
     };
 }
 
@@ -368,7 +368,7 @@ auto parse_int_map_items( const JsonObject &jo ) -> std::vector<int_map_item_def
     for( const JsonObject item_jo : jo.get_array( "items" ) ) {
         result.push_back( int_map_item_definition{
             .value = item_jo.get_int( "value" ),
-            .label = read_translation_member( item_jo, "label", no_translation( std::to_string( item_jo.get_int( "value" ) ) ) ),
+                            .label = read_translation_member( item_jo, "label", no_translation( std::to_string( item_jo.get_int( "value" ) ) ) ),
         } );
     }
     return result;
@@ -380,14 +380,14 @@ auto parse_option_definition( const JsonObject &jo ) -> option_definition
 
     auto option = option_definition{
         .name = jo.get_string( "name" ),
-        .stype = jo.get_string( "stype" ),
-        .scope = jo.get_string( "scope" ),
-        .page = jo.get_string( "page" ),
-        .group = jo.has_string( "group" ) ? jo.get_string( "group" ) : std::string(),
-        .menu_text = read_translation_member( jo, "menu_text", no_translation( jo.get_string( "name" ) ) ),
-        .tooltip = read_translation_member( jo, "tooltip", no_translation( "" ) ),
-        .hide = read_option_hide( jo ),
-        .deps = read_option_dependencies( jo ),
+                  .stype = jo.get_string( "stype" ),
+                  .scope = jo.get_string( "scope" ),
+                  .page = jo.get_string( "page" ),
+                  .group = jo.has_string( "group" ) ? jo.get_string( "group" ) : std::string(),
+                  .menu_text = read_translation_member( jo, "menu_text", no_translation( jo.get_string( "name" ) ) ),
+                  .tooltip = read_translation_member( jo, "tooltip", no_translation( "" ) ),
+                  .hide = read_option_hide( jo ),
+                  .deps = read_option_dependencies( jo ),
         .items = {},
         .int_map_items = {},
         .default_string = {},
@@ -1549,14 +1549,12 @@ auto options_manager::parse_option_definition_entry( const JsonObject &jo ) -> v
 {
     const auto type = jo.get_string( "type" );
     const auto has_page = [&]( const std::string & page_id ) -> bool {
-        return std::ranges::any_of( pages_, [&]( const Page & page )
-        {
+        return std::ranges::any_of( pages_, [&]( const Page & page ) {
             return page.id_ == page_id;
         } );
     };
     const auto has_group = [&]( const std::string & group_id ) -> bool {
-        return std::ranges::any_of( groups_, [&]( const Group & group )
-        {
+        return std::ranges::any_of( groups_, [&]( const Group & group ) {
             return group.id_ == group_id;
         } );
     };
@@ -1720,8 +1718,6 @@ void options_manager::init()
     }
 }
 
-
-
 void options_manager::add_options_general()
 {
     const auto add_empty_line = [&]() {
@@ -1803,7 +1799,6 @@ void options_manager::add_options_interface()
                            "backpack, a flashlight, a bottle of water and a pocket knife.  Off: the "
                            "usual default scenario." ),
          true );
-
 
     add_empty_line();
 
@@ -1991,7 +1986,6 @@ void options_manager::add_options_interface()
          */
     translate_marker( "Allows diagonal movement with cursor keys using CTRL and SHIFT modifiers.  Diagonal movement action keys are taken from keybindings, so you need these to be configured." ), { { "none", translate_marker( "None" ) }, { "mode1", translate_marker( "Mode 1: Numpad Emulation" ) }, { "mode2", translate_marker( "Mode 2: CW/CCW" ) }, { "mode3", translate_marker( "Mode 3: L/R Tilt" ) } },
     "none", COPT_CURSES_HIDE );
-
 
     add( "SUGGEST_AUTOWALK_STAIRCASE", interface, translate_marker( "Suggest autowalk to staircases" ),
          translate_marker( "If true, upon pressing Ascend Stairs or Descend Stairs, the player will be prompted with an option to walk to the nearest visible staircase." ),
@@ -2550,36 +2544,37 @@ void options_manager::add_options_graphics()
 #endif
 
     add( "MODERN_MENUS", graphics, translate_marker( "Modern menu borders" ),
-         translate_marker( "Use muted borders and padded headings. Disable to keep the classic menu appearance." ), false );
+         translate_marker( "Use muted borders and padded headings. Disable to keep the classic menu appearance." ),
+         false );
 #if defined(TILES)
     add( "RENDERER_3D", graphics, translate_marker( "Voxelised 3D renderer (experimental)" ),
          translate_marker( "If true, draws the map as a voxelised 3D scene instead of the standard isometric view.  "
                            "Turn it off to return to the standard view.  Needs a GPU renderer; falls back to flat tiles otherwise." ),
-         false, COPT_CURSES_HIDE
+         true, COPT_CURSES_HIDE
        );
 
     get_option( "RENDERER_3D" ).setPrerequisite( "USE_TILES" );
 
-        add( "R3D_WEATHER", graphics, translate_marker( "3D weather and sky" ),
-             translate_marker( "Show the weather and the time of day in the 3D view: rain and snow drifting with the wind, fog that thickens with distance, the colour of the sky, the sun and the moon in its phase.  The status report action describes the same in words." ),
-             true, COPT_CURSES_HIDE
-           );
+    add( "R3D_WEATHER", graphics, translate_marker( "3D weather and sky" ),
+         translate_marker( "Show the weather and the time of day in the 3D view: rain and snow drifting with the wind, fog that thickens with distance, the colour of the sky, the sun and the moon in its phase.  The status report action describes the same in words." ),
+         true, COPT_CURSES_HIDE
+       );
 
-        get_option( "R3D_WEATHER" ).setPrerequisite( "RENDERER_3D" );
+    get_option( "R3D_WEATHER" ).setPrerequisite( "RENDERER_3D" );
 
-        add( "R3D_HUD", graphics, translate_marker( "3D overlays" ),
-             translate_marker( "Draw marks over the 3D view: combat text, heard sounds, the zone being placed, pointers to threats off screen, the compass, abnormal states and where a hit came from." ),
-             true, COPT_CURSES_HIDE
-           );
+    add( "R3D_HUD", graphics, translate_marker( "3D overlays" ),
+         translate_marker( "Draw marks over the 3D view: combat text, heard sounds, the zone being placed, pointers to threats off screen, the compass, abnormal states and where a hit came from." ),
+         true, COPT_CURSES_HIDE
+       );
 
-        get_option( "R3D_HUD" ).setPrerequisite( "RENDERER_3D" );
+    get_option( "R3D_HUD" ).setPrerequisite( "RENDERER_3D" );
     add( "R3D_CAMERA_MODE", graphics, translate_marker( "3D camera" ),
          translate_marker( "Orbit: the free camera above the map.  First person: the view from the character's eyes, facing one of the eight directions; the arrow keys turn by 45 degrees and movement follows the facing.  The game itself is unchanged: you still see all around you, even though the picture shows only what is ahead." ),
     {
         { "orbit", translate_marker( "Orbit" ) },
         { "first_person", translate_marker( "First person" ) }
     },
-    "orbit", COPT_CURSES_HIDE
+    "first_person", COPT_CURSES_HIDE
        );
 
     get_option( "R3D_CAMERA_MODE" ).setPrerequisite( "RENDERER_3D" );
@@ -2654,7 +2649,6 @@ void options_manager::add_options_graphics()
        );
 
     get_option( "R3D_FP_OCCLUDE_UNSEEN" ).setPrerequisite( "RENDERER_3D" );
-
 
     add( "R3D_VIEW_DEPTH", graphics, translate_marker( "3D view depth" ),
          translate_marker( "How many z-levels below the viewed one the 3D renderer draws." ),
@@ -3265,7 +3259,6 @@ void options_manager::add_options_world_default()
              "Spawn rate for items from WORKSHOP TOOLS category.",
              0.0, 20.0, 1.0, 0.01 );
 
-
     } );
 
     add_empty_line();
@@ -3384,7 +3377,6 @@ void options_manager::add_options_world_default()
          translate_marker( "Sets the time of construction in percents.  '50' is two times faster than default, '200' is two times longer.  '0' makes construction instant." ),
          0, 1000, 100, COPT_NO_HIDE, "%i%%"
        );
-
 
     add( "CRAFTING_SPEED_MULT", world_default, translate_marker( "Crafting speed percentage" ),
          translate_marker( "Sets default crafting speed in percents.  '50' is two times faster than default, '200' is two times longer.  '0' makes crafting instant." ),
@@ -4009,8 +4001,7 @@ std::string options_manager::show( bool ingame, const bool world_options_only,
         int curr_line_visible = 0;
         const auto is_visible = [&]( int i ) -> bool {
             const PageItem &it = page_items[i];
-            switch( it.type )
-            {
+            switch( it.type ) {
                 case ItemType::GroupHeader:
                     return true;
                 case ItemType::BlankLine:
@@ -4033,8 +4024,7 @@ std::string options_manager::show( bool ingame, const bool world_options_only,
         const auto fmt_name_value = [&]( const PageItem & it, bool is_selected )
         -> std::pair<string_col, string_col> {
             const auto in_group_prefix = "  ";
-            switch( it.type )
-            {
+            switch( it.type ) {
                 case ItemType::BlankLine: {
                     std::string name = it.group.empty() ? "" : in_group_prefix;
                     return { string_col( name, c_white ), string_col() };
@@ -4227,8 +4217,7 @@ std::string options_manager::show( bool ingame, const bool world_options_only,
 
         const auto is_selectable = [&]( int i ) -> bool {
             const PageItem &curr_item = page_items[i];
-            switch( curr_item.type )
-            {
+            switch( curr_item.type ) {
                 case ItemType::BlankLine:
                     return false;
                 case ItemType::GroupHeader:
@@ -4633,7 +4622,6 @@ void options_manager::cache_balance_options()
         = ::get_option<int>( "FUNGUS_ADVANCED_CREATURES_THRESHOLD" );
     fungal_opt.spore_creatures_threshold = ::get_option<int>( "FUNGUS_SPORE_CREATURES_THRESHOLD" );
 }
-
 
 bool options_manager::has_option( const std::string &name ) const
 {

@@ -39,6 +39,7 @@
 #include "game_constants.h"
 
 #include "json.h"
+#include "line.h"
 #include "map/map.h"
 #include "game_constants.h"
 #include "map/mapbuffer.h"
@@ -220,6 +221,7 @@ struct state {
     // Sounds heard this turn whose post cannot be seen (out of the picture or behind something):
     // the compass strip shows a tick for each.
     std::vector<tripoint_bub_ms> heard_ticks;
+    std::optional<tripoint_bub_ms> hovered{};
 };
 
 auto st() -> state & // *NOPAD*
@@ -830,6 +832,7 @@ auto sync_camera_mode( camera &cam ) -> void
         cam.mode = camera_mode::orbit;
         // The orbit yaw turns the other way round (see camera::forward_eighths).
         cam.yaw = -static_cast<float>( cam.heading ) * eighth;
+        cam.exact_fp_yaw = std::nullopt;
     }
 }
 
@@ -1124,12 +1127,74 @@ auto picking_column_height( const picking_column_height_options &options ) -> fl
     if( p.z() < v.z_lo || p.z() > v.z_hi || !here.inbounds( p ) ) {
         return 0.0f;
     }
-    const auto h = static_cast<float>( column_height( s, here, p ) );
+    auto h = static_cast<float>( column_height( s, here, p ) );
     const Creature *critter = g->critter_at( p, true );
     if( critter && ( critter->is_avatar() ? !v.cam.first_person() : you.sees( *critter ) ) ) {
         return 1.0f;
     }
+    if( here.sees_some_items( p, you ) && !here.has_flag( "CONTAINER", p ) &&
+        here.has_items( p ) ) {
+        h = std::max( h, static_cast<float>( surface_height( s, here, p ) + 0.55f ) );
+    }
     return h;
+}
+
+struct player_raycast_options {
+    state &s;
+    const map &here;
+    const avatar &you;
+    const tripoint_bub_ms &from;
+    const tripoint_bub_ms &to;
+};
+
+auto raycast_from_player( const player_raycast_options &options ) -> std::optional<tripoint_bub_ms>
+{
+    auto &s = options.s;
+    const auto &here = options.here;
+    const auto &you = options.you;
+    const auto &from = options.from;
+    const auto &to = options.to;
+
+    if( from == to ) {
+        return to;
+    }
+
+    const auto total_dist = std::hypot( static_cast<float>( to.x() - from.x() ),
+                                        static_cast<float>( to.y() - from.y() ) );
+    if( total_dist <= 0.001f ) {
+        return to;
+    }
+
+    const auto eye_z = static_cast<float>( from.z() ) + surface_height( s, here, from ) + 0.65f;
+    const auto target_z = static_cast<float>( to.z() ) + surface_height( s, here, to ) +
+                          ( here.has_items( to ) ? 0.25f : 0.1f );
+
+    const auto steps = line_to( from, to );
+    for( const auto &step : steps ) {
+        if( !here.inbounds( step ) ) {
+            break;
+        }
+        if( step == to ) {
+            return to;
+        }
+        const auto step_dist = std::hypot( static_cast<float>( step.x() - from.x() ),
+                                           static_cast<float>( step.y() - from.y() ) );
+        const auto frac = std::clamp( step_dist / total_dist, 0.0f, 1.0f );
+        const auto ray_z = eye_z + frac * ( target_z - eye_z );
+
+        auto obs_col = static_cast<float>( step.z() ) + column_height( s, here, step );
+        if( const Creature *critter = g->critter_at( step, true ) ) {
+            if( !critter->is_avatar() && you.sees( *critter ) ) {
+                obs_col = std::max( obs_col, static_cast<float>( step.z() ) + 1.0f );
+            }
+        }
+
+        const auto tile_surf = static_cast<float>( step.z() ) + surface_height( s, here, step );
+        if( obs_col >= tile_surf + 0.45f && ray_z <= obs_col ) {
+            return step;
+        }
+    }
+    return to;
 }
 
 struct loaded_submap_at_options {
@@ -1858,6 +1923,10 @@ auto crosshair() -> std::optional<tripoint_bub_ms>
 auto face_towards( int dx, int dy ) -> void
 {
     auto &s = st();
+    const auto &you = get_avatar();
+    if( you.controlling_vehicle ) {
+        return;
+    }
     if( s.cam.first_person() && ( dx != 0 || dy != 0 ) ) {
         s.cam.heading = eighths_towards( dx, dy );
         remember_heading( s );
@@ -1869,6 +1938,10 @@ auto rotate( int dir ) -> void
 {
 
     auto &s = st();
+    const auto &you = get_avatar();
+    if( s.cam.first_person() && you.controlling_vehicle ) {
+        return;
+    }
     s.cam.rotate_steps( dir );
 
     if( s.cam.first_person() ) {
@@ -1918,6 +1991,16 @@ auto contains( float x, float y ) -> bool
 {
     const auto &v = st().shown;
     return active() && v.valid && x >= v.x && y >= v.y && x < v.x + v.w && y < v.y + v.h;
+}
+
+auto set_hovered_tile( const std::optional<tripoint_bub_ms> &p ) -> void
+{
+    st().hovered = p;
+}
+
+auto hovered_tile() -> std::optional<tripoint_bub_ms>
+{
+    return st().hovered;
 }
 
 auto drag_orbit( float dx, float dy ) -> void
@@ -2004,6 +2087,9 @@ auto pick( float x, float y ) -> std::optional<tripoint_bub_ms>
     if( !here.inbounds( p ) ) {
         return std::nullopt;
     }
+    if( v.cam.first_person() ) {
+        return raycast_from_player( { .s = s, .here = here, .you = you, .from = you.bub_pos(), .to = p } );
+    }
     return p;
 }
 
@@ -2081,7 +2167,6 @@ auto draw_fp_hud( const draw_fp_hud_options &options ) -> void
     const auto compass = std::string( get_option<std::string>( "R3D_FP_COMPASS" ) );
     const auto edge_alert = static_cast<bool>( get_option<bool>( "R3D_FP_EDGE_ALERT" ) );
     const auto &you = get_avatar();
-    auto &here = get_map();
     const auto view_yaw = static_cast<float>( cam.fp_yaw() );
     auto bearing_to = [ &you, view_yaw ]( const tripoint_bub_ms & at ) {
         const auto d = tripoint_rel_ms( at - you.bub_pos() );
@@ -2201,13 +2286,77 @@ auto draw_fp_hud( const draw_fp_hud_options &options ) -> void
         const auto cx = static_cast<float>( x + w * 0.5f );
         const auto cy = static_cast<float>( y + h * 0.5f );
         fill( { .x = cx - 2.0f, .y = cy - 2.0f, .w = 4.0f, .h = 4.0f, .r = 255, .g = 255, .b = 255, .a = 200 } );
-        auto label = std::string{};
-        const auto at = std::optional<tripoint_bub_ms>( crosshair() );
-        if( at ) { label = crosshair_description( get_avatar(), here, *at ); }
-        if( !label.empty() ) {
-            text( { .x = cx, .y = cy + 8.0f, .text = label, .color = white } );
-        }
     }
+}
+
+struct draw_first_person_weapon_options {
+    SDL_Renderer *renderer = nullptr;
+    float view_x = 0.0f;
+    float view_y = 0.0f;
+    float view_w = 0.0f;
+    float view_h = 0.0f;
+    const camera &cam;
+};
+
+auto draw_first_person_weapon( const draw_first_person_weapon_options &options ) -> void
+{
+    auto *const renderer = options.renderer;
+    const auto view_x = options.view_x;
+    const auto view_y = options.view_y;
+    const auto view_w = options.view_w;
+    const auto view_h = options.view_h;
+    const auto &cam = options.cam;
+
+    if( !cam.first_person() || !tilecontext ) {
+        return;
+    }
+    const auto &you = get_avatar();
+    if( you.controlling_vehicle || !you.is_armed() ) {
+        return;
+    }
+    const auto &weapon = you.primary_weapon();
+    const auto item_id = std::string( weapon.typeId().str() );
+    const auto data = tilecontext->get_sprite_draw_data( {
+        .id = item_id,
+        .category = C_ITEM,
+        .pos = you.bub_pos()
+    } );
+    if( !data || !data->texture ) {
+        return;
+    }
+    auto src = SDL_FRect{
+        .x = static_cast<float>( data->dimensions.x ),
+        .y = static_cast<float>( data->dimensions.y ),
+        .w = static_cast<float>( data->dimensions.w ),
+        .h = static_cast<float>( data->dimensions.h )
+    };
+    if( data->opaque.w > 0 && data->opaque.h > 0 ) {
+        src.x = static_cast<float>( data->dimensions.x + data->opaque.x );
+        src.y = static_cast<float>( data->dimensions.y + data->opaque.y );
+        src.w = static_cast<float>( data->opaque.w );
+        src.h = static_cast<float>( data->opaque.h );
+    }
+    if( src.w <= 0.0f || src.h <= 0.0f ) {
+        return;
+    }
+
+    const auto target_h = view_h * 0.35f;
+    const auto aspect = src.w / src.h;
+    const auto target_w = std::clamp( target_h * aspect, view_h * 0.18f, view_w * 0.40f );
+
+    const auto p = you.bub_pos();
+    const auto phase = static_cast<float>( p.x() * 3 + p.y() * 5 ) * 0.8f + cam.fp_yaw() * 2.0f;
+    const auto bob_x = std::sin( phase ) * ( view_w * 0.008f );
+    const auto bob_y = std::abs( std::cos( phase ) ) * ( view_h * 0.012f );
+
+    const auto dst = SDL_FRect{
+        .x = view_x + view_w * 0.65f - target_w * 0.5f + bob_x,
+        .y = view_y + view_h - target_h * 0.92f + bob_y,
+        .w = target_w,
+        .h = target_h
+    };
+    SDL_SetTextureScaleMode( data->texture, SDL_SCALEMODE_NEAREST );
+    SDL_RenderTextureRotated( renderer, data->texture, &src, &dst, -8.0, nullptr, SDL_FLIP_HORIZONTAL );
 }
 
 } // namespace
@@ -2223,6 +2372,12 @@ auto draw( const draw_options &options ) -> bool
     auto render_epoch = options.render_epoch;
 
     auto &s = st();
+    static auto forced_3d_on_start = false;
+    if( !forced_3d_on_start ) {
+        forced_3d_on_start = true;
+        get_options().get_option( "RENDERER_3D" ).setValue( "true" );
+        sync_camera_mode( s.cam );
+    }
     s.drawn = false;
     s.map_drawn = true;
     s.texts.clear();
@@ -2386,6 +2541,15 @@ auto draw( const draw_options &options ) -> bool
     if( !s.comparison_camera && is_controlling ) {
         const auto veh_face = vp->vehicle().face.dir();
         const auto veh_yaw = vehicle_heading_to_yaw( veh_face );
+        if( fp ) {
+            s.cam.exact_fp_yaw = vehicle_heading_to_fp_yaw( veh_face );
+            const auto veh_heading = ( ( static_cast<int>( std::round( ( units::to_degrees(
+                                             veh_face ) + 90.0 ) / 45.0 ) ) % 8 ) + 8 ) % 8;
+            s.cam.heading = veh_heading;
+            s.cam.tween_yaw = 0.0f;
+            s.fp_ease_yaw = 0.0f;
+            remember_heading( s );
+        }
         if( !s.was_controlling_vehicle ) {
             s.cam.yaw = veh_yaw;
             s.was_controlling_vehicle = true;
@@ -2394,6 +2558,9 @@ auto draw( const draw_options &options ) -> bool
         }
         s.last_vehicle_yaw = veh_yaw;
     } else if( !s.comparison_camera ) {
+        if( fp ) {
+            s.cam.exact_fp_yaw = std::nullopt;
+        }
         s.was_controlling_vehicle = false;
     }
 
@@ -2404,13 +2571,39 @@ auto draw( const draw_options &options ) -> bool
         auto ease_y = static_cast<float>( 0.0f );
         auto ease_z = static_cast<float>( 0.0f );
         const auto stand = static_cast<float>( surface_height( s, here, player_pos ) );
-        update_fp_ease( { .s = s, .pos = bub_to_abs( player_pos ), .surface = stand, .offset_x = ease_x, .offset_y = ease_y, .offset_z = ease_z } );
-        // The camera stands on the player's tile, at the height of what they stand on.
-        s.cam.target = tile_to_world( {
-            static_cast<float>( player_pos.x() - center.x() ) + 0.5f + ease_x,
-            static_cast<float>( player_pos.y() - center.y() ) + 0.5f + ease_y,
-            static_cast<float>( player_pos.z() - center.z() ) + stand + ease_z
-        } );
+        if( is_controlling && vp ) {
+            s.fp_prev_valid = false;
+            s.fp_easing = false;
+            s.cam.tween_yaw = 0.0f;
+            s.fp_ease_yaw = 0.0f;
+            s.fp_ease_ms = 0;
+            const auto &veh = vp->vehicle();
+            const auto mount = vp->mount();
+            const auto pivot_mnt = veh.pivot_anchor[0];
+            const auto veh_bub = veh.bub_ms_location();
+            const auto pivot_sx = static_cast<float>( veh_bub.x() - center.x() ) + 0.5f;
+            const auto pivot_sy = static_cast<float>( veh_bub.y() - center.y() ) + 0.5f;
+            const auto theta = static_cast<float>( units::to_radians( veh.face.dir() ) );
+            const auto cos_th = static_cast<float>( std::cos( theta ) );
+            const auto sin_th = static_cast<float>( std::sin( theta ) );
+            const auto rel_f = static_cast<float>( mount.x() - pivot_mnt.x() );
+            const auto rel_r = static_cast<float>( mount.y() - pivot_mnt.y() );
+            const auto seat_scene_x = pivot_sx + rel_f * cos_th - rel_r * sin_th;
+            const auto seat_scene_y = pivot_sy + rel_f * sin_th + rel_r * cos_th;
+            s.cam.target = tile_to_world( {
+                seat_scene_x,
+                seat_scene_y,
+                static_cast<float>( player_pos.z() - center.z() ) + stand
+            } );
+        } else {
+            update_fp_ease( { .s = s, .pos = bub_to_abs( player_pos ), .surface = stand, .offset_x = ease_x, .offset_y = ease_y, .offset_z = ease_z } );
+            // The camera stands on the player's tile, at the height of what they stand on.
+            s.cam.target = tile_to_world( {
+                static_cast<float>( player_pos.x() - center.x() ) + 0.5f + ease_x,
+                static_cast<float>( player_pos.y() - center.y() ) + 0.5f + ease_y,
+                static_cast<float>( player_pos.z() - center.z() ) + stand + ease_z
+            } );
+        }
         // Looking at another level (look mode's < and >) tilts the view towards it, 45 degrees
         // per level at most one level's worth; the eye stays where the player stands.
         constexpr auto level_tilt = static_cast<float>( 0.7854f );
@@ -2500,11 +2693,22 @@ auto draw( const draw_options &options ) -> bool
     -> float {
         return surface_height( s, here, p );
     }, .vehicle_vox_parts = &s.vehicle_vox_parts, .item_vox_models = &s.item_vox_models,
-    .presentation_profiles = &s.presentation_profiles, .vehicle_mount_visible = [&here]( const tripoint_bub_ms & p )
+    .presentation_profiles = &s.presentation_profiles, .vehicle_mount_visible = [&here, &you, vp, &sampler]( const tripoint_bub_ms & p )
     {
         static const auto fullbright = static_cast<bool>( std::getenv( "CATA_R3D_FULLBRIGHT" ) != nullptr );
-        return here.inbounds( p ) && ( fullbright || here.pl_sees( p, -1 ) );
-    } };
+        if( !here.inbounds( p ) ) {
+            return false;
+        }
+        if( fullbright ) {
+            return true;
+        }
+        const auto veh_opt = here.veh_at( p );
+        if( you.in_vehicle && vp && veh_opt && &vp->vehicle() == &veh_opt->vehicle() ) {
+            return true;
+        }
+        return here.pl_sees( p, -1 ) || here.pl_line_of_sight( p, -1 ) ||
+               sampler.color_at( p ) != pack_light( 0, 0, 0 );
+    }, .hovered = s.hovered };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
 
     entities_view.upright_billboards = fp;
@@ -2519,6 +2723,9 @@ auto draw( const draw_options &options ) -> bool
         }
         append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.highlights, .id = "highlight", .box = false, .large = true } );
         append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.cursors, .id = "cursor", .box = true, .large = true } );
+        if( s.hovered ) {
+            append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = { *s.hovered }, .id = "highlight", .box = false, .large = false } );
+        }
 
         // Sounds heard this turn, which cata_tiles::draw_footsteps_frame would draw: posts on
         // their tile with normal depth, so walls and creatures in front hide them. The 2D view
@@ -2680,6 +2887,7 @@ auto draw( const draw_options &options ) -> bool
         uniforms.pull[1] = 0.0f;
         uniforms.pull[2] = 0.0f;
         uniforms.pull[3] = 0.0f;
+        uniforms.flags[0] = 0.0f;
         set_cutaway( { .u = uniforms, .view_proj = view_proj, .aspect = aspect, .cam = s.cam, .center = center } );
         if( is_controlling ) {
             uniforms.cut[3] = 0.0f;
@@ -2746,6 +2954,7 @@ auto draw( const draw_options &options ) -> bool
     }
     const auto dst = SDL_FRect{ .x = x, .y = y, .w = w, .h = h };
     SDL_RenderTexture( renderer, result, nullptr, &dst );
+    draw_first_person_weapon( { .renderer = renderer, .view_x = x, .view_y = y, .view_w = w, .view_h = h, .cam = s.cam } );
     s.texts.clear();
     auto frame = hud_frame{};
     frame.x = x;

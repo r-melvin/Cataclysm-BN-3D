@@ -27,6 +27,10 @@ inline auto wrap_angle( float radians ) -> float
 inline auto vehicle_heading_to_yaw( units::angle face ) -> float
 { return wrap_angle( static_cast<float>( units::to_radians( 270_degrees - face ) ) ); }
 
+/// First person camera yaw looking along a vehicle heading: 270 deg (North) is yaw 0, 0 deg (East) is pi/2.
+inline auto vehicle_heading_to_fp_yaw( units::angle face ) -> float
+{ return wrap_angle( static_cast<float>( units::to_radians( face + 90_degrees ) ) ); }
+
 } // namespace r3d
 
 #endif // CATA_SRC_R3D_VEHICLE_CAMERA_H

@@ -47,7 +47,12 @@ auto camera::stretched_target() const -> vec3
 { return { .x = target.x, .y = target.y, .z = target.z * z_scale }; }
 
 auto camera::fp_yaw() const -> float
-{ return static_cast<float>( heading ) * eighth_turn + glance_yaw + tween_yaw; }
+{
+    if( exact_fp_yaw ) {
+        return *exact_fp_yaw + glance_yaw + tween_yaw;
+    }
+    return static_cast<float>( heading ) * eighth_turn + glance_yaw + tween_yaw;
+}
 
 auto camera::fp_forward() const -> vec3
 {
@@ -136,6 +141,9 @@ auto camera::forward_eighths() const -> int
     // Forward in tile space (y south) is away from the eye, flattened.
 
     if( first_person() ) {
+        if( exact_fp_yaw ) {
+            return ( static_cast<int>( std::round( *exact_fp_yaw / eighth_turn ) ) % 8 + 8 ) % 8;
+        }
         return ( heading % 8 + 8 ) % 8;
     }
     // Forward in tile space (y south) is away from the eye, flattened.

@@ -909,6 +909,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
     auto &sink = options.sink;
     const auto &view = options.view;
     auto &here = options.here;
+    const auto &you = get_avatar();
+    const auto p_avatar = you.bub_pos();
+    const auto vp_avatar = here.veh_at( p_avatar );
 
     for( const wrapped_vehicle &wrapped : here.get_vehicles() ) {
         auto &veh = *wrapped.v;
@@ -917,6 +920,11 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
         if( veh_z < view.z_lo || veh_z > view.z_hi ) {
             continue;
         }
+
+        const auto is_driving_this_vehicle = you.in_vehicle && vp_avatar &&
+                                             &vp_avatar->vehicle() == &veh &&
+                                             veh.player_in_control( you );
+        const auto clear_windshield = is_driving_this_vehicle && view.cam.first_person();
 
         const auto pivot_mnt = veh.pivot_anchor[0];
         const auto pivot_sx = static_cast<float>( veh_bub.x() - view.center.x() ) + 0.5f;
@@ -1421,7 +1429,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         { glass_low_r.x, glass_low_r.y, z_low }, { glass_low_l.x, glass_low_l.y, z_low }
                     }};
                 const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
-                sink.add_colored( { .sprite = spr, .corners = c_glass, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                if( !clear_windshield ) {
+                    sink.add_colored( { .sprite = spr, .corners = c_glass, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                }
 
                 // Solid cowl deck under the windshield at z = body_h (0.55f)
                 const auto p0_cowl = transform.apply( f_top, r_l );
@@ -1572,7 +1582,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             { win_mid_r.x, win_mid_r.y, z_mid }, { win_mid_l.x, win_mid_l.y, z_mid }
                         }};
                     const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
-                    sink.add_colored( { .sprite = s, .corners = c_window, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                    if( !clear_windshield ) {
+                        sink.add_colored( { .sprite = s, .corners = c_window, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                    }
 
                     // Lower hatch lid (painted metal)
                     const auto p_mid_l = transform.apply( f_mid, r_l_mid );
@@ -1864,7 +1876,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                     { pane_p0_top.x, pane_p0_top.y, z_top }, { pane_p1_top.x, pane_p1_top.y, z_top },
                                     { pane_p1_mid.x, pane_p1_mid.y, z_mid }, { pane_p0_mid.x, pane_p0_mid.y, z_mid }
                                 }};
-                            sink.add_colored( { .sprite = s, .corners = c_pane, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                            if( !clear_windshield ) {
+                                sink.add_colored( { .sprite = s, .corners = c_pane, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                            }
                         } else {
                             // Front/rear upper wall
                             const auto f_outer = f_center;
@@ -2121,9 +2135,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                     continue;
                 }
                 const auto light = static_cast<uint32_t>( view.light( p ) );
-                if( light == pack_light( 0, 0, 0 ) ) {
-                    continue; // not visible
-                }
+                const auto visible_light = light == pack_light( 0, 0, 0 ) ? seen_in_dark_light : light;
                 const auto id = std::string( ( *stack.begin() )->typeId().str() );
                 const tile_info &sprite = view.cache.named( { .category = C_ITEM, .id = id, .tiles = view.tiles } );
                 auto profile = item_profile( id );
@@ -2146,6 +2158,24 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                         vox_item = &found->second;
                     }
                 }
+                const auto is_hovered = view.hovered && *view.hovered == p;
+                const auto current_item_size = is_hovered ? ( item_size * 1.28f ) : item_size;
+                const auto z_base = frame_z( p ) + view.surface( p ) + ( is_hovered ? 0.04f : 0.02f );
+                const auto item_color = static_cast<uint32_t>( is_hovered ? pack_light( 255, 245,
+                                        160 ) : visible_light );
+
+                if( is_hovered ) {
+                    emit_flat( {
+                        .sink = sink,
+                        .sprite = view.cache.named( { .category = C_NONE, .id = "cursor", .tiles = view.tiles } ),
+                        .cx = frame_x( p ),
+                        .cy = frame_y( p ),
+                        .z = frame_z( p ) + view.surface( p ) + 0.025f,
+                                                .color = pack_light( 255, 220, 60 ),
+                                                .size = 0.85f
+                    } );
+                }
+
                 if( voxel_items && vox_item ) {
                     const auto &model = vox_item->model;
                     auto size = fit_vox_model_to_unit_cube( model );
@@ -2158,20 +2188,19 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                         anchor = art.support_anchor;
                     }
                     if( size.x > 0.0f && size.y > 0.0f && size.z > 0.0f ) {
-                        const auto z_base = frame_z( p ) + view.surface( p ) + 0.02f;
                         emit_vox_model( { .sink = sink, .asset = *vox_item,
                                           .transform = { .pivot_sx = frame_x( p ), .pivot_sy = frame_y( p ) },
                                           .f_min = -size.x *anchor[0], .f_max = size.x * ( 1.0f - anchor[0] ),
                                           .r_min = -size.y *anchor[1], .r_max = size.y * ( 1.0f - anchor[1] ),
                                           .z_min = z_base - size.z *anchor[2],
                                           .z_max = z_base + size.z * ( 1.0f - anchor[2] ),
-                                          .color = light } );
+                                          .color = item_color } );
                     }
                 } else if( voxel_items && !sprite.backdrop.valid && !sprite.main().placeholder &&
                            sprite.main().alpha_mask ) {
                     emit_sprite_volume( { .sink = sink, .sprite = sprite.main(), .cx = frame_x( p ), .cy = frame_y( p ),
-                                          .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
-                                          .color = light, .depth_fraction = profile.depth_fraction,
+                                          .z_base = z_base,
+                                          .color = item_color, .depth_fraction = profile.depth_fraction,
                                           .width = has_authored_profile ? authored_profile->second.size[0] : 0.0f,
                                           .height = has_authored_profile ? authored_profile->second.size[2] : 0.0f,
                                           .anchor_forward = has_authored_profile ? authored_profile->second.support_anchor[0] : 0.5f,
@@ -2179,14 +2208,14 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
                                           .anchor_up = has_authored_profile ? authored_profile->second.support_anchor[2] : 0.0f } );
                 } else if( upright ) {
                     emit_stand( { .sink = sink, .sprite = sprite, .right_world = right, .z_scale = view.cam.z_scale,
-                                  .cx = frame_x( p ), .cy = frame_y( p ), .z = frame_z( p ) + view.surface( p ) + 0.02f, .color = light } );
+                                  .cx = frame_x( p ), .cy = frame_y( p ), .z = z_base, .color = item_color } );
                 } else {
                     // Items without a usable transparent sprite stay as camera-facing art.
                     emit_billboard( { .sink = sink, .layers = { &sprite }, .right_world = right, .up_world = up,
                                       .toward_world = toward, .z_scale = view.cam.z_scale,
                                       .cx = frame_x( p ), .cy = frame_y( p ),
-                                      .z_base = frame_z( p ) + view.surface( p ) + 0.02f,
-                                      .color = light, .mirrored = false, .scale = item_size } );
+                                      .z_base = z_base,
+                                      .color = item_color, .mirrored = false, .scale = current_item_size } );
                 }
             }
         }
@@ -2204,6 +2233,9 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
 
     // Creatures: the player, NPCs and monsters that the player can see.
     for( Creature &critter : g->all_creatures() ) {
+        if( view.cam.first_person() && critter.is_avatar() ) {
+            continue;
+        }
         const auto p = tripoint_bub_ms( critter.bub_pos() );
         if( !in_range( p, creature_radius ) ) {
             continue;
@@ -2302,6 +2334,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
             }
         }
     }
+
     return sink.finish();
 }
 

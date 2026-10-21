@@ -3276,20 +3276,10 @@ static void CheckMessages()
 
     last_input = input_event();
 
-    if( ::window ) {
-        const auto has_focus = ( SDL_GetWindowFlags( ::window.get() ) & SDL_WINDOW_INPUT_FOCUS ) != 0;
-        const auto *key_state = SDL_GetKeyboardState( nullptr );
-        const auto lalt_down = key_state && key_state[SDL_SCANCODE_LALT];
-        const auto want_capture = has_focus &&
-                                  r3d::active() &&
-                                  input_context::get_active_category() == "DEFAULTMODE" &&
-                                  !lalt_down;
-        const auto current_capture = SDL_GetWindowRelativeMouseMode( ::window.get() );
-        if( current_capture != want_capture ) {
-            SDL_SetWindowRelativeMouseMode( ::window.get(), want_capture );
-            if( !want_capture && !SDL_CursorVisible() ) {
-                SDL_ShowCursor();
-            }
+    if( ::window && SDL_GetWindowRelativeMouseMode( ::window.get() ) ) {
+        SDL_SetWindowRelativeMouseMode( ::window.get(), false );
+        if( !SDL_CursorVisible() ) {
+            SDL_ShowCursor();
         }
     }
 
@@ -3450,10 +3440,6 @@ static void CheckMessages()
                 }
 #endif
                 is_repeat = ev.key.repeat;
-                if( ev.key.key == SDLK_LALT && ::window && r3d::active() &&
-                    input_context::get_active_category() == "DEFAULTMODE" ) {
-                    SDL_SetWindowRelativeMouseMode( ::window.get(), true );
-                }
                 if( ev.key.key == SDLK_LALT || ev.key.key == SDLK_RALT ) {
                     int code = end_alt_code();
                     if( code ) {
@@ -3523,14 +3509,17 @@ static void CheckMessages()
                 }
                 break;
             case SDL_EVENT_MOUSE_MOTION:
-                if( is_mouse_captured() ) {
-                    if( SDL_GetModState() & SDL_KMOD_SHIFT ) {
-                        r3d::drag_pan( ev.motion.xrel, ev.motion.yrel );
-                    } else {
-                        r3d::drag_orbit( ev.motion.xrel, ev.motion.yrel );
+                if( !r3d_dragging && r3d::active() ) {
+                    const auto scale = get_scaling_factor();
+                    const auto picked = r3d::pick( static_cast<float>( ev.motion.x ) / scale,
+                                                   static_cast<float>( ev.motion.y ) / scale );
+                    if( picked != r3d::hovered_tile() ) {
+                        r3d::set_hovered_tile( picked );
+                        if( g ) {
+                            g->invalidate_main_ui_adaptor();
+                        }
+                        needupdate = true;
                     }
-                    camera_changed = true;
-                    break;
                 }
                 if( r3d_dragging ) {
                     if( SDL_GetModState() & SDL_KMOD_SHIFT ) { r3d::drag_pan( ev.motion.xrel, ev.motion.yrel ); }

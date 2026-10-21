@@ -104,6 +104,8 @@ auto contains( float x, float y ) -> bool;
 /// Free camera from a mouse drag of (dx, dy) pixels: orbit and tilt, or slide over the ground.
 auto drag_orbit( float dx, float dy ) -> void;
 auto drag_pan( float dx, float dy ) -> void;
+auto set_hovered_tile( const std::optional<tripoint_bub_ms> &p ) -> void;
+auto hovered_tile() -> std::optional<tripoint_bub_ms>;
 
 #else
 
@@ -126,6 +128,8 @@ inline auto reset() -> void {}
 inline auto contains( float /*x*/, float /*y*/ ) -> bool { return false; }
 inline auto drag_orbit( float /*x*/, float /*y*/ ) -> void {}
 inline auto drag_pan( float /*x*/, float /*y*/ ) -> void {}
+inline auto set_hovered_tile( const std::optional<tripoint_bub_ms> &/*p*/ ) -> void {}
+inline auto hovered_tile() -> std::optional<tripoint_bub_ms> { return std::nullopt; }
 
 #endif
 
