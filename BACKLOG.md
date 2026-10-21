@@ -565,9 +565,7 @@ share one set of constraints.
   SDL spike) decides whether to fall back to Godot; the fallback conditions in 06_frontend_options
   are accepted.
 - Keep Windows, macOS and Android build support (their packaging files stay).
-- Drop deno and the docs site (done on `chore/drop-deno`; the scripts are kept on the
-  `archive/deno-tooling` branch). Release workflows that still call deno are inert on this fork
-  and need replacing before releases are built from it.
+- Keep deno and the docs site: dropping them was tried (PR #7) and reverted as more effort than it is worth.
 - Keep translations, tilesets and sound. Research docs go to an archive branch and player guides
   to the wiki.
 - Upstream merges take game logic only, not renderer work: see
