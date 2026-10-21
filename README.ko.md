@@ -78,6 +78,7 @@
 있습니다. 또는
 
 - [공식 문서 사이트](https://docs.cataclysmbn.org/ko/)를 방문하거나
+- [로컬에서 사이트를 빌드하고 실행](./docs/en/contribute/docs.md)할 수 있습니다.
 
 ## 커뮤니티
 

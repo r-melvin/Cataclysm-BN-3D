@@ -65,8 +65,10 @@ Result before the `vehicle_drag` fixture reuse: all shards passed in `6:52.40` l
 After reusing a single map in `vehicle_drag`, standalone `[#vehicle_drag_test] ~[.]` with CPU
 compute dropped from `121s` to `16.33s` wall time locally.
 
-The Deno shard runner (`build-scripts/run-linux-test-shards.ts`) has been removed; it is kept on the
-`archive/deno-tooling` branch.
+For local runs, `build-scripts/run-linux-test-shards.ts` defaults to the linux-full tiles test
+binary, standard CI-like test options, and detected CPU-count `--jobs`. The Deno runner now skips
+game initialization for `--list-tags`, folds CPU-only filters into weighted shards, and keeps only
+visibility on software GPU compute.
 
 Latest local results on this 12-thread machine:
 

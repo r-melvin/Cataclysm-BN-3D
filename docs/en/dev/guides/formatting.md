@@ -12,6 +12,8 @@ This guide explains how to format and lint code in Cataclysm: Bright Nights.
 | All files       | all formatters      | `just fmt --all` |
 | C++ (`.cpp/.h`) | astyle/clang-format | `just fmt-cpp`   |
 | JSON            | json_formatter      | `just fmt-json`  |
+| Markdown/TS     | deno fmt            | `just fmt-docs`  |
+| Lua             | dprint              | `just fmt-lua`   |
 
 ## Automated Formatting
 
@@ -93,6 +95,27 @@ build-scripts/lint-json.sh
 
 This runs Python's `json.tool` on all JSON files to catch syntax errors.
 
+## Markdown & TypeScript Formatting
+
+Markdown and TypeScript files are formatted with [Deno](https://deno.land/).
+
+```sh
+# Install Deno
+curl -fsSL https://deno.land/install.sh | sh
+
+# Format Markdown and TypeScript
+deno fmt
+```
+
+## Lua Formatting
+
+Lua files are formatted with [dprint](https://dprint.dev/) via Deno.
+
+```sh
+# Format Lua files
+deno task dprint fmt
+```
+
 ## Dialogue Validation
 
 NPC dialogue files have additional validation:
@@ -111,7 +134,8 @@ prek install
 just hooks-setup
 ```
 
-When you commit, the hook runs `just fmt`: the C++ and JSON formatters run only on staged created/updated files. Formatted staged files are re-added so the commit includes
+When you commit, the hook runs `just fmt`: Deno and dprint run normally, while C++ and JSON formatters
+run only on staged created/updated files. Formatted staged files are re-added so the commit includes
 the formatted result.
 
 To run the same formatting manually against staged files:
@@ -145,9 +169,10 @@ pushing.
 
 ### VS Code
 
-Use the repository helper for C++:
+Use the repository helper for C++ and the Deno extension for Markdown/TypeScript:
 
 - **C++**: run `just fmt-cpp`
+- **Deno**: [Deno](https://marketplace.visualstudio.com/items?itemName=denoland.vscode-deno)
 
 ### Visual Studio
 
@@ -182,6 +207,7 @@ Use the helper instead of calling astyle or clang-format directly:
 
 ```vim
 autocmd BufWritePre *.cpp,*.h !just fmt-cpp %
+autocmd BufWritePre *.md,*.ts !deno fmt %
 ```
 
 ## Troubleshooting

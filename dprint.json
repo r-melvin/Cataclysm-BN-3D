@@ -1,0 +1,18 @@
+{
+  "includes": [
+    "data/json/*.lua",
+    "data/lua/**/*.lua",
+    "data/raw/**/*.lua",
+    "data/mods/**/*.lua",
+    "tests/**/*.lua"
+  ],
+  "excludes": [
+
+  ],
+  "stylua": {
+    "collapseSimpleStatement": "Always"
+  },
+  "plugins": [
+    "https://plugins.dprint.dev/RubixDev/stylua-v0.2.1.wasm"
+  ]
+}

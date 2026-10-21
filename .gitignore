@@ -59,7 +59,7 @@ cataclysmdda-*
 debug.log
 logg.txt
 
-# Generated docs (see LUA_DOCS_ON_BUILD)
+# Generated docs (see `deno task docs:gen`)
 /docs/en/dev/reference/cli_options.md
 /docs/en/mod/lua/reference/lua.md
 /lua_annotations.lua

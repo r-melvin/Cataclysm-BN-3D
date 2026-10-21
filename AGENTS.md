@@ -95,6 +95,9 @@ auto print_button( const catacurses::window &w, const button_options &opts ) -> 
 cmake --build build --target format
 # Format JSON files
 cmake --build build --target style-json-parallel
+# Format scripts
+deno fmt
+deno task dprint fmt
 ```
 
 - **astyle version (all agents, including Codex)**: astyle 3.6.x mis-indents trailing-return function bodies. Use `bash build-scripts/format-cpp.sh <files>`: the helper and CMake format targets select native astyle 3.4.7 or the pinned `astyle-py==1.1.0` wrapper; nested C++ and tests retain clang-format. Install uv or the Python package for the fallback. Never run incompatible system astyle directly or commit a diff that moves function bodies to column 0.
@@ -126,7 +129,7 @@ cmake --build --preset linux-full --target cataclysm-bn-tiles cata_test-tiles
 ./out/build/linux-full/cataclysm-bn-tiles --check-mods
 
 # Generate Lua Documentation (if conflicts with lua_annotations.lua or docs/en/mod/lua/reference/lua.md)
-./out/build/linux-full/src/cataclysm-bn-tiles --lua-doc docs/en/mod/lua/reference/lua.md --lua-types lua_annotations.lua
+deno task docs:gen
 ```
 
 - **Commit**: Commit **ATOMICALLY**. **MUST** Follow [Conventional Commits](./docs/en/contribute/changelog_guidelines.md). **MUST NOT** add body/footer unless critical.

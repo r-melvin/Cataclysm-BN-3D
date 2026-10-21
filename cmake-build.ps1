@@ -732,8 +732,9 @@ if ($Action -eq "build" -or $Action -eq "rebuild") {
             Write-Host ""
         }
 
-        # Suppress the post-build Lua docs generation, which rewrites tracked files and creates
-        # unwanted source-control noise for local builds.
+        # Suppress the post-build deno docs:gen step — it rewrites cli_options.md and
+        # other tracked files, creating unwanted source-control noise for local builds.
+        # (cmake cache update; no-op if deno is not installed)
         & $cmakeExe $winBuildDir -DLUA_DOCS_ON_BUILD:BOOL=OFF 2>$null | Out-Null
 
         Write-Host "--- Building $selectedTarget ($selectedBuildType) ..."
