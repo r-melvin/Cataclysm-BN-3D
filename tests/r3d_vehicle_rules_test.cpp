@@ -471,6 +471,7 @@ TEST_CASE("r3d_surface_height_follows_floor_parts_not_frames_or_panels", "[r3d][
 }
 
 #if defined(TILES)
+#    include "avatar.h"
 #    include "cata_tiles.h"
 #    include "cata_utility.h"
 #    include "game.h"
@@ -482,6 +483,7 @@ TEST_CASE("r3d_surface_height_follows_floor_parts_not_frames_or_panels", "[r3d][
 #    include "sdltiles.h"
 #    include "state_helpers.h"
 #    include "tile_helpers.h"
+#    include "vehicle/vpart_range.h"
 
 #    include <cstdint>
 #    include <fstream>
@@ -887,6 +889,51 @@ TEST_CASE("r3d_vehicle_solid_faces_sample_opaque_pixels", "[r3d][vehicle][tiles]
         CHECK(matched);
     }
     CHECK(solid_faces > 0);
+}
+
+TEST_CASE("r3d_first_person_driver_sees_through_own_windshield", "[r3d][vehicle][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto& here = get_map();
+    auto& you = get_avatar();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    you.setpos(origin);
+    auto* const veh =
+        here.add_vehicle(vproto_id("car"), origin + tripoint(4, 0, 0), 0_degrees, 0, 0);
+    REQUIRE(veh != nullptr);
+    auto controls = veh->get_avail_parts("CONTROLS");
+    REQUIRE(controls.part_count() > 0);
+    const auto seat = (*controls.begin()).pos();
+    here.board_vehicle(seat, &you);
+    you.controlling_vehicle = true;
+    REQUIRE(veh->player_in_control(you));
+
+    auto cache = r3d::tile_info_cache{};
+    const auto mesh_size = [&](const r3d::camera& cam) {
+        const auto view = r3d::entity_view{
+            .tiles = *tilecontext,
+            .cache = cache,
+            .cam = cam,
+            .center = origin,
+            .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+            .markers = {},
+            .uprights = {},
+            .surface = {}};
+        return r3d::build_vehicle_mesh(view).indices.size();
+    };
+    auto fp_cam = r3d::camera{};
+    fp_cam.mode = r3d::camera_mode::first_person;
+    const auto orbit = mesh_size(r3d::camera{});
+    const auto driving_fp = mesh_size(fp_cam);
+    // Only the driver's own glass is dropped; the rest of the body stays.
+    CHECK(driving_fp < orbit);
+    CHECK(driving_fp > orbit / 2);
+    you.controlling_vehicle = false;
+    CHECK(mesh_size(fp_cam) == orbit);
 }
 
 #endif
