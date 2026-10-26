@@ -7114,6 +7114,17 @@
   },
   {
     "type": "mutation",
+    "id": "WAYFARER_SELF",
+    "name": { "str": "DIWhy" },
+    "points": -3,
+    "description": "There's nothing better than a vehicle you built with your own hands, sanity and practicality be damned.  You won't even touch the controls of a vehicle you haven't constructed from scratch, even if your life depended on it.",
+    "starting_trait": true,
+    "random_starting_trait": false,
+    "valid": false,
+    "purifiable": false
+  },
+  {
+    "type": "mutation",
     "id": "FAST_REFLEXES",
     "name": { "str": "Fast Reflexes" },
     "points": 2,

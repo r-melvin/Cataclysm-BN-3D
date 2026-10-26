@@ -199,6 +199,8 @@ to find which flags work elsewhere.
   piece.
 - `POWERARMOR_COMPATIBLE` Makes item compatible with power armor despite other parameters causing
   failure.
+- `PLATE_CARRIER` Marks the item as a plate carrier which allows armor plates to be worn.
+- `ARMOR_PLATE` Marks the item as a set of armor plates, which can only be worn when the player is wearing an item with the PLATE_CARRIER flag. One set of armor plates can be worn per plate carrier.
 - `PSYSHIELD_PARTIAL` 25% chance to protect against fear_paralyze monster attack when worn.
 - `RAD_PROOF` This piece of clothing completely protects you from radiation.
 - `RAD_RESIST` This piece of clothing partially protects you from radiation.
@@ -1090,6 +1092,7 @@ Multiple death functions can be used. Not all combinations make sense.
 - `NIGHT_INVISIBILITY` Monster becomes invisible if it's more than one tile away and the lighting on
   its tile is LL_LOW or less. Visibility is not affected by night vision.
 - `CAMOUFLAGE` Monster becomes invisible at a range greater than the player's current perception + half of survival skill rounded down.
+- `UNCANNY_DODGE` Monster is able to uncanny dodge.
 - `NOGIB` Does not leave gibs / meat chunks when killed with huge damage.
 - `NOHEAD` Headshots not allowed!
 - `NO_BREATHE` Creature can't drown and is unharmed by gas, smoke or poison.
