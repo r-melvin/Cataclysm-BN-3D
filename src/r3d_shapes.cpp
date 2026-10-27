@@ -64,6 +64,12 @@ auto classify_furniture( const tile_traits &t ) -> shape
     // Solid furniture is a box: tilesets draw it in 3/4 view, so the top of the sprite becomes
     // the box's top and the rest its sides. Low or flat-topped pieces (benches, counters, tables)
     // are low boxes, other impassable ones (lockers, fridges) tall ones.
+    // Solid manufactured containers (sinks, ovens, dumpsters, dishwashers) are voxel shapes with a locked facing.
+    if( t.container && t.move_cost > 0 && !t.low ) {
+        const auto height = static_cast<float>( ( t.transparent ||
+                                                t.flat_surface ) ? surface_height : tall_furniture_height );
+        return { .kind = shape_kind::prism, .height = height, .slab = 0.0f, .voxel = true };
+    }
     if( t.low || t.flat_surface ) {
         const auto height = static_cast<float>( t.flat_surface ? surface_height : low_height );
         // Benches and tables are a top on legs; cabinets and counters holding items are solid.

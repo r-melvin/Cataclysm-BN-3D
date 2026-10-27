@@ -3,6 +3,7 @@
 #    include "sdltiles.h" // IWYU pragma: associated
 #    include "r3d.h"
 #    include "r3d_asset_loader.h"
+#    include "r3d_targeting_panel.h"
 
 #    include "avatar.h"
 #    include "cata_tiles.h"
@@ -3505,20 +3506,42 @@ static void CheckMessages()
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if( ev.button.button == SDL_BUTTON_MIDDLE ) {
-                    r3d_dragging = r3d::contains( ev.button.x / scaling_factor, ev.button.y / scaling_factor );
+                    const auto mx = static_cast<float>( ev.button.x ) / scaling_factor;
+                    const auto my = static_cast<float>( ev.button.y ) / scaling_factor;
+                    if( r3d::targeting_panel_contains( mx, my ) ) {
+                        r3d_dragging = false;
+                    } else {
+                        r3d_dragging = r3d::contains( mx, my );
+                    }
                 }
                 break;
             case SDL_EVENT_MOUSE_MOTION:
                 if( !r3d_dragging && r3d::active() ) {
                     const auto scale = get_scaling_factor();
-                    const auto picked = r3d::pick( static_cast<float>( ev.motion.x ) / scale,
-                                                   static_cast<float>( ev.motion.y ) / scale );
-                    if( picked != r3d::hovered_tile() ) {
-                        r3d::set_hovered_tile( picked );
-                        if( g ) {
-                            g->invalidate_main_ui_adaptor();
+                    const auto mx = static_cast<float>( ev.motion.x ) / scale;
+                    const auto my = static_cast<float>( ev.motion.y ) / scale;
+                    if( r3d::targeting_panel_contains( mx, my ) ) {
+                        if( r3d::targeting_panel_mouse_move( mx, my ) ) {
+                            if( g ) {
+                                g->invalidate_main_ui_adaptor();
+                            }
+                            needupdate = true;
                         }
-                        needupdate = true;
+                    } else {
+                        if( r3d::targeting_panel_mouse_move( mx, my ) ) {
+                            if( g ) {
+                                g->invalidate_main_ui_adaptor();
+                            }
+                            needupdate = true;
+                        }
+                        const auto picked = r3d::pick( mx, my );
+                        if( picked != r3d::hovered_tile() ) {
+                            r3d::set_hovered_tile( picked );
+                            if( g ) {
+                                g->invalidate_main_ui_adaptor();
+                            }
+                            needupdate = true;
+                        }
                     }
                 }
                 if( r3d_dragging ) {
@@ -3548,9 +3571,14 @@ static void CheckMessages()
                     case SDL_BUTTON_LEFT:
                         last_input = input_event( MOUSE_BUTTON_LEFT, input_event_t::mouse );
                         break;
-                    case SDL_BUTTON_RIGHT:
-                        last_input = input_event( MOUSE_BUTTON_RIGHT, input_event_t::mouse );
+                    case SDL_BUTTON_RIGHT: {
+                        const auto scale = get_scaling_factor();
+                        if( !r3d::targeting_panel_contains( static_cast<float>( ev.button.x ) / scale,
+                                                            static_cast<float>( ev.button.y ) / scale ) ) {
+                            last_input = input_event( MOUSE_BUTTON_RIGHT, input_event_t::mouse );
+                        }
                         break;
+                    }
                 }
                 break;
 

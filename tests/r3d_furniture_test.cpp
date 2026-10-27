@@ -37,6 +37,58 @@ TEST_CASE( "r3d_chair_is_meshed_as_a_solid_prop", "[r3d][tiles]" )
     } ) );
 }
 
+TEST_CASE( "r3d_appliances_and_containers_have_locked_facing", "[r3d][tiles]" )
+{
+    const auto contexts = tile_context_fixture( true );
+    REQUIRE( contexts.valid() );
+    tilecontext->load_tileset( "UltimateCataclysm", {}, false, true, false );
+    const auto pos = tripoint_abs_sm( get_map().get_abs_sub(), 0 );
+    auto sm = submap( pos, {} );
+    sm.set_all_ter( t_floor );
+    const auto lookup = [&sm, &pos]( const tripoint_abs_sm &requested ) -> const submap * {
+        return requested == pos ? &sm : nullptr;
+    };
+    auto cache = r3d::tile_info_cache{};
+
+    // Sink, dumpster, oven, and dishwasher must be solid 3D prisms, not camera-facing billboards.
+    for( const auto &id : { "f_sink", "f_dumpster", "f_oven", "f_dishwasher" } ) {
+        CAPTURE( id );
+        const auto furniture = furn_str_id( id ).id();
+        sm.set_furn( point_sm_ms( 5, 5 ), furniture );
+        const auto &info = cache.furniture( { .id = furniture, .tiles = *tilecontext } );
+        CHECK( info.sh.kind == r3d::shape_kind::prism );
+        CHECK( info.sh.slab == 0.0f );
+        CHECK( info.sh.height > r3d::floor_height );
+
+        const auto mesh = r3d::build_chunk_mesh(
+                              { .pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext } );
+        CHECK( mesh.uprights.empty() );
+        CHECK( std::ranges::any_of( mesh.vertices, []( const auto &vertex ) {
+            return vertex.x >= 5.0f && vertex.x <= 6.0f && vertex.y <= -5.0f && vertex.y >= -6.0f &&
+                   vertex.z > r3d::floor_height;
+        } ) );
+        if( info.sprite.alpha_mask && info.sprite.alpha_width > 0 && info.sprite.alpha_height > 0 ) {
+            CHECK( info.sprite.ortho_voxel_mesh != nullptr );
+            CHECK_FALSE( info.sprite.ortho_voxel_mesh->quads.empty() );
+        }
+    }
+
+    // Placing against a wall or window locks the facing into the room.
+    const auto oven = furn_str_id( "f_oven" ).id();
+    sm.set_furn( point_sm_ms( 5, 5 ), oven );
+    sm.set_ter( point_sm_ms( 6, 5 ), ter_str_id( "t_wall" ).id() );
+    const auto east_wall_mesh = r3d::build_chunk_mesh(
+                                    { .pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext } );
+    CHECK( east_wall_mesh.uprights.empty() );
+
+    const auto sink = furn_str_id( "f_sink" ).id();
+    sm.set_furn( point_sm_ms( 5, 5 ), sink );
+    sm.set_ter( point_sm_ms( 6, 5 ), ter_str_id( "t_window_domestic" ).id() );
+    const auto window_mesh = r3d::build_chunk_mesh(
+                                 { .pos = pos, .lookup = lookup, .cache = cache, .tiles = *tilecontext } );
+    CHECK( window_mesh.uprights.empty() );
+}
+
 TEST_CASE("r3d_damaged_shelter_furniture_has_closed_opaque_geometry", "[r3d][tiles]") {
     const auto contexts = tile_context_fixture(true);
     REQUIRE(contexts.valid());

@@ -1,4 +1,8 @@
 #include "r3d.h"
+#include "r3d_targeting_panel.h"
+#if defined(TILES)
+#include "cursesport.h"
+#endif
 #include "ranged.h"
 
 #include "activity_actor_definitions.h"
@@ -329,10 +333,10 @@ auto add_grouped_shot_hit( std::vector<grouped_shot_hit> &grouped_hits,
         grouped_hits.push_back( grouped_shot_hit {
             .target = shot.hit_critter,
             .target_name = shot.hit_critter->disp_name(),
-            .target_is_player = shot.hit_critter->is_player(),
-            .player_saw_hit = g->u.sees( *shot.hit_critter ),
-            .pellet_hits = 1,
-            .total_damage = shot.dealt_dam.total_damage(),
+                               .target_is_player = shot.hit_critter->is_player(),
+                               .player_saw_hit = g->u.sees( *shot.hit_critter ),
+                               .pellet_hits = 1,
+                               .total_damage = shot.dealt_dam.total_damage(),
         } );
         return;
     }
@@ -639,6 +643,9 @@ class target_ui
         // Draw aiming window
         void draw_ui_window();
 
+        // Update 3D targeting panel state
+        void update_r3d_targeting_panel();
+
         // Generate ui window title
         std::string uitext_title();
 
@@ -929,16 +936,16 @@ bool ranged::handle_gun_damage( Character &shooter, item &it )
         x_in_y( dirt_dbl * dirt_dbl * dirt_dbl,
                 1000000000000.0 ) ) {
         shooter.add_msg_player_or_npc(
-            _( "Your %s misfires with a muffled click!" ),
-            _( "<npcname>'s %s misfires with a muffled click!" ),
-            it.tname() );
+                   _( "Your %s misfires with a muffled click!" ),
+                   _( "<npcname>'s %s misfires with a muffled click!" ),
+                   it.tname() );
         // at high dirt levels the chance to misfire gets to significant levels. 10,000 is max and 7800 is quite high so above that the player gets some relief in the form of exchanging time for some dirt reduction. Basically jiggling the parts loose to remove some dirt and get a few more shots out.
         if( dirt_dbl >
             7800 ) {
             shooter.add_msg_player_or_npc(
-                _( "Perhaps taking the ammo out of your %s and reloading will help." ),
-                _( "Perhaps taking the ammo out of <npcname>'s %s and reloading will help." ),
-                it.tname() );
+                       _( "Perhaps taking the ammo out of your %s and reloading will help." ),
+                       _( "Perhaps taking the ammo out of <npcname>'s %s and reloading will help." ),
+                       it.tname() );
         }
         return false;
     }
@@ -1098,7 +1105,6 @@ void npc::pretend_fire( npc *source, int shots, item &gun )
     }
 }
 
-
 namespace ranged
 {
 
@@ -1239,7 +1245,6 @@ auto apply_gun_recoil_to_vehicle( map &here, const Character &who, const tripoin
 }
 
 } // namespace
-
 
 dispersion_sources calculate_dispersion( const map &m, const Character &who, const item &gun,
         int at_recoil, bool burst )
@@ -1432,17 +1437,17 @@ int ranged::fire_gun( Character &who, const tripoint_bub_ms &target, int max_sho
             auto shell_headshot = false;
             const auto shell_target = shot_count > 1 ? get_shot_target( {
                 .source = who.bub_pos(),
-                .target = aim,
-                .proj = projectile,
-                .dispersion = dispersion,
+                             .target = aim,
+                             .proj = projectile,
+                             .dispersion = dispersion,
             } ) : aim;
             const auto pellet_dispersion = shot_count > 1 ? dispersion_sources {} :
                                            dispersion;
             for( int projectile_index = 0; projectile_index < shot_count; projectile_index++ ) {
                 const auto pellet_target = shot_count > 1 ? get_pellet_target( {
                     .source = who.bub_pos(),
-                    .target = shell_target,
-                    .half_angle = shot_half_angle,
+                                 .target = shell_target,
+                                 .half_angle = shot_half_angle,
                 } ) : shell_target;
                 auto shot = projectile_attack( render_projectile, who.bub_pos(), pellet_target, pellet_dispersion,
                                                &who,
@@ -2903,8 +2908,7 @@ std::vector<Creature *> targetable_creatures( const Character &c, const int rang
     return g->get_creatures_if( [&c, range, veh_from_turret]( const Creature & critter ) -> bool {
         const auto shooter_pos = c.bub_pos();
         const auto critter_pos = critter.bub_pos();
-        if( std::round( rl_dist_exact( shooter_pos, critter_pos ) ) > range )
-        {
+        if( std::round( rl_dist_exact( shooter_pos, critter_pos ) ) > range ) {
             return false;
         }
 
@@ -3025,15 +3029,29 @@ target_handler::trajectory target_ui::run()
     } );
     g->add_draw_callback( target_ui_cb );
 
+    on_out_of_scope cleanup_r3d( []() {
+        r3d::clear_targeting_panel_data();
+    } );
+
+    init_window_and_input();
+
     ui_adaptor ui;
     ui.on_screen_resize( [&]( ui_adaptor & ui ) {
         init_window_and_input();
-        ui.position_from_window( w_target );
+        if( !r3d::active() ) {
+            ui.position_from_window( w_target );
+        } else {
+            ui.position( point_zero, point_zero );
+        }
     } );
     ui.mark_resize();
 
     ui.on_redraw( [&]( const ui_adaptor & ) {
-        draw_ui_window();
+        if( !r3d::active() ) {
+            draw_ui_window();
+        } else {
+            update_r3d_targeting_panel();
+        }
     } );
 
     // Handle multi-turn aiming
@@ -3118,6 +3136,9 @@ target_handler::trajectory target_ui::run()
     bool skip_redraw = false;
     for( ;; action.clear() ) {
         if( !skip_redraw ) {
+            if( r3d::active() ) {
+                update_r3d_targeting_panel();
+            }
             g->invalidate_main_ui_adaptor();
             ui_manager::redraw();
         }
@@ -3127,6 +3148,25 @@ target_handler::trajectory target_ui::run()
         if( action.empty() ) {
             int timeout = get_option<int>( "EDGE_SCROLL" );
             action = ctxt.handle_input( timeout );
+        }
+
+        if( r3d::active() ) {
+#if defined(TILES)
+            float mx = 0.0f;
+            float my = 0.0f;
+            SDL_GetMouseState( &mx, &my );
+            const auto scale = get_scaling_factor();
+            const auto smx = mx / scale;
+            const auto smy = my / scale;
+            if( r3d::targeting_panel_contains( smx, smy ) ) {
+                const auto clicked = r3d::targeting_panel_mouse_click( smx, smy );
+                if( clicked ) {
+                    action = *clicked;
+                } else {
+                    continue;
+                }
+            }
+#endif
         }
 
         // If an aiming mode is selected, use "*_SHOT" instead of "FIRE"
@@ -3273,7 +3313,11 @@ void target_ui::init_window_and_input()
         }
     }
 
-    w_target = catacurses::newwin( height, width, point( TERMX - width, top ) );
+    if( !r3d::active() ) {
+        w_target = catacurses::newwin( height, width, point( TERMX - width, top ) );
+    } else {
+        w_target = catacurses::newwin( 0, 0, point_zero );
+    }
 
     ctxt = input_context( "TARGET" );
     ctxt.set_iso( true );
@@ -4099,8 +4143,289 @@ void target_ui::draw_terrain_overlay()
     }
 }
 
+void target_ui::update_r3d_targeting_panel()
+{
+#if defined(TILES)
+    if( ( mode == TargetMode::Fire || mode == TargetMode::TurretManual || mode == TargetMode::Throw ||
+          mode == TargetMode::ThrowBlind ) && !relevant ) {
+        return;
+    }
+
+    update_status();
+
+    auto data = r3d::targeting_panel_data{};
+    data.title = uitext_title();
+
+    if( mode == TargetMode::Fire || mode == TargetMode::TurretManual || ( mode == TargetMode::Shape &&
+            relevant && relevant->is_gun() ) ) {
+        gun_mode m = relevant->gun_current_mode();
+        std::string mode_name = m.tname();
+        std::string gunmod_name;
+        if( m.target != relevant ) {
+            gunmod_name = m->tname() + " ";
+        }
+        data.mode_text = string_format( "%s%s (%d)", gunmod_name, mode_name, m.qty );
+
+        if( status == Status::OutOfAmmo ) {
+            data.ammo_text = _( "OUT OF AMMO" );
+            data.out_of_ammo = true;
+        } else if( ammo ) {
+            data.ammo_text = string_format( m->ammo_remaining() ? _( "Ammo: %s (%d/%d)" ) : _( "Ammo: %s" ),
+                                            ammo->nname( std::max( m->ammo_remaining(), 1 ) ),
+                                            m->ammo_remaining(), m->ammo_capacity() );
+        }
+
+        const int val = ranged::recoil_total( *you );
+        const int min_recoil = ranged::effective_dispersion( *you, relevant->sight_dispersion() );
+        const int recoil_range = MAX_RECOIL - min_recoil;
+        std::string r_str;
+        if( val >= min_recoil + ( recoil_range * 2 / 3 ) ) {
+            r_str = pgettext( "amount of backward momentum", "High" );
+        } else if( val >= min_recoil + ( recoil_range / 2 ) ) {
+            r_str = pgettext( "amount of backward momentum", "Medium" );
+        } else if( val >= min_recoil + ( recoil_range / 4 ) ) {
+            r_str = pgettext( "amount of backward momentum", "Low" );
+        } else {
+            r_str = pgettext( "amount of backward momentum", "None" );
+        }
+        data.recoil_text = string_format( _( "Recoil: %s" ), r_str );
+
+        data.can_switch_mode = true;
+        data.can_switch_ammo = ( mode == TargetMode::TurretManual ||
+                                 relevant->has_flag( flag_RELOAD_AND_SHOOT ) );
+    } else if( mode == TargetMode::Spell && casting ) {
+        data.mode_text = string_format( _( "%s (Level %u)" ), casting->name(), casting->get_level() );
+        data.ammo_text = string_format( _( "Damage: %s" ), casting->damage_string( *you ) );
+    }
+
+    data.range = dist_fn( dst );
+    data.max_range = range;
+    data.elevation = dst.z() - src.z();
+    data.out_of_range = ( status == Status::OutOfRange );
+
+    if( dst_critter && you->sees( *dst_critter ) ) {
+        data.has_target = true;
+        data.target_name = dst_critter->disp_name();
+        data.target_detail = Creature::get_attitude_ui_data( dst_critter->attitude_to(
+                                 *you ) ).first.translated();
+    }
+
+    const auto get_shortcut = [this]( const std::string & action_id,
+    const std::string & fallback ) -> std::string {
+        const std::vector<char> keys = this->ctxt.keys_bound_to( action_id );
+        return keys.empty() ? fallback : std::string( 1, keys.front() );
+    };
+
+    if( mode == TargetMode::Fire ) {
+        if( aim_types.empty() ) {
+            init_window_and_input();
+        }
+        if( aim_types.empty() ) {
+            return;
+        }
+        bool aim_mode_valid = false;
+        for( auto it = aim_types.begin(); it != aim_types.end(); ++it ) {
+            if( it == aim_mode ) {
+                aim_mode_valid = true;
+                break;
+            }
+        }
+        if( !aim_mode_valid ) {
+            aim_mode = aim_types.begin();
+            for( auto it = aim_types.begin(); it != aim_types.end(); ++it ) {
+                if( you->preferred_aiming_mode == it->action ) {
+                    aim_mode = it;
+                    break;
+                }
+            }
+        }
+
+        double saved_pc_recoil = you->recoil;
+        you->recoil = predicted_recoil;
+        double pred_recoil = you->recoil;
+        if( aim_mode->has_threshold && aim_mode->threshold < you->recoil ) {
+            do {
+                const double aim_amount = ranged::aim_per_move( *you, *relevant, pred_recoil );
+                if( aim_amount > 0 ) {
+                    pred_recoil = std::max( pred_recoil - aim_amount, 0.0 );
+                }
+            } while( pred_recoil > aim_mode->threshold && pred_recoil - sight_dispersion > 0 );
+        } else {
+            pred_recoil = you->recoil;
+        }
+
+        const double target_size = dst_critter ? dst_critter->ranged_target_size() :
+                                   occupied_tile_fraction( creature_size::medium );
+        item *load_loc = activity && activity->reload_loc ? &*activity->reload_loc : nullptr;
+        int shots = std::max( 1, relevant->gun_current_mode().qty );
+        const auto dispersion_fun = [&]( const ranged::aim_type & at ) {
+            int at_recoil = at.has_threshold ? at.threshold : static_cast<int>( pred_recoil );
+            return calculate_dispersion( get_map(), *you, *relevant, at_recoil, shots > 1 );
+        };
+        const auto cost_fun = [&]( const ranged::aim_type & at ) {
+            int at_recoil = at.has_threshold ? at.threshold : static_cast<int>( pred_recoil );
+            return ranged::gun_engagement_moves( *you, *relevant, at_recoil, you->recoil ) +
+                   ranged::time_to_attack( *you, *relevant, load_loc );
+        };
+
+        for( const ranged::aim_type &at : aim_types ) {
+            const auto disp = dispersion_fun( at );
+            const double range_val = rl_dist( you->bub_pos(), dst );
+            const double confidence = confidence_estimate( range_val, target_size, disp );
+            const int great = std::min<int>( 100, 100.0 * accuracy_critical * confidence );
+            const int normal = std::min<int>( 100, 100.0 * accuracy_standard * confidence ) - great;
+            const int graze = std::min<int>( 100, 100.0 * accuracy_grazing * confidence ) - ( great + normal );
+
+            data.presets.push_back( {
+                .action_id = at.has_threshold ? at.action : "FIRE",
+                .label = at.has_threshold ? at.name : uitext_fire(),
+                           .shortcut_text = get_shortcut( at.has_threshold ? at.action : "FIRE", "f" ),
+                           .moves_cost = cost_fun( at ),
+                           .chance_great = great,
+                           .chance_normal = normal,
+                           .chance_graze = graze,
+                           .has_accuracy = true,
+                           .enabled = ( status == Status::Good ),
+                           .is_aim_only = false,
+                           .is_primary = ( at.action == aim_mode->action ) || ( !at.has_threshold && !aim_mode->has_threshold )
+            } );
+        }
+
+        // Aim-only as a clearly separate action
+        data.aim_only = r3d::targeting_action_item{
+            .action_id = "AIM",
+            .label = _( "Aim" ),
+            .shortcut_text = get_shortcut( "AIM", "." ),
+            .moves_cost = 10,
+            .chance_great = 0,
+            .chance_normal = 0,
+            .chance_graze = 0,
+            .has_accuracy = false,
+            .enabled = ( status == Status::Good ),
+            .is_aim_only = true,
+            .is_primary = false
+        };
+
+        you->recoil = saved_pc_recoil;
+    } else if( mode == TargetMode::Throw || mode == TargetMode::ThrowBlind ) {
+        const double target_size = dst_critter ? dst_critter->ranged_target_size() : 1.0f;
+        const auto disp = dispersion_sources( ranged::throwing_dispersion( *you, *relevant, dst_critter,
+                                              mode == TargetMode::ThrowBlind ) );
+        const double range_val = rl_dist( you->bub_pos(), dst );
+        const double confidence = confidence_estimate( range_val, target_size, disp );
+        const int great = std::min<int>( 100, 100.0 * accuracy_critical * confidence );
+        const int normal = std::min<int>( 100, 100.0 * accuracy_standard * confidence ) - great;
+        const int graze = std::min<int>( 100, 100.0 * accuracy_grazing * confidence ) - ( great + normal );
+
+        data.presets.push_back( {
+            .action_id = "FIRE",
+            .label = _( "Throw" ),
+            .shortcut_text = get_shortcut( "FIRE", "f" ),
+            .moves_cost = ranged::throw_cost( *you, *relevant ),
+            .chance_great = great,
+            .chance_normal = normal,
+            .chance_graze = graze,
+            .has_accuracy = true,
+            .enabled = ( status == Status::Good ),
+            .is_aim_only = false,
+            .is_primary = true
+        } );
+    } else {
+        data.presets.push_back( {
+            .action_id = "FIRE",
+            .label = uitext_fire(),
+            .shortcut_text = get_shortcut( "FIRE", "f" ),
+            .moves_cost = -1,
+            .chance_great = 0,
+            .chance_normal = 0,
+            .chance_graze = 0,
+            .has_accuracy = false,
+            .enabled = ( status == Status::Good ),
+            .is_aim_only = false,
+            .is_primary = true
+        } );
+    }
+
+    if( data.can_switch_mode ) {
+        data.controls.push_back( {
+            .action_id = "SWITCH_MODE",
+            .label = _( "Mode" ),
+            .shortcut_text = get_shortcut( "SWITCH_MODE", "s" ),
+            .moves_cost = -1,
+            .chance_great = 0,
+            .chance_normal = 0,
+            .chance_graze = 0,
+            .has_accuracy = false,
+            .enabled = true,
+            .is_aim_only = false,
+            .is_primary = false
+        } );
+    }
+    if( data.can_switch_ammo ) {
+        data.controls.push_back( {
+            .action_id = "SWITCH_AMMO",
+            .label = _( "Ammo" ),
+            .shortcut_text = get_shortcut( "SWITCH_AMMO", "o" ),
+            .moves_cost = -1,
+            .chance_great = 0,
+            .chance_normal = 0,
+            .chance_graze = 0,
+            .has_accuracy = false,
+            .enabled = true,
+            .is_aim_only = false,
+            .is_primary = false
+        } );
+    }
+    data.controls.push_back( {
+        .action_id = "PREV_TARGET",
+        .label = _( "< Prev" ),
+        .shortcut_text = get_shortcut( "PREV_TARGET", "<" ),
+        .moves_cost = -1,
+        .chance_great = 0,
+        .chance_normal = 0,
+        .chance_graze = 0,
+        .has_accuracy = false,
+        .enabled = !targets.empty(),
+                           .is_aim_only = false,
+                           .is_primary = false
+    } );
+    data.controls.push_back( {
+        .action_id = "NEXT_TARGET",
+        .label = _( "Next >" ),
+        .shortcut_text = get_shortcut( "NEXT_TARGET", ">" ),
+        .moves_cost = -1,
+        .chance_great = 0,
+        .chance_normal = 0,
+        .chance_graze = 0,
+        .has_accuracy = false,
+        .enabled = !targets.empty(),
+                           .is_aim_only = false,
+                           .is_primary = false
+    } );
+    data.controls.push_back( {
+        .action_id = "QUIT",
+        .label = _( "Cancel" ),
+        .shortcut_text = get_shortcut( "QUIT", "Esc" ),
+        .moves_cost = -1,
+        .chance_great = 0,
+        .chance_normal = 0,
+        .chance_graze = 0,
+        .has_accuracy = false,
+        .enabled = true,
+        .is_aim_only = false,
+        .is_primary = false
+    } );
+
+    r3d::set_targeting_panel_data( data );
+#endif
+}
+
 void target_ui::draw_ui_window()
 {
+    if( r3d::active() ) {
+        return;
+    }
+
     // Clear target window and make it non-transparent.
     int width = getmaxx( w_target );
     int height = getmaxy( w_target );

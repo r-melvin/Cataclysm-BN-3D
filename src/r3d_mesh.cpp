@@ -73,7 +73,7 @@ auto traits_of( const map_data_common_t &d ) -> tile_traits
     t.tree = d.has_flag( TFLAG_TREE );
     t.shrub = d.has_flag( TFLAG_SHRUB );
     t.flat = d.has_flag( TFLAG_FLAT );
-    t.tiny = d.has_flag( "TINY" );
+    t.tiny = d.has_flag( "TINY" ) || ( d.has_flag( "NOCOLLIDE" ) && d.has_flag( "RUBBLE" ) );
     t.low = d.has_flag( "SHORT" );
     t.flat_surface = d.has_flag( "FLAT_SURF" );
     t.window = d.has_flag( "WINDOW" );
@@ -212,7 +212,7 @@ auto resolve_layers( const resolve_layers_options &options ) -> void
     auto subtile = options.subtile;
     auto rota = options.rota;
     const auto &variant = options.variant;
-    const auto with_alpha = options.voxel_items && category == C_ITEM;
+    const auto with_alpha = ( options.voxel_items && category == C_ITEM ) || category == C_FURNITURE;
 
     const auto origin = tripoint_bub_ms( 0, 0, 0 );
     if( const auto bg = std::optional<texture_draw_data>( tiles.get_sprite_draw_data( { .id = id, .category = category, .pos = origin, .background = true, .subtile = subtile, .rotation = rota, .variant = variant } ) ) ) {
@@ -245,9 +245,19 @@ auto resolve_layers( const resolve_layers_options &options ) -> void
         }
     }
     if( with_alpha && out.sprite.alpha_mask ) {
-        const auto geometry = voxelize_sprite_alpha( out.sprite.alpha_width, out.sprite.alpha_height,
-                              *out.sprite.alpha_mask );
-        out.sprite.voxel_surface = std::make_shared<const sprite_voxel_surface>( geometry );
+        if( category == C_ITEM ) {
+            const auto geometry = voxelize_sprite_alpha( out.sprite.alpha_width, out.sprite.alpha_height,
+                                  *out.sprite.alpha_mask );
+            out.sprite.voxel_surface = std::make_shared<const sprite_voxel_surface>( geometry );
+        } else if( category == C_FURNITURE ) {
+            const auto shape = generate_orthogonal_voxel_shape( {
+                .width = out.sprite.alpha_width,
+                .height = out.sprite.alpha_height,
+                .mask = *out.sprite.alpha_mask
+            } );
+            const auto mesh = extract_orthogonal_voxel_mesh( shape );
+            out.sprite.ortho_voxel_mesh = std::make_shared<const orthogonal_voxel_mesh>( mesh );
+        }
     }
 }
 
@@ -513,6 +523,164 @@ auto back_to_wall( bool row_x, bool row_y, IsWall is_wall ) -> int
     return furniture_wall_facing( row_x, row_y, walls );
 }
 
+struct emit_orthogonal_voxel_box_options {
+    quad_sink &sink;
+    const sprite_ref &s;
+    const orthogonal_voxel_mesh &mesh;
+    int x;
+    int y;
+    float z0;
+    float z1;
+    const box_layout &bounds;
+    const std::array<light_ref, 5> &refs;
+    int facing;
+};
+
+auto emit_orthogonal_voxel_box( const emit_orthogonal_voxel_box_options &options ) -> void
+{
+    auto &sink = options.sink;
+    const auto &s = options.s;
+    const auto &mesh = options.mesh;
+    const auto ox = static_cast<float>( options.x );
+    const auto oy = static_cast<float>( options.y );
+    const auto fx0 = static_cast<float>( options.bounds.x0 );
+    const auto fx1 = static_cast<float>( options.bounds.x1 );
+    const auto fy0 = static_cast<float>( options.bounds.y0 );
+    const auto fy1 = static_cast<float>( options.bounds.y1 );
+    const auto z0 = options.z0;
+    const auto z1 = options.z1;
+    const auto facing = options.facing;
+
+    const auto rotate_point = [facing]( float px, float py ) -> point_f {
+        switch( facing & 3 ) {
+            case 0:
+                return { px, py };
+            case 1:
+                return { 1.0f - py, px };
+            case 2:
+                return { 1.0f - px, 1.0f - py };
+            case 3:
+                return { py, 1.0f - px };
+            default:
+                return { px, py };
+        }
+    };
+
+    const auto to_world_pt = [&]( float px, float py, float pz ) -> std::array<float, 3> {
+        const auto r = rotate_point( px, py );
+        const auto wx = ox + fx0 + ( fx1 - fx0 ) * r.x;
+        const auto wy = oy + fy0 + ( fy1 - fy0 ) * r.y;
+        const auto wz = z0 + ( z1 - z0 ) * pz;
+        return { wx, wy, wz };
+    };
+
+    const auto du = static_cast<float>( s.u1 - s.u0 );
+    const auto dv = static_cast<float>( s.v1 - s.v0 );
+
+    for( const auto &quad : mesh.quads ) {
+        if( quad.face == orthogonal_face_kind::top ) {
+            const auto pt0 = to_world_pt( quad.x0, quad.y0, quad.z1 );
+            const auto pt1 = to_world_pt( quad.x1, quad.y0, quad.z1 );
+            const auto pt2 = to_world_pt( quad.x1, quad.y1, quad.z1 );
+            const auto pt3 = to_world_pt( quad.x0, quad.y1, quad.z1 );
+            const auto c = corners_t{{ pt0, pt1, pt2, pt3 }};
+
+            auto uvs = uvs_t{};
+            if( s.solid_uv ) {
+                const auto su = ( *s.solid_uv )[0];
+                const auto sv = ( *s.solid_uv )[1];
+                uvs = {{ { su, sv }, { su, sv }, { su, sv }, { su, sv } }};
+            } else {
+                const auto tu = static_cast<float>( s.u0 + du * 0.5f );
+                const auto tv = static_cast<float>( s.v0 + dv * ( s.opaque_y0 + 0.02f ) );
+                uvs = {{ { tu, tv }, { tu, tv }, { tu, tv }, { tu, tv } }};
+            }
+
+            auto top_color = pack_light( options.refs[0].shade, options.refs[0].shade, options.refs[0].shade );
+            if( s.top_color != 0 ) {
+                const auto tr = static_cast<uint8_t>( ( s.top_color >> 16 ) & 0xff );
+                const auto tg = static_cast<uint8_t>( ( s.top_color >> 8 ) & 0xff );
+                const auto tb = static_cast<uint8_t>( s.top_color & 0xff );
+                const auto shade = options.refs[0].shade;
+                top_color = pack_light( static_cast<uint8_t>( ( tr * shade ) / 255 ),
+                                        static_cast<uint8_t>( ( tg * shade ) / 255 ),
+                                        static_cast<uint8_t>( ( tb * shade ) / 255 ) );
+            }
+            sink.add_colored( { .sprite = s, .corners = c, .uvs = uvs, .ref = options.refs[0], .color = top_color } );
+            continue;
+        }
+
+        if( quad.face == orthogonal_face_kind::bottom ) {
+            if( quad.z0 > 0.001f ) {
+                const auto pt0 = to_world_pt( quad.x0, quad.y1, quad.z0 );
+                const auto pt1 = to_world_pt( quad.x1, quad.y1, quad.z0 );
+                const auto pt2 = to_world_pt( quad.x1, quad.y0, quad.z0 );
+                const auto pt3 = to_world_pt( quad.x0, quad.y0, quad.z0 );
+                const auto c = corners_t{{ pt0, pt1, pt2, pt3 }};
+                const auto u0 = static_cast<float>( s.u0 + du * quad.u0 );
+                const auto u1 = static_cast<float>( s.u0 + du * quad.u1 );
+                const auto v0 = static_cast<float>( s.v0 + dv * quad.v0 );
+                const auto v1 = static_cast<float>( s.v0 + dv * quad.v1 );
+                const auto uvs = uvs_t{{ { u0, v0 }, { u1, v0 }, { u1, v1 }, { u0, v1 } }};
+                sink.add( { .sprite = s, .corners = c, .uvs = uvs, .ref = options.refs[0] } );
+            }
+            continue;
+        }
+
+        auto orig_dir = 0; // 0=south, 1=west, 2=north, 3=east
+        auto pt0 = std::array<float, 3> {};
+        auto pt1 = std::array<float, 3> {};
+        auto pt2 = std::array<float, 3> {};
+        auto pt3 = std::array<float, 3> {};
+
+        switch( quad.face ) {
+            case orthogonal_face_kind::south:
+                orig_dir = 0;
+                pt0 = to_world_pt( quad.x0, quad.y1, quad.z1 );
+                pt1 = to_world_pt( quad.x1, quad.y1, quad.z1 );
+                pt2 = to_world_pt( quad.x1, quad.y1, quad.z0 );
+                pt3 = to_world_pt( quad.x0, quad.y1, quad.z0 );
+                break;
+            case orthogonal_face_kind::west:
+                orig_dir = 1;
+                pt0 = to_world_pt( quad.x0, quad.y0, quad.z1 );
+                pt1 = to_world_pt( quad.x0, quad.y1, quad.z1 );
+                pt2 = to_world_pt( quad.x0, quad.y1, quad.z0 );
+                pt3 = to_world_pt( quad.x0, quad.y0, quad.z0 );
+                break;
+            case orthogonal_face_kind::north:
+                orig_dir = 2;
+                pt0 = to_world_pt( quad.x1, quad.y0, quad.z1 );
+                pt1 = to_world_pt( quad.x0, quad.y0, quad.z1 );
+                pt2 = to_world_pt( quad.x0, quad.y0, quad.z0 );
+                pt3 = to_world_pt( quad.x1, quad.y0, quad.z0 );
+                break;
+            case orthogonal_face_kind::east:
+                orig_dir = 3;
+                pt0 = to_world_pt( quad.x1, quad.y1, quad.z1 );
+                pt1 = to_world_pt( quad.x1, quad.y0, quad.z1 );
+                pt2 = to_world_pt( quad.x1, quad.y0, quad.z0 );
+                pt3 = to_world_pt( quad.x1, quad.y1, quad.z0 );
+                break;
+            default:
+                continue;
+        }
+
+        const auto rotated_dir = ( orig_dir + ( facing & 3 ) ) % 4;
+        static constexpr auto dir_to_ref = std::array<size_t, 4> { 2, 3, 1, 4 };
+        const auto ref_idx = dir_to_ref[static_cast<size_t>( rotated_dir )];
+
+        const auto u0 = static_cast<float>( s.u0 + du * quad.u0 );
+        const auto u1 = static_cast<float>( s.u0 + du * quad.u1 );
+        const auto v0 = static_cast<float>( s.v0 + dv * quad.v0 );
+        const auto v1 = static_cast<float>( s.v0 + dv * quad.v1 );
+
+        const auto c = corners_t{{ pt0, pt1, pt2, pt3 }};
+        const auto uvs = uvs_t{{ { u0, v0 }, { u1, v0 }, { u1, v1 }, { u0, v1 } }};
+        sink.add( { .sprite = s, .corners = c, .uvs = uvs, .ref = options.refs[ref_idx] } );
+    }
+}
+
 // A furniture box laid out by furniture_box_layout, mirrored like the flat view mirrors the
 // sprite and turned clockwise facing quarter turns (its front from south). refs: top, north,
 // south, west, east. faces says which sides neighbours leave open; a side that stops short of
@@ -561,6 +729,24 @@ auto emit_box( const emit_box_options &options ) -> void
     if( options.materials ) {
         bounds = furniture_profile_bounds( { .fitted = bounds, .profile = options.materials->proportions,
                                              .facing = facing, .flip = s.flip, .wall_contacts = wall_contacts } );
+    }
+
+    if( slab == 0.0f && options.materials && options.materials->sh.voxel ) {
+        auto ortho_mesh = s.ortho_voxel_mesh;
+        if( !ortho_mesh && s.alpha_mask && s.alpha_width > 0 && s.alpha_height > 0 ) {
+            const auto shape = generate_orthogonal_voxel_shape( {
+                .width = s.alpha_width,
+                .height = s.alpha_height,
+                .mask = *s.alpha_mask
+            } );
+            ortho_mesh = std::make_shared<const orthogonal_voxel_mesh>( extract_orthogonal_voxel_mesh(
+                             shape ) );
+        }
+        if( ortho_mesh && !ortho_mesh->quads.empty() ) {
+            emit_orthogonal_voxel_box( { .sink = sink, .s = s, .mesh = *ortho_mesh, .x = x, .y = y,
+                                         .z0 = z0, .z1 = z1, .bounds = bounds, .refs = refs, .facing = facing } );
+            return;
+        }
     }
     const auto fx0 = static_cast<float>( bounds.x0 );
     const auto fx1 = static_cast<float>( bounds.x1 );
@@ -2384,7 +2570,8 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             const auto row_x = static_cast<bool>( ( joined & ( face_west | face_east ) ) != 0 );
             const auto row_y = static_cast<bool>( !row_x && ( joined & ( face_north | face_south ) ) != 0 );
             // A connected sprite's rotation says how it joins its neighbours, not where it faces.
-            auto facing = static_cast<int>( furn_subtile >= 0 ? 0 : spr.facing );
+            auto facing = static_cast<int>( ( furn_subtile >= 0 &&
+                                              furn_subtile != unconnected ) ? 0 : spr.facing );
             if( fs.slab > 0.0f ) {
                 // A bench or table runs along its row (x before the turn): a seat about 0.6 tile
                 // wide across the middle of the tile, the length of the tile when it continues
@@ -2404,7 +2591,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                 // Lockers and cabinets stand with their back to a wall, their row along it.
                 facing = back_to_wall( row_x, row_y, [ &chunk_tiles, lx, ly, &bub ]( const point & d ) -> bool {
                     const tile_info *t = chunk_tiles.terrain_at( lx + d.x, ly + d.y );
-                    return t && t->wall_connection && t->sh.kind == shape_kind::block &&
+                    return t && t->wall_connection &&
                     !chunk_tiles.trim_corner_at( bub + tripoint_rel_ms( d.x, d.y, 0 ) );
                 } );
             }

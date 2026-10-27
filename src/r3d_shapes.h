@@ -22,10 +22,11 @@ struct shape {
     shape_kind kind = shape_kind::empty;
     float height = 0.0f; // top of the solid part within the cell, in tile units
     float slab = 0.0f;   // prism only: > 0 is a top this thick on legs (benches, tables)
+    bool voxel = false;  // 4-way orthogonal voxel extrusion from sprite silhouette
     bool ground_backdrop = false; // upright foliage has a separate flat ground layer
 
     auto operator==( const shape &o ) const -> bool {
-        return kind == o.kind && height == o.height;
+        return kind == o.kind && height == o.height && voxel == o.voxel;
     }
 };
 

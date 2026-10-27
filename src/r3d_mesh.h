@@ -59,6 +59,7 @@ struct sprite_ref {
     int alpha_width = 0;
     int alpha_height = 0;
     std::shared_ptr<const sprite_voxel_surface> voxel_surface{};
+    std::shared_ptr<const orthogonal_voxel_mesh> ortho_voxel_mesh{};
     // opaque part of the sprite as fractions of it (whole sprite when unknown)
     float opaque_x0 = 0.0f;
     float opaque_y0 = 0.0f;

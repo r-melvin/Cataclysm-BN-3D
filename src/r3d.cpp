@@ -59,6 +59,7 @@
 #include "vehicle/vpart_position.h"
 #include "r3d_gpu.h"
 #include "r3d_hud.h"
+#include "r3d_targeting_panel.h"
 #include "r3d_renderer_state.h"
 #include "r3d_hud_math.h"
 #include "r3d_knowledge.h"
@@ -2051,6 +2052,9 @@ auto pick( float x, float y ) -> std::optional<tripoint_bub_ms>
     if( !active() || !v.valid || v.w <= 0.0f || v.h <= 0.0f || !tilecontext ) {
         return std::nullopt;
     }
+    if( targeting_panel_contains( x, y ) ) {
+        return std::nullopt;
+    }
     if( x < v.x || y < v.y || x >= v.x + v.w || y >= v.y + v.h ) {
         return std::nullopt;
     }
@@ -2970,6 +2974,11 @@ auto draw( const draw_options &options ) -> bool
     frame.cell_h = static_cast<float>( s.text_h );
     frame.sky = &s.sky;
     draw_hud( { .renderer = renderer, .frame = frame, .air = air, .texts = s.texts } );
+    if( has_targeting_panel() ) {
+        draw_targeting_panel( { .renderer = renderer, .view_x = x, .view_y = y, .view_w = w, .view_h = h,
+                                .texts = s.texts, .cell_w = static_cast<float>( s.text_w ),
+                                .cell_h = static_cast<float>( s.text_h ) } );
+    }
 
     const auto report_time = debug_chunk_work ? std::chrono::steady_clock::now() :
                              std::chrono::steady_clock::time_point{};
