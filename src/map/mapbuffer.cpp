@@ -50,6 +50,7 @@
 #include "vehicle/vehicle.h"
 #include "vehicle/vehicle_part.h"
 #include "vehicle/vpart_range.h"
+#include "wall_edges.h"
 #include "weather/weather.h"
 #include "world.h"
 
@@ -554,7 +555,8 @@ auto move_cost_from_tile_parts(
     -> int {
     const auto& terrain = terrain_id.obj();
     const auto& furniture = furniture_id.obj();
-    if (terrain.movecost == 0 || (furniture.id && furniture.movecost < 0)) { return 0; }
+    const auto terrain_cost = wall_edges::terrain_move_cost(terrain);
+    if (terrain_cost == 0 || (furniture.id && furniture.movecost < 0)) { return 0; }
 
     if (vp) {
         if (vp.obstacle_at_part()) { return 0; }
@@ -562,9 +564,9 @@ auto move_cost_from_tile_parts(
         return 8;
     }
 
-    if (furniture.id) { return std::max(terrain.movecost + furniture.movecost, 0); }
+    if (furniture.id) { return std::max(terrain_cost + furniture.movecost, 0); }
 
-    return std::max(terrain.movecost, 0);
+    return std::max(terrain_cost, 0);
 }
 
 auto omt_submap_offsets() -> const std::array<point_omt_sm, 4>& {
@@ -637,9 +639,10 @@ auto mapbuffer_abs_tile_view::get_lum() const -> std::uint8_t { return sm_->get_
 auto mapbuffer_abs_tile_view::move_cost_ter_furn() const -> int {
     const auto& terrain = get_ter_t();
     const auto& furniture = get_furn_t();
-    if (terrain.movecost == 0 || (furniture.id && furniture.movecost < 0)) { return 0; }
-    if (furniture.id) { return std::max(terrain.movecost + furniture.movecost, 0); }
-    return std::max(terrain.movecost, 0);
+    const auto terrain_cost = wall_edges::terrain_move_cost(terrain);
+    if (terrain_cost == 0 || (furniture.id && furniture.movecost < 0)) { return 0; }
+    if (furniture.id) { return std::max(terrain_cost + furniture.movecost, 0); }
+    return std::max(terrain_cost, 0);
 }
 
 auto mapbuffer_abs_tile_view::passable_ter_furn() const -> bool {
@@ -1749,6 +1752,11 @@ auto mapbuffer::valid_move(
     const auto tile_reader = make_abs_tile_reader(options.lookup);
 
     if (from.z() == to.z()) {
+        if (!options.bash
+            && wall_edges::trace(
+                {.buffer = *this, .from = from, .to = to, .lookup = options.lookup})) {
+            return false;
+        }
         const auto target_tile = tile_reader.get_tile_with_vehicle(to);
         if (!target_tile) { return false; }
         return target_tile->passable() || options.bash;
@@ -1765,14 +1773,14 @@ auto mapbuffer::valid_move(
     if (up_ter.id.is_null()) { return false; }
     const auto& up_furn = up_tile->get_furn_t();
 
-    if (up_ter.movecost == 0) { return false; }
+    if (wall_edges::terrain_move_cost(up_ter) == 0) { return false; }
 
     const auto down_tile = tile_reader.get_tile(down_p);
     if (!down_tile) { return false; }
     const auto& down_ter = down_tile->get_ter_t();
     if (down_ter.id.is_null()) { return false; }
 
-    if (down_ter.movecost == 0) { return false; }
+    if (wall_edges::terrain_move_cost(down_ter) == 0) { return false; }
 
     if (!up_ter.has_flag(TFLAG_NO_FLOOR) && !up_ter.has_flag(TFLAG_GOES_DOWN)
         && !options.via_ramp) {

@@ -12,6 +12,7 @@
 #include "sounds.h"
 #include "vehicle/veh_type.h"
 #include "vehicle/vpart_position.h"
+#include "wall_edges.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -99,7 +100,8 @@ auto vehicle_enclosure_between(const map& m, const tripoint_bub_ms& from, const 
 
 auto physical_barrier_between(const map& m, const tripoint_bub_ms& from, const tripoint_bub_ms& to)
     -> bool {
-    return map_funcs::physical_floor_between(m, from, to) || vehicle_enclosure_between(m, from, to);
+    return map_funcs::physical_floor_between(m, from, to) || vehicle_enclosure_between(m, from, to)
+        || wall_edges::trace({.here = m, .from = from, .to = to}).has_value();
 }
 
 } // namespace

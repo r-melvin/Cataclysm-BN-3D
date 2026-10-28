@@ -14,6 +14,7 @@
 #include "vehicle/vehicle.h"
 #include "vehicle/vehicle_part.h"
 #include "vehicle/vpart_position.h"
+#include "wall_edges.h"
 
 #include <algorithm>
 #include <memory>
@@ -674,6 +675,27 @@ Pathfinding::ExpansionOutcome Pathfinding::expand_2d_up_to(
                 continue;
             }
 
+            auto edge_cost = 0.0f;
+            if( const auto hit = wall_edges::trace( { .buffer = buffer, .from = cur_point_with_z,
+                                                    .to = next_point_with_z, .lookup = pathfinding_lookup_options() } ) ) {
+                const auto hit_tile = get_pathfinding_tile( tile_reader, hit->tile );
+                const auto can_open = hit_tile && can_open_doors && hit_tile->terrain.obj().open &&
+                                      ( !hit_tile->terrain.obj().has_flag( "OPENCLOSE_INSIDE" ) ||
+                                        !here.is_outside( abs_to_map_local( here, cur_point_with_z ) ) );
+                const auto rating = hit_tile && can_bash ? here.bash_rating_internal(
+                                        this->settings.bash_strength_val * this->settings.bash_strength_quanta,
+                                        hit_tile->furniture.obj(), hit_tile->terrain.obj(), false,
+                                        hit_tile->vehicle_ptr(), hit_tile->part_index() ) : -1;
+                if( can_open ) {
+                    edge_cost = this->settings.door_open_cost;
+                } else if( rating > 0 ) {
+                    edge_cost = ( 10.0f / rating ) * this->settings.bash_cost;
+                } else {
+                    this->forbidden_moves.emplace( cur_point, next_point );
+                    continue;
+                }
+            }
+
             const auto maybe_new_tile = get_pathfinding_tile( tile_reader, cur_point_with_z );
             if( !maybe_new_tile ) {
                 this->tile_state_at( cur_point ) = Pathfinding::State::INACCESSIBLE;
@@ -837,7 +859,7 @@ Pathfinding::ExpansionOutcome Pathfinding::expand_2d_up_to(
                 this->g_at( cur_point ) = cur_g;
             }
 
-            this->p_at( cur_point ) = this->get_f_unbiased( next_point );
+            this->p_at( cur_point ) = this->get_f_unbiased( next_point ) + edge_cost;
 
             // Reintroduce this point_bub_ms into frontier unless the tile is closed
             if( is_inf( cur_g ) ) {

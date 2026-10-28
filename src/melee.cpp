@@ -1,4 +1,5 @@
 #include "melee.h"
+#include "wall_edges.h"
 
 #include "avatar.h"
 #include "avatar_action.h"
@@ -1494,6 +1495,9 @@ int Character::get_melee_stamina_cost( const item &weapon )
 void Character::melee_attack( Creature &t, bool allow_special, const matec_id *force_technique,
                               bool allow_unarmed )
 {
+    if( wall_edges::trace( { .here = get_map(), .from = bub_pos(), .to = t.bub_pos() } ) ) {
+        return;
+    }
     melee::melee_stats.attack_count += 1;
     // Old check for if the target is player retained in case you somehow hit yourself
     if( !t.is_player() && is_player() ) {

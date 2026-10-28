@@ -2672,8 +2672,9 @@ void options_manager::add_options_graphics()
     get_option( "R3D_WASD" ).setPrerequisite( "RENDERER_3D" );
 
     add( "R3D_THIN_WALLS", graphics, translate_marker( "3D thin walls" ),
-         translate_marker( "Draw walls with the same thin profile as doors and windows.  "
-                           "Disable to draw walls as full tile blocks." ),
+         translate_marker( "Draw quarter-tile walls at tile edges with floor beneath them.  "
+                           "In 3D, movement and physical attacks collide with those edges.  "
+                           "Disable to restore full-tile walls and collision." ),
          true, COPT_CURSES_HIDE );
     get_option( "R3D_THIN_WALLS" ).setPrerequisite( "RENDERER_3D" );
 

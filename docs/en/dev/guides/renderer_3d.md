@@ -36,14 +36,25 @@ stone and metal walls use elevation textures tinted from the tileset; top-down
 studs and wall caps are not repeated over their sides. Painted walls retain
 their native elevation unless the plaster texture option is enabled.
 
-**3D thin walls** changes presentation only. BN still blocks movement and resolves
-projectiles by terrain tile, and mouse picking uses the tile's full column.
-The visible space beside a thin wall is therefore not walkable. Disable thin
-walls to draw full-tile blocks that show the blocked footprint more directly.
+**3D thin walls** draws ¼-tile walls at tile edges, with the room floor extending
+beneath the wall tiles, including corners. Exterior faces sit against the far
+edge from the room. Interior partitions and ambiguous walls consistently use
+the north/west edge. Doors, windows, surrounds and fitted cabinetry follow the
+same line. Floor roof metadata identifies building interiors even when the
+terrain lacks an `INDOORS` flag.
+
+With 3D thin walls enabled, characters keep whole-tile positions but can enter
+the free floor in a wall tile. Crossing the wall strip is blocked. Player and AI
+movement, routes, melee/reach and projectiles use that boundary; closed doors
+open when their edge is reached. Vehicle parts sweep their native tile footprint
+against the strips. Terrain IDs, materials and damage states remain native.
+Disabling thin walls or 3D restores whole-cell collision. Mouse picking and the
+lighting grid still use native tile columns.
 
 In Options > Graphics, select the `gpu` renderer, restart if changing renderers,
-and enable **Voxelised 3D renderer (experimental)**. This setting is off by
-default; disable it in the same menu to return to the standard isometric view.
+and enable **Voxelised 3D renderer (experimental)**. Disable it in the same menu
+to return to the standard isometric view. Flat-renderer fallback retains native
+whole-cell collision.
 New configurations prefer `gpu` when SDL provides it. Unsupported graphics
 backends retain BN's ordinary 2D view.
 

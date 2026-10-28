@@ -1,3 +1,4 @@
+#include "wall_edges.h"
 #include "avatar_action.h"
 
 #include "action.h"
@@ -386,12 +387,18 @@ bool avatar_action::move( avatar &you, map &m, const tripoint_rel_ms &d )
         return true;
     }
 
+    // Adjacent creatures may now stand on opposite sides of the same wall edge.
+    if( !character_funcs::can_noclip( you ) && g->critter_at( dest_loc ) &&
+        wall_edges::trace( { .here = m, .from = you.bub_pos(), .to = dest_loc } ) ) {
+        add_msg( m_info, _( "A wall blocks your way." ) );
+        return false;
+    }
+
     const bool auto_features = get_option<bool>( "AUTO_FEATURES" );
     const bool auto_mine = auto_features && get_option<bool>( "AUTO_MINING" );
 
     const auto can_use_ladder = [&]() -> bool {
-        if( is_riding || m.has_floor_or_support( dest_loc ) )
-        {
+        if( is_riding || m.has_floor_or_support( dest_loc ) ) {
             return false;
         }
         return m.has_flag( flag_LADDER, dest_loc + tripoint_below );
@@ -695,10 +702,16 @@ bool avatar_action::move( avatar &you, map &m, const tripoint_rel_ms &d )
         }
     }
 
+    // Entering the free floor of a wall cell does not touch its closed leaf yet.
+    const auto free_edge_floor = wall_edges::enabled() &&
+                                 wall_edges::is_edge_terrain( m.ter( dest_loc ).obj() ) &&
+                                 m.furn( dest_loc ) == f_null &&
+                                 !wall_edges::trace( { .here = m, .from = you.bub_pos(), .to = dest_loc } );
+
     // Wooden Fence Gate (or equivalently walkable doors):
     // open it if we are walking
     // vault over it if we are running
-    if( m.passable_ter_furn( dest_loc )
+    if( !free_edge_floor && m.passable_ter_furn( dest_loc )
         && you.movement_mode_is( CMM_WALK )
         && m.open_door( &you, dest_loc, !m.is_outside( you.bub_pos() ) ) ) {
         you.moves -= 100;
@@ -710,7 +723,7 @@ bool avatar_action::move( avatar &you, map &m, const tripoint_rel_ms &d )
     }
 
     // Openable furniture (wardrobes, etc)
-    if( m.furn( dest_loc ) != f_safe_c
+    if( !free_edge_floor && m.furn( dest_loc ) != f_safe_c
         && m.open_door( &you, dest_loc, !m.is_outside( you.bub_pos() ) ) ) {
         you.moves -= 100;
         // if auto-move is on, continue moving next turn

@@ -83,6 +83,7 @@ class tileray;
 class vpart_reference;
 struct mongroup;
 struct projectile;
+struct map_shoot_options;
 struct veh_collision;
 
 template <typename T> class visitable;
@@ -1477,6 +1478,7 @@ public:
     void crush(const tripoint_bub_ms& p);
     void shoot(
         const tripoint_bub_ms& origin, const tripoint_bub_ms& p, projectile& proj, bool hit_items);
+    auto shoot(const map_shoot_options& options) -> void;
     /** Checks if a square should collapse, returns the X for the one_in(X) collapse chance */
     auto collapse_check(const tripoint_bub_ms& p) -> int;
     /** Causes a collapse at p, such as from destroying a wall */

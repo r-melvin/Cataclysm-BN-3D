@@ -19,6 +19,7 @@
 #include "vehicle/vehicle.h"
 #include "vehicle/vehicle_part.h"
 #include "vehicle/vpart_position.h"
+#include "wall_edges.h"
 
 #include <algorithm>
 #include <array>
@@ -279,7 +280,14 @@ auto map::route(
                })) {
             const std::set<tripoint_abs_ms> sorted_line(line_path.begin(), line_path.end());
 
-            if (is_disjoint(sorted_line, pre_closed)) { return line_path; }
+            auto previous = f;
+            const auto edges_clear = std::ranges::all_of(line_path, [&](const auto& step) {
+                const auto blocked = wall_edges::trace(
+                    {.buffer = buffer, .from = previous, .to = step});
+                previous = step;
+                return !blocked;
+            });
+            if (edges_clear && is_disjoint(sorted_line, pre_closed)) { return line_path; }
         }
     }
 
@@ -371,6 +379,29 @@ auto map::route(
 
             if (layer.state[index] == ASL_CLOSED) { continue; }
 
+            auto edge_cost = 0;
+            if (const auto hit = wall_edges::trace({.buffer = buffer, .from = cur, .to = p})) {
+                const auto hit_tile = get_legacy_pathfinding_tile(*this, hit->tile);
+                if (!hit_tile) { continue; }
+                const auto& terrain = hit_tile->terrain.obj();
+                const auto can_open =
+                    doors && terrain.open
+                    && (!terrain.has_flag("OPENCLOSE_INSIDE")
+                        || !is_outside(abs_to_map_local(*this, cur)));
+                const auto rating =
+                    bash > 0
+                        ? bash_rating_internal(bash, hit_tile->furniture.obj(), terrain, false,
+                                               hit_tile->vehicle_ptr(), hit_tile->part_index())
+                        : -1;
+                if (can_open) {
+                    edge_cost = 4;
+                } else if (rating > 0) {
+                    edge_cost = 20 / rating + 12;
+                } else {
+                    continue;
+                }
+            }
+
             const auto p_tile = get_legacy_pathfinding_tile(*this, p);
             if (!p_tile) {
                 layer.state[index] = ASL_CLOSED;
@@ -393,8 +424,8 @@ auto map::route(
             }
 
             // Penalize for diagonals or the path will look "unnatural"
-            int newg =
-                layer.gscore[parent_index] + ((cur.x() != p.x() && cur.y() != p.y()) ? 1 : 0);
+            int newg = layer.gscore[parent_index] + edge_cost
+                     + ((cur.x() != p.x() && cur.y() != p.y()) ? 1 : 0);
 
             const auto p_special = get_pf_special_from_tile(*p_tile);
             // TODO: De-uglify, de-huge-n

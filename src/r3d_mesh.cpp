@@ -2,6 +2,9 @@
 
 #include "r3d_mesh.h"
 #include "r3d_door_geometry.h"
+#include "r3d_wall_layout.h"
+#include "wall_edges.h"
+#include "r3d_wall_furniture.h"
 #include "r3d_sprite_voxels.h"
 #include "r3d_profile_materials.h"
 
@@ -454,6 +457,8 @@ struct emit_pane_options {
     const light_ref &ref;
     float half_thickness = wall_half_thickness;
     float half_width = 0.5f;
+    float center_x = 0.5f;
+    float center_y = 0.5f;
 };
 
 auto emit_pane( const emit_pane_options &options ) -> void
@@ -469,8 +474,8 @@ auto emit_pane( const emit_pane_options &options ) -> void
     auto half_thickness = options.half_thickness;
     auto half_width = options.half_width;
 
-    const auto cx = static_cast<float>( static_cast<float>( x ) + 0.5f );
-    const auto cy = static_cast<float>( static_cast<float>( y ) + 0.5f );
+    const auto cx = static_cast<float>( x ) + options.center_x;
+    const auto cy = static_cast<float>( y ) + options.center_y;
     const auto z_top = static_cast<float>( z_base + height );
     const auto uv = uvs_t{{ { s.u0, s.v0 }, { s.u1, s.v0 }, { s.u1, s.v1 }, { s.u0, s.v1 } }};
     for( const float side : {
@@ -534,6 +539,7 @@ struct emit_box_options {
     float slab = 0.0f;
     float depth_scale = 1.0f;
     const tile_info *materials = nullptr;
+    std::array<float, 4> wall_gaps{};
 };
 
 auto emit_box( const emit_box_options &options ) -> void
@@ -563,6 +569,10 @@ auto emit_box( const emit_box_options &options ) -> void
                                              .facing = facing, .flip = s.flip, .wall_contacts = wall_contacts } );
     }
 
+    if( wall_contacts != 0 && options.materials ) {
+        bounds = fit_furniture_to_wall_edges( { .bounds = bounds, .profile = options.materials->proportions,
+                                                .facing = facing, .contacts = wall_contacts, .gaps = options.wall_gaps } );
+    }
     const auto fx0 = static_cast<float>( bounds.x0 );
     const auto fx1 = static_cast<float>( bounds.x1 );
     const auto fy0 = static_cast<float>( bounds.y0 );
@@ -1045,6 +1055,7 @@ struct emit_thin_wall_options {
     int y;
     uint8_t connections;
     const std::array<const tile_info *, 4> &side_materials;
+    const wall_layout &layout;
 };
 
 auto emit_thin_wall( const emit_thin_wall_options &options ) -> void
@@ -1057,18 +1068,18 @@ auto emit_thin_wall( const emit_thin_wall_options &options ) -> void
     const auto &side_materials = options.side_materials;
 
     const auto occupied = std::array<bool, 9>( wall_footprint( connections ) );
-    const float edges[] = { 0.0f, 0.5f - wall_half_thickness,
-                            0.5f + wall_half_thickness, 1.0f
-                          };
+    const auto &x_edges = options.layout.x_edges;
+    const auto &y_edges = options.layout.y_edges;
     for( auto row = static_cast<int>( 0 ); row < 3; ++row ) {
         for( auto col = static_cast<int>( 0 ); col < 3; ++col ) {
             if( !occupied[row * 3 + col] ) {
                 continue;
             }
-            const auto x0 = static_cast<float>( edges[col] );
-            const auto y0 = static_cast<float>( edges[row] );
-            const auto x1 = static_cast<float>( edges[col + 1] );
-            const auto y1 = static_cast<float>( edges[row + 1] );
+            const auto x0 = static_cast<float>( x_edges[col] );
+            const auto y0 = static_cast<float>( y_edges[row] );
+            const auto x1 = static_cast<float>( x_edges[col + 1] );
+            const auto y1 = static_cast<float>( y_edges[row + 1] );
+            if( x1 <= x0 || y1 <= y0 ) { continue; }
             emit_wall_cap( { .sink = sink, .t = t, .x = x, .y = y, .z = t.sh.height, .x0 = x0, .y0 = y0, .x1 = x1, .y1 = y1,
                              .ref = wall_ref( { .lx = x, .ly = y, .dx = 0, .dy = 0, .dz = 0, .shade = face_shade[0] } ) } );
             const auto faces = std::array<face_bit, 4> {{ face_north, face_south, face_west, face_east }};
@@ -1380,22 +1391,8 @@ auto tile_info_cache::terrain( const terrain_options &options ) -> const tile_in
     };
     if( !traits.window && !traits.wall && t.movecost > 0 && t.has_flag( "CONNECT_TO_WALL" ) &&
         ( frame_art( t.id.str() ) || frame_art( t.looks_like ) ) ) { traits.window = true; }
-    if( !traits.window ) {
-        const auto id_str = std::string( t.id.str() );
-        const auto looks_like = std::string( t.looks_like );
-        const auto has_name_match = [&id_str, &looks_like]( const std::string & sub ) -> bool {
-            return id_str.find( sub ) != std::string::npos || looks_like.find( sub ) != std::string::npos;
-        };
-        const auto is_excluded = has_name_match( "manhole" ) || has_name_match( "hatch" ) ||
-                                 has_name_match( "grate" ) || has_name_match( "ramp" );
-        if( !is_excluded && ( traits.door || has_name_match( "door" ) || has_name_match( "gate" ) ) ) {
-            traits.door = true;
-            traits.open_door = traits.flat || traits.move_cost > 0;
-        }
-    } else {
-        traits.door = false;
-        traits.open_door = false;
-    }
+    traits.door = !traits.window && wall_edges::is_door_terrain( t );
+    traits.open_door = traits.door && ( traits.flat || traits.move_cost > 0 );
     info.sh = classify_terrain( traits );
     info.tree = traits.tree;
     info.stairs = t.has_flag( TFLAG_GOES_UP ) ||
@@ -1631,7 +1628,7 @@ auto chunk_stamp( const tripoint_abs_sm &pos, const submap_lookup &lookup ) -> u
         return 0;
     }
     auto stamp = static_cast<uint64_t>( self->render_stamp() );
-    const tripoint_rel_sm neighbours[] = { { 0, -1, 0 }, { 0, 1, 0 }, { -1, 0, 0 }, { 1, 0, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+    const tripoint_rel_sm neighbours[] = { { 0, -1, 0 }, { 0, 1, 0 }, { -1, 0, 0 }, { 1, 0, 0 }, { -1, -1, 0 }, { 1, -1, 0 }, { -1, 1, 0 }, { 1, 1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
     for( const tripoint_rel_sm &d : neighbours ) {
         const submap *n = lookup( pos + d );
         stamp = stamp * 1099511628211ull ^ ( n ? n->render_stamp() : 0ull );
@@ -1652,6 +1649,8 @@ struct chunk_tile_lookup {
     tile_info_cache &cache;
     cata_tiles &tiles;
     const map &here;
+    const submap_lookup &lookup;
+    tripoint_abs_sm origin;
 
     static constexpr auto wall_dirs = std::array<point, 4> {
         {
@@ -1660,23 +1659,33 @@ struct chunk_tile_lookup {
     };
     static constexpr auto wall_bits = std::array<uint8_t, 4> {{ face_north, face_south, face_west, face_east }};
 
+    auto terrain_id_at( int lx, int ly ) const -> std::optional<ter_id> {
+        const auto absolute = project_to<coords::ms>( origin ) + tripoint_rel_ms( lx, ly, 0 );
+        const auto split = project_remain<coords::sm>( absolute );
+        const auto sm = lookup( split.quotient_tripoint );
+        return sm ? std::optional<ter_id>( sm->get_ter( split.remainder ) ) : std::nullopt;
+    }
+
     auto terrain_at( int lx, int ly ) const -> const tile_info * {
-        const submap *sm = self;
-        if( lx < 0 ) {
-            sm = west;
-            lx = side - 1;
-        } else if( lx >= side ) {
-            sm = east;
-            lx = 0;
-        } else if( ly < 0 ) {
-            sm = north;
-            ly = side - 1;
-        } else if( ly >= side ) {
-            sm = south;
-            ly = 0;
+        const auto id = terrain_id_at( lx, ly );
+        return id ? &cache.terrain( { .id = *id, .tiles = tiles } ) : nullptr;
+    }
+
+    auto indoor_floor_at( int lx, int ly ) const -> bool {
+        const auto id = terrain_id_at( lx, ly );
+        // Stock wooden/linoleum floors have roof metadata but no INDOORS flag.
+        return id && ( id->obj().has_flag( "INDOORS" ) || !id->obj().roof.is_null() ) &&
+               cache.terrain( { .id = *id, .tiles = tiles } ).sh.kind == shape_kind::floor;
+    }
+
+    auto wall_layout_at( int lx, int ly ) const -> wall_layout {
+        auto indoors = std::array<bool, 9> {};
+        for( auto dy = -1; dy <= 1; ++dy ) {
+            for( auto dx = -1; dx <= 1; ++dx ) {
+                indoors[( dy + 1 ) * 3 + dx + 1] = indoor_floor_at( lx + dx, ly + dy );
+            }
         }
-        return sm ? &cache.terrain( { .id = sm->get_ter( point_sm_ms( lx, ly ) ), .tiles = tiles } ) :
-               nullptr;
+        return exterior_wall_layout( { .indoors = indoors, .half_width = cache.wall_half_width() } );
     }
 
     auto furniture_at( int lx, int ly ) const -> furn_id {
@@ -1724,11 +1733,28 @@ struct chunk_tile_lookup {
         const auto order = std::array<point, 4>( wall_along_y ?
                            std::array<point, 4> { point( -1, 0 ), point( 1, 0 ), point( 0, -1 ), point( 0, 1 ) } :
                            std::array<point, 4> { point( 0, -1 ), point( 0, 1 ), point( -1, 0 ), point( 1, 0 ) } );
-        for( const point &d : order ) {
-            const tile_info *n = terrain_at( lx + d.x, ly + d.y );
-            if( n && n->sh.kind == shape_kind::floor && !is_tall( n->sprite ) ) {
-                under = n;
+        // Prefer the actual room floor, including diagonal corners and chunk seams.
+        for( const auto &d : order ) {
+            if( indoor_floor_at( lx + d.x, ly + d.y ) ) {
+                under = terrain_at( lx + d.x, ly + d.y );
                 break;
+            }
+        }
+        if( !under ) {
+            for( const auto &d : { point( -1, -1 ), point( 1, -1 ), point( -1, 1 ), point( 1, 1 ) } ) {
+                if( indoor_floor_at( lx + d.x, ly + d.y ) ) {
+                    under = terrain_at( lx + d.x, ly + d.y );
+                    break;
+                }
+            }
+        }
+        if( !under ) {
+            for( const auto &d : order ) {
+                const auto *n = terrain_at( lx + d.x, ly + d.y );
+                if( n && n->sh.kind == shape_kind::floor && !is_tall( n->sprite ) ) {
+                    under = n;
+                    break;
+                }
             }
         }
         emit_top_layers( { .sink = sink, .t = under ? *under : cache.ground( tiles ), .x = lx, .y = ly, .z = floor_height,
@@ -1778,9 +1804,8 @@ struct chunk_tile_lookup {
     }
 
     auto indoor_floor( const tripoint_bub_ms &p ) const -> bool {
-        return here.inbounds( p ) &&
-               here.has_flag( "INDOORS", p ) &&
-               cache.terrain( { .id = here.ter( p ), .tiles = tiles } ).sh.kind == shape_kind::floor;
+        const auto offset = bub_to_abs( p ) - project_to<coords::ms>( origin );
+        return indoor_floor_at( offset.x(), offset.y() );
     }
 
     struct face_material_options {
@@ -1836,7 +1861,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
     const submap *east = lookup( pos + tripoint_rel_sm( 1, 0, 0 ) );
     const submap *above = lookup( pos + tripoint_rel_sm( 0, 0, 1 ) );
     const submap *below = lookup( pos + tripoint_rel_sm( 0, 0, -1 ) );
-    const auto chunk_tiles = chunk_tile_lookup{ .self = self, .north = north, .south = south, .west = west, .east = east, .cache = cache, .tiles = tiles, .here = get_map() };
+    const auto chunk_tiles = chunk_tile_lookup{ .self = self, .north = north, .south = south, .west = west, .east = east, .cache = cache, .tiles = tiles, .here = get_map(), .lookup = lookup, .origin = pos };
 
     // Terrain of a tile of this level, which may lie in a horizontal neighbour (one tile out).
 
@@ -2027,7 +2052,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                                 &chunk_tiles.face_material( { .bub = bub, .wall = terrain, .dx = -1, .dy = 0 } ), &chunk_tiles.face_material( { .bub = bub, .wall = terrain, .dx = 1, .dy = 0 } )
                             }
                         };
-                        emit_thin_wall( { .sink = sink, .t = terrain, .x = lx, .y = ly, .connections = connections, .side_materials = materials } );
+                        emit_thin_wall( { .sink = sink, .t = terrain, .x = lx, .y = ly, .connections = connections, .side_materials = materials, .layout = chunk_tiles.wall_layout_at( lx, ly ) } );
                         break;
                     }
                     // Every wall stands on a floor: a see-through block (fence, bars, a sparse
@@ -2128,6 +2153,10 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                             surround = &*authored_surround;
                         }
                     }
+                    auto wall_layout = chunk_tiles.wall_layout_at( lx, ly );
+                    // Only the wall's normal moves; panes keep their native span along it.
+                    if( wall_along_y ) { wall_layout.center_y = 0.5f; }
+                    else { wall_layout.center_x = 0.5f; }
                     if( terrain.window ) {
                         // Carry the neighbouring wall across the sill and lintel. The glass
                         // occupies an opening rather than replacing an entire storey.
@@ -2135,10 +2164,10 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                         constexpr auto sill = static_cast<float>( 0.35f );
                         constexpr auto lintel = static_cast<float>( 0.9f );
                         constexpr auto recess_shade = 178;
-                        const auto x0 = static_cast<float>( wall_along_y ? 0.5f - half_width : 0.0f );
-                        const auto x1 = static_cast<float>( wall_along_y ? 0.5f + half_width : 1.0f );
-                        const auto y0 = static_cast<float>( wall_along_y ? 0.0f : 0.5f - half_width );
-                        const auto y1 = static_cast<float>( wall_along_y ? 1.0f : 0.5f + half_width );
+                        const auto x0 = static_cast<float>( wall_along_y ? wall_layout.center_x - half_width : 0.0f );
+                        const auto x1 = static_cast<float>( wall_along_y ? wall_layout.center_x + half_width : 1.0f );
+                        const auto y0 = static_cast<float>( wall_along_y ? 0.0f : wall_layout.center_y - half_width );
+                        const auto y1 = static_cast<float>( wall_along_y ? 1.0f : wall_layout.center_y + half_width );
                         for( const face_bit face : {
                                  face_north, face_south, face_west, face_east
                              } ) {
@@ -2169,20 +2198,20 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                                          .ref = wall_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ) } );
                         if( terrain.backdrop.valid ) {
                             emit_pane( { .sink = sink, .s = terrain.backdrop, .x = lx, .y = ly, .along_x = !wall_along_y, .z_base = sill,
-                                         .height = lintel - sill, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ), .half_thickness = half_width + 0.001f, .half_width = 0.4f } );
+                                         .height = lintel - sill, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ), .half_thickness = half_width + 0.001f, .half_width = 0.4f, .center_x = wall_layout.center_x, .center_y = wall_layout.center_y } );
                         }
                         emit_pane( { .sink = sink, .s = terrain.sprite, .x = lx, .y = ly, .along_x = !wall_along_y, .z_base = sill,
-                                     .height = lintel - sill, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ), .half_thickness = half_width + 0.002f, .half_width = 0.4f } );
+                                     .height = lintel - sill, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ), .half_thickness = half_width + 0.002f, .half_width = 0.4f, .center_x = wall_layout.center_x, .center_y = wall_layout.center_y } );
                         break;
                     }
                     if( terrain.door ) {
                         constexpr auto lintel = static_cast<float>( 0.86f );
                         constexpr auto jamb = door_jamb_width;
                         const auto half_width = static_cast<float>( cache.wall_half_width() );
-                        const auto x0 = static_cast<float>( wall_along_y ? 0.5f - half_width : 0.0f );
-                        const auto x1 = static_cast<float>( wall_along_y ? 0.5f + half_width : 1.0f );
-                        const auto y0 = static_cast<float>( wall_along_y ? 0.0f : 0.5f - half_width );
-                        const auto y1 = static_cast<float>( wall_along_y ? 1.0f : 0.5f + half_width );
+                        const auto x0 = static_cast<float>( wall_along_y ? wall_layout.center_x - half_width : 0.0f );
+                        const auto x1 = static_cast<float>( wall_along_y ? wall_layout.center_x + half_width : 1.0f );
+                        const auto y0 = static_cast<float>( wall_along_y ? 0.0f : wall_layout.center_y - half_width );
+                        const auto y1 = static_cast<float>( wall_along_y ? 1.0f : wall_layout.center_y + half_width );
 
                         for( const auto face : {
                                  face_north, face_south, face_west, face_east
@@ -2209,11 +2238,11 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                             if( terrain.backdrop.valid ) {
                                 emit_pane( { .sink = sink, .s = terrain.backdrop, .x = lx, .y = ly, .along_x = !wall_along_y, .z_base = floor_height,
                                              .height = lintel - floor_height, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ),
-                                             .half_thickness = half_width + 0.001f, .half_width = 0.5f - jamb } );
+                                             .half_thickness = half_width + 0.001f, .half_width = 0.5f - jamb, .center_x = wall_layout.center_x, .center_y = wall_layout.center_y } );
                             }
                             emit_pane( { .sink = sink, .s = terrain.sprite, .x = lx, .y = ly, .along_x = !wall_along_y, .z_base = floor_height,
                                          .height = lintel - floor_height, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ),
-                                         .half_thickness = half_width + 0.002f, .half_width = 0.5f - jamb } );
+                                         .half_thickness = half_width + 0.002f, .half_width = 0.5f - jamb, .center_x = wall_layout.center_x, .center_y = wall_layout.center_y } );
                             break;
                         }
 
@@ -2240,7 +2269,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                                     const auto south_in = static_cast<bool>( chunk_tiles.indoor_floor( bub + tripoint_rel_ms( 0, 1,
                                                           0 ) ) );
                                     const auto swing_dir = static_cast<int>( ( north_in && !south_in ) ? -1 : 1 );
-                                    const auto cy = static_cast<float>( ly ) + 0.5f;
+                                    const auto cy = static_cast<float>( ly ) + wall_layout.center_y;
                                     const auto y_start = static_cast<float>( swing_dir > 0 ? cy + half_width : cy - half_width );
                                     const auto y_end = open_door_tip( y_start, swing_dir );
                                     const auto y_min = std::min( y_start, y_end );
@@ -2265,7 +2294,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                                     const auto east_in = static_cast<bool>( chunk_tiles.indoor_floor( bub + tripoint_rel_ms( 1, 0,
                                                                             0 ) ) );
                                     const auto swing_dir = static_cast<int>( ( west_in && !east_in ) ? -1 : 1 );
-                                    const auto cx = static_cast<float>( lx ) + 0.5f;
+                                    const auto cx = static_cast<float>( lx ) + wall_layout.center_x;
                                     const auto x_start = static_cast<float>( swing_dir > 0 ? cx + half_width : cx - half_width );
                                     const auto x_end = open_door_tip( x_start, swing_dir );
                                     const auto x_min = std::min( x_start, x_end );
@@ -2291,10 +2320,10 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                     }
                     if( terrain.backdrop.valid ) {
                         emit_pane( { .sink = sink, .s = terrain.backdrop, .x = lx, .y = ly, .along_x = !wall_along_y, .z_base = floor_height,
-                                     .height = ts.height - floor_height, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ) } );
+                                     .height = ts.height - floor_height, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ), .center_x = wall_layout.center_x, .center_y = wall_layout.center_y } );
                     }
                     emit_pane( { .sink = sink, .s = terrain.sprite, .x = lx, .y = ly, .along_x = !wall_along_y, .z_base = floor_height,
-                                 .height = ts.height - floor_height, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ) } );
+                                 .height = ts.height - floor_height, .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ), .center_x = wall_layout.center_x, .center_y = wall_layout.center_y } );
                     break;
                 }
                 case shape_kind::empty:
@@ -2302,9 +2331,11 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                     break;
             }
 
-            // Furniture stands on the floor; it is skipped inside walls and under trees.
+            // Thin wall cells have usable floor beneath their edge strip.
+            const auto edge_floor = cache.wall_half_width() < 0.5f && terrain.wall_connection;
+            const auto furniture_base = edge_floor ? floor_height : ts.height;
             const auto &fs = furn.sh;
-            if( ts.kind != shape_kind::floor || fs.kind == shape_kind::empty ) {
+            if( ( ts.kind != shape_kind::floor && !edge_floor ) || fs.kind == shape_kind::empty ) {
                 continue;
             }
             if( furn.prop != solid_prop::none ) {
@@ -2313,12 +2344,12 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                 const auto along_y = bench( chunk_tiles.furniture_at( lx, ly - 1 ) ) ||
                                      bench( chunk_tiles.furniture_at( lx, ly + 1 ) );
                 emit_prop_cuboids( { .sink = sink, .material = furn.main(), .boxes = boxes,
-                                     .x = lx, .y = ly, .base = ts.height, .facing = along_y ? 1 : 0 } );
+                                     .x = lx, .y = ly, .base = furniture_base, .facing = along_y ? 1 : 0 } );
                 continue;
             }
             if( fs.kind == shape_kind::upright ) {
                 mesh_uprights.push_back( { .lx = static_cast<uint8_t>( lx ), .ly = static_cast<uint8_t>( ly ),
-                                           .z_base = ts.height, .info = &furn } );
+                                           .z_base = furniture_base, .info = &furn } );
                 continue;
             }
             if( fs.kind == shape_kind::pane ) {
@@ -2326,7 +2357,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                                                         chunk_tiles.terrain_at( lx - 1, ly )->sh.kind == shape_kind::block ) ||
                                                         ( chunk_tiles.terrain_at( lx + 1, ly ) &&
                                                                 chunk_tiles.terrain_at( lx + 1, ly )->sh.kind == shape_kind::block ) );
-                emit_pane( { .sink = sink, .s = furn.main(), .x = lx, .y = ly, .along_x = !along_y, .z_base = ts.height, .height = fs.height,
+                emit_pane( { .sink = sink, .s = furn.main(), .x = lx, .y = ly, .along_x = !along_y, .z_base = furniture_base, .height = fs.height,
                              .ref = make_ref( { .lx = lx, .ly = ly, .dx = 0, .dy = 0, .dz = 0, .shade = 230 } ) } );
                 continue;
             }
@@ -2352,7 +2383,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
                     }
                 };
                 for( auto i = size_t( 0 ); i < sides.size(); ++i ) {
-                    emit_side_layers( { .sink = sink, .t = furn, .x = lx, .y = ly, .face = sides[i], .z_base = ts.height, .z_top = fs.height,
+                    emit_side_layers( { .sink = sink, .t = furn, .x = lx, .y = ly, .face = sides[i], .z_base = furniture_base, .z_top = fs.height,
                                         .ref = make_ref( { .lx = lx, .ly = ly, .dx = offsets[i].x, .dy = offsets[i].y, .dz = 0, .shade = face_shade[i + 1] } ),
                                         .band = sprite_band{ .top = 0.0f, .bottom = 1.0f } } );
                 }
@@ -2364,7 +2395,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             const auto &spr = furn.main();
             constexpr auto low_box = static_cast<float>( 0.6f );
             auto layout = box_layout( furniture_box_layout( { .ox0 = spr.opaque_x0, .oy0 = spr.opaque_y0, .ox1 = spr.opaque_x1,
-                                      .oy1 = spr.opaque_y1, .front = front_fraction( fs.height - ts.height ), .low = fs.height < low_box } ) );
+                                      .oy1 = spr.opaque_y1, .front = front_fraction( fs.height - furniture_base ), .low = fs.height < low_box } ) );
             if( furn.depth_scale < 1.0f ) {
                 layout.x0 = 0.0f;
                 layout.x1 = 1.0f;
@@ -2418,18 +2449,24 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             // Thin walls leave space between their face and the old tile boundary. Extend
             // solid cabinetry into that space, keeping its front and row joins in place.
             auto wall_contacts = uint8_t( 0 );
+            auto wall_gaps = std::array<float, 4> {};
             if( fs.slab == 0.0f ) {
                 for( auto i = size_t( 0 ); i < dirs.size(); ++i ) {
                     const tile_info *t = chunk_tiles.terrain_at( lx + dirs[i].x, ly + dirs[i].y );
                     if( t && t->thin_wall && t->sh.kind == shape_kind::block &&
                         !chunk_tiles.trim_corner_at( bub + tripoint_rel_ms( dirs[i].x, dirs[i].y, 0 ) ) ) {
                         wall_contacts |= dir_faces[i];
+                        const auto wall = chunk_tiles.wall_layout_at( lx + dirs[i].x, ly + dirs[i].y );
+                        const auto half = cache.wall_half_width();
+                        wall_gaps[i] = i == 0 ? 1.0f - wall.center_y - half :
+                                       i == 1 ? wall.center_y - half :
+                                       i == 2 ? 1.0f - wall.center_x - half : wall.center_x - half;
                     }
                 }
             }
             const auto box_faces = uint8_t( visible_faces( fs, nb ) | ( fs.slab > 0.0f ? 0 : all_sides ) );
-            emit_box( { .sink = sink, .s = spr, .x = lx, .y = ly, .z0 = ts.height + furn.base_offset, .z1 = fs.height, .b = layout, .faces = box_faces, .refs = refs, .facing = facing, .joined = joined,
-                        .wall_contacts = wall_contacts, .slab = fs.slab, .depth_scale = furn.depth_scale, .materials = &furn } );
+            emit_box( { .sink = sink, .s = spr, .x = lx, .y = ly, .z0 = furniture_base + furn.base_offset, .z1 = fs.height, .b = layout, .faces = box_faces, .refs = refs, .facing = facing, .joined = joined,
+                        .wall_contacts = wall_contacts, .slab = fs.slab, .depth_scale = furn.depth_scale, .materials = &furn, .wall_gaps = wall_gaps } );
 
         }
     }

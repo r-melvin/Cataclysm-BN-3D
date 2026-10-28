@@ -1,3 +1,4 @@
+#include "wall_edges.h"
 #include "onboarding.h"
 #include "game.h"
 #include "r3d.h"
@@ -12764,6 +12765,17 @@ std::vector<std::string> game::get_dangerous_tile( const tripoint_bub_ms &dest_l
 bool game::walk_move( const tripoint_bub_ms &dest_loc, const bool via_ramp )
 {
     ZoneScopedN( "walk_move" );
+    if( !character_funcs::can_noclip( u ) ) {
+        if( const auto wall = wall_edges::trace( { .here = m, .from = u.bub_pos(), .to = dest_loc } ) ) {
+            if( m.open_door( &u, *wall, !m.is_outside( u.bub_pos() ) ) ) {
+                u.mod_moves( -100 );
+                return true;
+            }
+            add_msg( m_info, _( "The %s blocks your way." ), m.tername( *wall ) );
+            return false;
+        }
+    }
+
     if( m.has_flag_ter( TFLAG_SMALL_PASSAGE, dest_loc ) ) {
         if( u.get_size() > creature_size::medium ) {
             add_msg( m_warning, _( "You can't fit there." ) );
@@ -14243,6 +14255,8 @@ void game::update_performance_bubble()
 
 void game::on_options_changed()
 {
+    // Graphics options can switch between whole-cell walls and edge barriers.
+    Pathfinding::clear_d_maps();
 #if defined(TILES)
     tilecontext->on_options_changed();
 #endif

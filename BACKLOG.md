@@ -162,9 +162,26 @@ targets build; all 167 renderer cases pass (55,337 assertions). A reusable
 `fixtures/readability.lua` scene covers brick/timber walls, door/window and sink,
 oven, fridge, dishwasher and washer. Private Xvfb/software-Vulkan comparisons
 cover oblique, reverse and native 2D views; evidence is in
-`out/validation/readability/`. Thin walls retain full-tile native movement,
-projectile and picking rules: the visible gap beside a thin mesh is not walkable.
-The guide documents the full-block option; sub-tile physics is not introduced.
+`out/validation/readability/`. That initial presentation change retained full-tile
+collision; the wall-edge follow-up below supersedes that movement limitation.
+
+Wall-edge follow-up (2026-10-28, complete): all thin walls are
+¼ tile thick and occupy tile edges, including interior partitions (north/west
+for shared/ambiguous room sides). Floors cover the wall tiles, including diagonal
+submap corners. Openings and fitted cabinetry follow the shifted line. Stock
+floors identify interiors through roof metadata, without altering gameplay flags.
+A shared native boundary query now drives whole-tile player/AI movement, routing,
+melee/reach and projectile cover; vehicle parts sweep their tile footprint.
+Native terrain states/materials remain intact. Furniture on the newly usable
+wall-cell floor remains visible. Full-block/2D modes retain whole-cell collision.
+Both binaries build. The combined renderer, explicit edge-collision and native
+2D projectile/pathfinding/vehicle suite passes 196 cases (56,134 assertions),
+including the cost of bashing a crossed wall and flat-backend fallback. The
+17 vehicle/item fingerprints are unchanged. A private Xvfb game confirmed floor
+entry, the solid-wall edge barrier, orbit views, driving and braking. Evidence
+and the exact command are in `out/validation/wall-edges/`; the checked-in
+`fixtures/wall_edges.lua` reproduces the scene. Mouse picking and lighting still
+use native tile columns.
 
 ## R3D-04: Finish vehicle layer, material and state presentation
 

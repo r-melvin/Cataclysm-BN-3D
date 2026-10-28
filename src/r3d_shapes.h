@@ -5,6 +5,8 @@
 #include <array>
 #include <cstdint>
 
+#include "wall_edge_dimensions.h"
+
 namespace r3d
 {
 
@@ -37,7 +39,7 @@ constexpr auto vehicle_clearance_h = static_cast<float>( 0.15f );
 constexpr auto vehicle_wheel_h = static_cast<float>( 0.34f );
 constexpr auto vehicle_bumper_h = static_cast<float>( 0.42f );
 // Shared half-thickness of walls, doors and window surrounds, in tiles.
-constexpr auto wall_half_thickness = static_cast<float>( 0.08f );
+constexpr auto wall_half_thickness = wall_edges::thickness * 0.5f;
 // Height (in levels, from the floor's base) that walls and tall furniture are cut down to
 // around the player in the orbit view; they keep a cap there so they read as low walls.
 constexpr auto cutaway_stub_height = static_cast<float>( 0.4f );

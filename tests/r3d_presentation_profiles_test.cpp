@@ -81,16 +81,16 @@ TEST_CASE("r3d_furniture_authored_bounds_rotate_contacts_without_stretching", "[
     if (contact) {
         switch (facing) {
             case 0:
-                CHECK(bounds.y0 == Approx(-0.42f));
+                CHECK(bounds.y0 == Approx(-0.375f));
                 break;
             case 1:
-                CHECK(bounds.x1 == Approx(1.42f));
+                CHECK(bounds.x1 == Approx(1.375f));
                 break;
             case 2:
-                CHECK(bounds.y1 == Approx(1.42f));
+                CHECK(bounds.y1 == Approx(1.375f));
                 break;
             case 3:
-                CHECK(bounds.x0 == Approx(-0.42f));
+                CHECK(bounds.x0 == Approx(-0.375f));
                 break;
         }
     } else {
@@ -270,7 +270,7 @@ TEST_CASE("r3d_opening_profiles_preserve_native_geometry_and_leaf_art", "[r3d][p
          {art.cap.u1, art.cap.v1},
          {art.cap.u0, art.cap.v1}}};
     const auto expected = r3d::orient_material_uvs(art.cap, raw_uvs)[0];
-    const auto inset = thin ? 0.5f - r3d::wall_half_thickness : 0.0f;
+    const auto inset = 0.0f; // Shared walls use the north/west tile edge.
     const auto cap_x = 5.0f + (along_y ? inset : 0.0f);
     const auto cap_y = -(5.0f + (along_y ? 0.0f : inset));
     auto found_cap = false;

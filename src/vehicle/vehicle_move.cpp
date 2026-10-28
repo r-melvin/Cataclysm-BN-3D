@@ -34,6 +34,7 @@
 #include "vehicle_part.h"
 #include "vpart_position.h"
 #include "vpart_range.h"
+#include "wall_edges.h"
 
 #include <algorithm>
 #include <array>
@@ -495,7 +496,14 @@ static void terrain_collision_data(
 
 auto vehicle::part_collision(const vehicle_part_collision_options& options) -> veh_collision {
     const auto part = options.part;
-    const auto& p = options.pos;
+    auto& here = get_map();
+    // A vehicle part fills its tile; sweep its half-tile footprint against wall strips.
+    const auto edge =
+        !options.vertical && !options.bash_floor
+            ? wall_edges::trace(
+                  {.here = here, .from = bub_part_location(part), .to = options.pos, .padding = 0.5})
+            : std::nullopt;
+    const auto p = edge.value_or(options.pos);
     const auto just_detect = options.just_detect;
     const auto bash_floor = options.bash_floor;
     // Vertical collisions need to be handled differently
@@ -503,7 +511,7 @@ auto vehicle::part_collision(const vehicle_part_collision_options& options) -> v
     const auto vert_coll = options.vertical;
     Character& player_character = get_player_character();
     const bool pl_ctrl = player_in_control(player_character);
-    Creature* critter = g->critter_at(p, true);
+    auto* critter = edge ? nullptr : g->critter_at(p, true);
     if (critter == options.ignored_critter) { critter = nullptr; }
     player* ph = dynamic_cast<player*>(critter);
 
@@ -515,7 +523,6 @@ auto vehicle::part_collision(const vehicle_part_collision_options& options) -> v
         ph = nullptr;
     }
 
-    map& here = get_map();
     const optional_vpart_position ovp = here.veh_at(p);
     // Disable vehicle/critter collisions when bashing floor
     // TODO: More elegant code
@@ -612,7 +619,7 @@ auto vehicle::part_collision(const vehicle_part_collision_options& options) -> v
         ret.target_name = critter->disp_name();
     } else if (
         (bash_floor && here.is_bashable_ter_furn(p, true))
-        || (here.is_bashable_ter_furn(p, false) && here.move_cost_ter_furn(p) != 2 &&
+        || (here.is_bashable_ter_furn(p, false) && (edge || here.move_cost_ter_furn(p) != 2) &&
             // Don't collide with tiny things, like flowers, unless we have a wheel in our space.
             (part_with_feature(ret.part, VPFLAG_WHEEL, true) >= 0
              || !here.has_flag_ter_or_furn("TINY", p))
@@ -630,7 +637,8 @@ auto vehicle::part_collision(const vehicle_part_collision_options& options) -> v
         ret.type = veh_coll_bashable;
         terrain_collision_data(p, bash_floor, mass2, part_dens, e);
         ret.target_name = here.disp_name(p);
-    } else if (here.impassable_ter_furn(p) || (bash_floor && !here.has_flag(TFLAG_NO_FLOOR, p))) {
+    } else if (edge || here.impassable_ter_furn(p)
+               || (bash_floor && !here.has_flag(TFLAG_NO_FLOOR, p))) {
         // not destructible
         ret.type = veh_coll_other;
         mass2 = 1000;

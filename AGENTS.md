@@ -186,3 +186,9 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Vehicle sprite footprint checks must include oversized/tall art (for example the 64-pixel hatch). Convert opacity fractions with the sprite size and anchor offsets before treating them as native tile-space geometry.
 
 - Camera mouse events must not render within `SDL_PollEvent` draining. Apply all deltas, redraw once per batch, and finish through `refresh_display()` before another camera redraw. Validate captured motion and released middle-button/Shift dragging in a private virtual game; geometry fingerprints cannot detect GPU command accumulation.
+
+- Building-floor detection must not rely on `INDOORS` alone: stock `t_floor` and linoleum floors identify building structure through native `roof` metadata without that flag. Verify actual terrain definitions, distinguish pavement, and cover these floors in renderer placement tests.
+
+- Projectile regression fixtures must supply a real loaded gun when calling the native attack pipeline; creature hit handling inspects the gun item.
+
+- Automated replacements of repeated expressions must be bounded to the intended function and assert the expected match count before writing.

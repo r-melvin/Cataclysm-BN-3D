@@ -1897,6 +1897,7 @@ auto toggle() -> void
 {
     get_options().get_option( "RENDERER_3D" ).setNext();
     get_options().save();
+    g->on_options_changed();
 }
 
 auto toggle_first_person() -> void
