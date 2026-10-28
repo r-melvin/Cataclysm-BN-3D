@@ -214,3 +214,7 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Live vehicle exterior lighting must not inherit terrain-memory tint from ground or cargo hidden beneath its roof. Keep perception/activation checks separate from surface illumination, and validate the actual runtime lighting producer.
 
 - A boardable supporting frame must not override an installed panel's authored top material with interior-floor shading. Vehicle surface tests must include full panels without roof parts as well as explicit and inferred roof caps.
+
+- Curved vehicle roofs need closure where a taller roofed cell meets a lower occupied neighbour, as well as an empty exterior. Roof accessories must clear the cap's interior crown maximum, not just its corner heights.
+
+- Chunk meshes group draw batches by source-sheet address. Material-profile geometry tests must compare canonical complete quads rather than vertex-array order, while checking each face's bound sheet separately.

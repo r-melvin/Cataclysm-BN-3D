@@ -298,9 +298,39 @@ assertions; gallery checks pass nine tests. Thirty intended snapshots update
 car, hatchback, sports car, pickup, SUV, cube van, bus, semi-truck, 2seater2 and
 SmallFlier1 at 0/90/225 degrees; both item scenes are unchanged. The snapshot
 fixture now actually installs the runtime presentation profiles into its cache.
-Global body bounds, wheel-side inference and aircraft-tail heuristics remain
-open for subsequent review; preserve stock helicopter recognition while
-conservatively gating custom/VTOL assemblies.
+Connected-section follow-up (2026-10-28): independently apply the reviewed
+semantic-grouping, negative-space and source-face concepts to existing vehicle
+meshes. Native body components and contiguous transverse skin runs exclude
+mirrors and frame-only attachments from body bounds. Glazed cabs and enclosed
+cargo roofs keep separate proportions; wheel placement uses the local axle
+centreline rather than mount-coordinate sign. Native wheel dimensions cut
+faceted openings through the body skin and recessed skirt, with a shallow
+material-lined reveal. Authored side crops retain continuous UVs across cuts;
+unprofiled art keeps its conservative sample fallback. Bonnet crowns and
+subdivided roof caps give the existing shapes more curvature. Roof accessories
+clear the interior crown maximum, and roof shoulders close against lower
+occupied neighbours as well as empty space. Hatch shaping uses its own body
+component. No replacement assets or external implementation code were imported.
+The public [3DNes section builder](https://github.com/play3577/3DNes_Engine/blob/75b75e8934df829d505db036ef14a5181f360b1e/Drawing.cs#L185)
+informs the section concept; it is not the current commercial 3dSen source.
+
+Vehicle-state and visual acceptance remain open: local proportions still have
+bounded heuristics, transverse widths are station-based rather than a complete
+continuous loft, and aircraft-tail inference needs conservative custom/VTOL
+gates. These changes do not implement a universal sprite-to-volume converter,
+full occupancy AO, animation, or the remaining building/prop profile work.
+Both game/test targets build without compiler warnings. The final CPU
+`[r3d],[wall_edges]` run passes 202 cases / 59,053 assertions with seed 424242.
+The appliance geometry test now compares canonical complete faces, avoiding
+native-sheet batch-order dependence while retaining sheet/UV checks; its
+assertion count is therefore not comparable with older per-vertex counts.
+Native section, open-door topology, disconnected/multilevel body, arch/skirt,
+continuous face-UV and lower-neighbour shoulder regressions pass. Thirty vehicle
+snapshots update the ten prototypes above at 0/90/225 degrees; both item scenes
+remain unchanged. Actual private Xvfb/software-Vulkan Ultica and Hoder captures
+are in `out/validation/vehicle-sections/index.html`, with hatchback, cube-van and
+helicopter views. The game and private display exited normally after capture.
+No claim of complete appearance acceptance or a full platform matrix is implied.
 
 Source and acceptance matrix:
 [vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).

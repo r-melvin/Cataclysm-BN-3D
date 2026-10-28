@@ -458,11 +458,22 @@ TEST_CASE("r3d_appliances_keep_native_art_on_the_existing_box", "[r3d][profiles]
     CHECK(art.sh == baseline_info.sh);
     REQUIRE(mesh.vertices.size() == baseline.vertices.size());
     CHECK(mesh.indices == baseline.indices);
-    for (auto i = size_t{0}; i < mesh.vertices.size(); ++i) {
-        CHECK(mesh.vertices[i].x == baseline.vertices[i].x);
-        CHECK(mesh.vertices[i].y == baseline.vertices[i].y);
-        CHECK(mesh.vertices[i].z == baseline.vertices[i].z);
-    }
+    const auto geometry = [](const auto& source) {
+        auto quads = std::vector<std::array<std::array<float, 3>, 4>>{};
+        for (auto i = size_t{0}; i < source.vertices.size(); i += 4) {
+            auto quad = std::array<std::array<float, 3>, 4>{};
+            for (auto corner = size_t{0}; corner < 4; ++corner) {
+                const auto& vertex = source.vertices[i + corner];
+                quad[corner] = {vertex.x, vertex.y, vertex.z};
+            }
+            quads.push_back(quad);
+        }
+        std::ranges::sort(quads);
+        return quads;
+    };
+    // Face-source changes can reorder batches grouped by native sheet address.
+    // Compare complete, ordered quads without depending on atlas allocation order.
+    CHECK(geometry(mesh) == geometry(baseline));
     // Each authored region must come from this appliance's own art, never a palette model.
     for (const auto& source : profiles.at("furniture:" + id).face_sources) {
         if (source.tileset != tileset) { continue; }

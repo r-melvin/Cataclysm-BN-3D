@@ -1,6 +1,7 @@
 #include "catch/catch.hpp"
 #include "r3d_shapes.h"
 #include "r3d_vehicle_rules.h"
+#include "r3d_vehicle_sections.h"
 #include "r3d_vehicle_silhouette.h"
 #include "vehicle/veh_type.h"
 #include "vehicle/vehicle.h"
@@ -10,11 +11,137 @@
 #include <array>
 #include <cmath>
 #include <map>
+#include <optional>
 #include <ranges>
 #include <set>
 #include <span>
 #include <string_view>
 #include <vector>
+
+TEST_CASE(
+    "r3d_vehicle_sections_ignore_accessories_and_unconnected_frames", "[r3d][vehicle][sections]") {
+    auto veh = vehicle(vproto_id("car_hatch"), 0, 0);
+    const auto original = r3d::describe_vehicle_sections(veh);
+    REQUIRE(original.bodies.size() == 1);
+    REQUIRE_FALSE(original.canopies.empty());
+    const auto bounds = original.bodies.front().bounds;
+    const auto anchor = original.canopies.front().mounts.front();
+    const auto height = original.cells.at(anchor).height;
+    const auto extra = tripoint_mnt_veh(bounds.front + 4, bounds.left - 5, 0);
+    REQUIRE(veh.install_part(extra, vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh.install_part(extra, vpart_id("wing_mirror_left"), true) >= 0);
+    const auto changed = r3d::describe_vehicle_sections(veh);
+    REQUIRE(changed.bodies.size() == 1);
+    CHECK(changed.bodies.front().bounds.front == bounds.front);
+    CHECK(changed.bodies.front().bounds.rear == bounds.rear);
+    CHECK(changed.bodies.front().bounds.left == bounds.left);
+    CHECK(changed.bodies.front().bounds.right == bounds.right);
+    CHECK(changed.cells.at(extra).body == -1);
+    CHECK(changed.cells.at(anchor).height == Approx(height));
+    // Opening a leaf changes its presentation state, not the body's cross-section.
+    for (auto i = 0; i < veh.part_count(); ++i) {
+        if (veh.part_info(i).location == "door") { veh.part(i).open = true; }
+    }
+    const auto opened = r3d::describe_vehicle_sections(veh);
+    CHECK(opened.cells.at(anchor).height == Approx(height));
+    CHECK(opened.bodies.front().bounds.left == bounds.left);
+}
+
+TEST_CASE(
+    "r3d_vehicle_sections_separate_glazed_cab_and_enclosed_cargo", "[r3d][vehicle][sections]") {
+    const auto veh = vehicle(vproto_id("cube_van"), 0, 0);
+    const auto sections = r3d::describe_vehicle_sections(veh);
+    const auto cab = sections.cells.at(tripoint_mnt_veh(0, 1, 0)).canopy;
+    const auto cargo = sections.cells.at(tripoint_mnt_veh(-3, 1, 0)).canopy;
+    REQUIRE(cab >= 0);
+    REQUIRE(cargo >= 0);
+    CHECK(cab != cargo);
+    CHECK(sections.canopies[cab].glazed);
+    CHECK_FALSE(sections.canopies[cargo].glazed);
+    CHECK(sections.canopies[cargo].box);
+    CHECK(sections.canopies[cargo].height > sections.canopies[cab].height);
+    // This bulkhead belongs to the taller box, without joining both roof components.
+    CHECK(sections.cells.at(tripoint_mnt_veh(-1, 1, 0)).height
+          == Approx(sections.canopies[cargo].height));
+}
+
+TEST_CASE(
+    "r3d_vehicle_sections_preserve_mount_levels_and_disconnected_bodies",
+    "[r3d][vehicle][sections]") {
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    for (const auto mount :
+         {tripoint_mnt_veh(0, 0, 0), tripoint_mnt_veh(0, 0, 1), tripoint_mnt_veh(4, 0, 0)}) {
+        REQUIRE(veh.install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+        REQUIRE(veh.install_part(mount, vpart_id("halfboard_horizontal"), true) >= 0);
+    }
+    const auto sections = r3d::describe_vehicle_sections(veh);
+    CHECK(sections.bodies.size() == 3);
+    CHECK(sections.cells.at(tripoint_mnt_veh(0, 0, 0)).body
+          != sections.cells.at(tripoint_mnt_veh(0, 0, 1)).body);
+    CHECK(sections.cells.at(tripoint_mnt_veh(0, 0, 0)).body
+          != sections.cells.at(tripoint_mnt_veh(4, 0, 0)).body);
+}
+
+TEST_CASE(
+    "r3d_section_shoulder_fit_has_a_shared_center_and_preserves_partition_edges",
+    "[r3d][vehicle][sections]") {
+    const auto fit = [](const float x) {
+        return r3d::vehicle_section_inset(
+            {.position = x, .left = 4.1f, .right = 6.9f, .amount = 0.24f});
+    };
+    CHECK(fit(5.5f) == Approx(5.5f));
+    CHECK(fit(4.1f) == Approx(4.34f));
+    CHECK(fit(6.9f) == Approx(6.66f));
+    CHECK(fit(5.0f) + fit(6.0f) == Approx(11.0f));
+    CHECK(fit(5.0f) < fit(5.5f));
+}
+
+TEST_CASE(
+    "r3d_wheel_openings_follow_the_native_axle_and_leave_outer_wall_intact",
+    "[r3d][vehicle][sections]") {
+    const auto strips = r3d::vehicle_wheel_opening(
+        {.from = -0.5f,
+         .to = 0.5f,
+         .bottom = 0.1f,
+         .center = 0.0f,
+         .center_z = 0.2f,
+         .radius_forward = 0.3f,
+         .radius_up = 0.18f});
+    REQUIRE(strips.size() > 3);
+    CHECK(strips.front().from == Approx(-0.5f));
+    CHECK(strips.back().to == Approx(0.5f));
+    CHECK(strips.front().bottom_from == Approx(0.1f));
+    CHECK(strips.front().bottom_to == Approx(0.1f));
+    CHECK(strips.back().bottom_from == Approx(0.1f));
+    auto crest = 0.0f;
+    for (auto i = size_t{0}; i < strips.size(); ++i) {
+        const auto& strip = strips[i];
+        CHECK(strip.to > strip.from);
+        if (i > 0) { CHECK(strip.from == Approx(strips[i - 1].to)); }
+        crest = std::max({crest, strip.bottom_from, strip.bottom_to});
+        if ((strip.from + strip.to) * 0.5f > -0.3f && (strip.from + strip.to) * 0.5f < 0.3f) {
+            for (const auto& point :
+                 {std::array{strip.from, strip.bottom_from},
+                  std::array{strip.to, strip.bottom_to}}) {
+                const auto x = point[0] / 0.3f;
+                const auto z = (point[1] - 0.2f) / 0.18f;
+                CHECK(x * x + z * z == Approx(1.0f).margin(1e-4));
+            }
+        }
+    }
+    CHECK(crest == Approx(0.38f));
+    const auto plain = r3d::vehicle_wheel_opening(
+        {.from = -0.5f,
+         .to = 0.5f,
+         .bottom = 0.1f,
+         .center = 0.0f,
+         .center_z = 0.2f,
+         .radius_forward = 0.0f,
+         .radius_up = 0.18f});
+    REQUIRE(plain.size() == 1);
+    CHECK(plain.front().bottom_from == Approx(0.1f));
+    CHECK(plain.front().bottom_to == Approx(0.1f));
+}
 
 TEST_CASE("r3d_cabin_proportions_follow_installed_parts", "[r3d][vehicle][silhouette]") {
     const auto sports = vehicle(vproto_id("car_sports"), 0, 0);
@@ -890,9 +1017,9 @@ TEST_CASE("r3d_car_hatch_blueprint_rules", "[r3d][vehicle][tiles][car_hatch]") {
             }
         }
         const auto expected_deck_z = r3d::floor_height + 0.02f + r3d::vehicle_body_h;
-        // The bonnet joins body height at the windshield and drops 0.10 toward the nose.
-        if (rel_min_x > 1.0f && std::abs(max_z - expected_deck_z) < 0.01f
-            && std::abs(min_z - (expected_deck_z - 0.10f)) < 0.01f) {
+        // The bonnet drops toward the nose and has a shallow transverse crown.
+        if (rel_min_x > 1.0f && max_z > expected_deck_z - 0.02f && max_z <= expected_deck_z + 0.046f
+            && min_z < max_z - 0.04f) {
             has_sloped_hood = true;
         }
         if (rel_max_x < -1.0f && std::abs(max_z - min_z) < 0.01f
@@ -908,8 +1035,9 @@ TEST_CASE("r3d_car_hatch_blueprint_rules", "[r3d][vehicle][tiles][car_hatch]") {
     CHECK(has_sloped_hatch);
     CHECK(has_sloped_hood);
     CHECK(has_rear_deck);
-    CHECK(front_wall_max_z
-          == Approx(r3d::floor_height + 0.02f + r3d::vehicle_body_h - 0.10f).margin(0.01f));
+    CHECK(
+        front_wall_max_z
+        == Approx(r3d::floor_height + 0.02f + r3d::vehicle_body_h - 0.10f + 0.045f).margin(0.01f));
 }
 TEST_CASE("r3d_vehicle_solid_faces_sample_opaque_pixels", "[r3d][vehicle][tiles]") {
     const auto cleanup = on_out_of_scope([] { clear_all_state(); });
@@ -1093,7 +1221,13 @@ TEST_CASE("r3d_vehicle_mounts_keep_their_material_without_double_tint", "[r3d][v
             for (auto c = size_t{0}; c < 4; ++c) {
                 CHECK(quad[c].u == Approx((*material.solid_uv)[0]));
                 CHECK(quad[c].v == Approx((*material.solid_uv)[1]));
-                CHECK((mesh.light[q + c] & 0x00ffffffu) == (light & 0x00ffffffu));
+                const auto actual = mesh.light[q + c];
+                for (const auto shift : {0, 8, 16}) {
+                    const auto channel = (actual >> shift) & 255u;
+                    const auto source = (light >> shift) & 255u;
+                    CHECK(channel <= source);
+                    CHECK(channel >= static_cast<unsigned>(source * (roof ? 0.92f : 1.0f)));
+                }
             }
             auto bound = false;
             for (const auto& batch : mesh.batches) {
@@ -1662,7 +1796,7 @@ TEST_CASE(
             CHECK((color & 255u) == ((color >> 16) & 255u));
         }
     }
-    CHECK(roof_faces == 2);
+    CHECK(roof_faces > 2);
     CHECK(light(adjacent) == dim);
     CHECK(std::ranges::any_of(mesh.light, [dim](const auto color) {
         return (color & 0x00ffffffu) == (dim & 0x00ffffffu);
@@ -1728,11 +1862,29 @@ TEST_CASE(
     const auto mesh = r3d::build_vehicle_mesh(view);
     for (const auto y : {0, 1, 2, 3}) {
         if (y == 1 && !joined) { continue; }
-        const auto center = veh->mount_to_bubble(tripoint_mnt_veh(0, y, 0));
         // The exterior full panel occupies the inner 0.4 tiles of its edge cell.
-        const auto target_y =
-            -static_cast<float>(center.y() - origin.y()) - 0.5f + (y == 3 ? 0.3f : 0.0f);
+        const auto sections = r3d::describe_vehicle_sections(*veh);
+        const auto& section_cell = sections.cells.at(tripoint_mnt_veh(0, y, 0));
+        const auto row = section_cell.row;
+        const auto shoulder =
+            section_cell.canopy >= 0 && sections.canopies[section_cell.canopy].box
+                    && !sections.canopies[section_cell.canopy].glazed
+                ? 0.09f
+                : 0.24f;
+        const auto left = static_cast<float>(row.left) + (row.right - row.left >= 2 ? 0.1f : -0.5f);
+        const auto right =
+            static_cast<float>(row.right) + (row.right - row.left >= 2 ? -0.1f : 0.5f);
+        const auto fit = [&](float p) {
+            return r3d::vehicle_section_inset(
+                {.position = p, .left = left, .right = right, .amount = shoulder});
+        };
+        const auto local_left = y - 0.5f;
+        const auto local_right = y == 3 ? y - 0.1f : y + 0.5f;
+        const auto fitted = y != 3 || section_cell.profile.has_roof || section_cell.profile.is_door;
+        const auto min_y = y == 3 ? -4.0f : -0.5f - (fitted ? fit(local_right) : local_right);
+        const auto max_y = y == 3 ? -3.0f : -0.5f - (fitted ? fit(local_left) : local_left);
         const auto& expected = joined || y >= 2 ? full : half;
+        CAPTURE(tileset, y, joined, door_cap, min_y, max_y, section_cell.height);
         auto roof_faces = 0;
         for (const auto& batch : mesh.batches) {
             for (auto i = batch.first_index; i < batch.first_index + batch.index_count; i += 6) {
@@ -1743,10 +1895,11 @@ TEST_CASE(
                     (quad[1].x - quad[0].x) * (quad[3].y - quad[0].y)
                     - (quad[1].y - quad[0].y) * (quad[3].x - quad[0].x);
                 const auto roof_base =
-                    r3d::floor_height + 0.02f
-                    + ((door_cap && y == 1) || y == 3 ? r3d::vehicle_cabin_h : r3d::vehicle_body_h);
-                if (std::abs(cy - target_y) > 0.1f || std::abs(area) < 0.05f
-                    || !std::ranges::all_of(quad, [roof_base](const auto& v) {
+                    r3d::floor_height + 0.02f + r3d::roof_cap_height(section_cell.height);
+                const auto low = std::ranges::min(quad, {}, &r3d::vertex::z).z;
+                const auto high = std::ranges::max(quad, {}, &r3d::vertex::z).z;
+                if (cy <= min_y + 1e-5f || cy >= max_y - 1e-5f || std::abs(area) < 1e-6f
+                    || high - low > 0.11f || !std::ranges::all_of(quad, [roof_base](const auto& v) {
                            return v.z >= roof_base - 1e-5f;
                        })) {
                     continue;
@@ -1759,7 +1912,7 @@ TEST_CASE(
                 }
             }
         }
-        CHECK(roof_faces == 1);
+        CHECK(roof_faces > 0);
     }
 }
 
@@ -1777,6 +1930,12 @@ TEST_CASE("r3d_solid_vehicle_shoulders_join_the_inset_roof", "[r3d][vehicle][til
     REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
     REQUIRE(veh->install_part(mount, vpart_id("board_vertical"), true) >= 0);
     REQUIRE(veh->install_part(mount, vpart_id("roof"), true) >= 0);
+    SECTION("exposed_wall") {}
+    SECTION("lower_neighbor_still_needs_a_roof_shoulder") {
+        const auto neighbor = tripoint_mnt_veh(-1, 0, 0);
+        REQUIRE(veh->install_part(neighbor, vpart_id("frame_horizontal"), true) >= 0);
+        REQUIRE(veh->install_part(neighbor, vpart_id("halfboard_horizontal"), true) >= 0);
+    }
     auto cache = r3d::tile_info_cache{};
     const auto cam = r3d::camera{};
     const auto view = r3d::entity_view{
@@ -1791,7 +1950,7 @@ TEST_CASE("r3d_solid_vehicle_shoulders_join_the_inset_roof", "[r3d][vehicle][til
     const auto mesh = r3d::build_vehicle_mesh(view);
     const auto height = r3d::floor_height + 0.02f + r3d::vehicle_cabin_h;
     for (const auto x : {0.18f, 0.82f}) {
-        for (const auto y : {-0.18f, -0.82f}) {
+        for (const auto y : {-0.24f, -0.76f}) {
             auto joins = 0;
             for (auto q = size_t{0}; q < mesh.vertices.size(); q += 4) {
                 const auto quad = std::span(mesh.vertices).subspan(q, 4);
@@ -1808,5 +1967,103 @@ TEST_CASE("r3d_solid_vehicle_shoulders_join_the_inset_roof", "[r3d][vehicle][til
         }
     }
 }
+
+TEST_CASE(
+    "r3d_native_wheel_arch_cuts_skin_and_skirt_without_stretching_face_art",
+    "[r3d][vehicle][tiles][sections]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    const auto panel = GENERATE("halfboard_ne", "windshield");
+    CAPTURE(panel);
+    // Deliberately offset the native centreline: mount sign cannot pick wheel sides.
+    for (auto x = -1; x <= 1; ++x) {
+        for (auto y = 2; y <= 4; ++y) {
+            const auto mount = tripoint_mnt_veh(x, y, 0);
+            REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+            REQUIRE(
+                veh->install_part(
+                    mount, vpart_id(x == 0 && y == 4 ? panel : "halfboard_horizontal"), true)
+                >= 0);
+        }
+    }
+    const auto wheel = veh->install_part(tripoint_mnt_veh(0, 4, 0), vpart_id("wheel"), true);
+    REQUIRE(wheel >= 0);
+    auto cache = r3d::tile_info_cache{};
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    cache.set_presentation_profiles(r3d::load_presentation_profiles(input));
+    const auto& art =
+        cache
+            .named({.category = C_VEHICLE_PART,
+                    .id = std::string("vp_") + panel,
+                    .tiles = *tilecontext})
+            .side;
+    REQUIRE(art.valid);
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    auto uv_derivative = std::optional<float>{};
+    const auto check_arch = [&](const bool installed) {
+        const auto mesh = r3d::build_vehicle_mesh(view);
+        auto samples = 0;
+        auto skirt_samples = 0;
+        for (const auto& batch : mesh.batches) {
+            for (auto i = batch.first_index; i < batch.first_index + batch.index_count; i += 6) {
+                const auto quad = std::span(mesh.vertices).subspan(mesh.indices[i], 4);
+                // Painted outer side, directly across the native axle. Wheel faces
+                // and the inward arch reveal have different coordinates/materials.
+                const auto skin = std::ranges::all_of(quad, [](const auto& v) {
+                    return std::abs(v.y + 4.4f) < 1e-4f;
+                });
+                const auto skirt = std::ranges::all_of(quad, [](const auto& v) {
+                    return std::abs(v.y + 4.32f) < 1e-4f;
+                });
+                if (batch.sheet != art.sheet || (!skin && !skirt)) { continue; }
+                const auto low_x = std::ranges::min(quad, {}, &r3d::vertex::x).x;
+                const auto high_x = std::ranges::max(quad, {}, &r3d::vertex::x).x;
+                if (low_x > 0.5001f || high_x < 0.4999f || high_x - low_x < 0.001f) { continue; }
+                const auto bottom = std::ranges::min(quad, {}, &r3d::vertex::z).z;
+                const auto top = std::ranges::max(quad, {}, &r3d::vertex::z).z;
+                if (top - bottom < 0.001f) { continue; }
+                ++samples;
+                skirt_samples += skirt;
+                if (top >= r3d::floor_height + 0.02f + r3d::vehicle_body_h - 0.001f) {
+                    const auto derivative = std::abs(
+                        (quad[1].u - quad[0].u) / (quad[1].x - quad[0].x));
+                    if (!uv_derivative) { uv_derivative = derivative; }
+                    CHECK(derivative == Approx(*uv_derivative).margin(1e-5f));
+                    if (!installed) {
+                        CHECK(std::abs(quad[1].u - quad[0].u) == Approx(std::abs(art.u1 - art.u0)));
+                    }
+                }
+                if (installed) {
+                    const auto dimensions = r3d::native_wheel_dimensions(veh->cpart(wheel));
+                    CHECK(bottom >= r3d::floor_height + 0.02f + dimensions.radius_up * 1.98f);
+                } else {
+                    CHECK(bottom < r3d::floor_height + 0.02f + r3d::vehicle_clearance_h + 0.001f);
+                }
+            }
+        }
+        CHECK(samples > 0);
+        CHECK((skirt_samples == 0) == (installed || std::string_view(panel) == "halfboard_ne"));
+    };
+    check_arch(true);
+    veh->part(wheel).removed = true;
+    check_arch(false);
+}
+
 
 #endif
