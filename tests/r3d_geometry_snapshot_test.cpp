@@ -120,6 +120,7 @@ TEST_CASE("r3d_geometry_matches_snapshot", "[r3d][geometry][tiles]") {
         rng_set_engine_seed(12345);
         setup();
         auto cache = r3d::tile_info_cache{};
+        cache.set_presentation_profiles(profiles);
         cache.set_voxel_items(true);
         const auto cam = r3d::camera{};
         auto view = r3d::entity_view{

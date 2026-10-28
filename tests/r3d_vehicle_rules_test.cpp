@@ -565,6 +565,7 @@ TEST_CASE("r3d_surface_height_follows_floor_parts_not_frames_or_panels", "[r3d][
 #    include "map_helpers.h"
 #    include "path_info.h"
 #    include "r3d_entities.h"
+#    include "r3d_vehicle_lighting.h"
 #    include "sdltiles.h"
 #    include "state_helpers.h"
 #    include "tile_helpers.h"
@@ -1346,6 +1347,466 @@ TEST_CASE("r3d_rooftop_accessories_clear_the_faceted_roof", "[r3d][vehicle][tile
     const auto panel = r3d::build_vehicle_mesh(view);
     CHECK(panel.vertices.size() > roof.vertices.size());
     CHECK(std::ranges::max(panel.vertices, {}, &r3d::vertex::z).z >= roof_top + 0.002f);
+}
+
+TEST_CASE(
+    "r3d_vehicle_native_glass_and_lamps_reach_their_exterior_faces",
+    "[r3d][vehicle][tiles][materials]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    const auto tileset = GENERATE("UltimateCataclysm", "hoder");
+    tilecontext->load_tileset(tileset, {}, false, true, false);
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    auto cache = r3d::tile_info_cache{};
+    cache.set_presentation_profiles(r3d::load_presentation_profiles(input));
+    const auto& glass_art = cache.named(
+        {.category = C_VEHICLE_PART, .id = "vp_windshield_horizontal_front", .tiles = *tilecontext});
+    REQUIRE(glass_art.glass.valid);
+    const auto& lamp_art = cache.named(
+        {.category = C_VEHICLE_PART, .id = "vp_halfboard_sw", .tiles = *tilecontext});
+    REQUIRE(lamp_art.rear.valid);
+    REQUIRE(lamp_art.cap.valid);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("car_hatch"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    for (auto i = 0; i < veh->part_count(); ++i) {
+        veh->set_hp(veh->part(i), veh->part_info(i).durability);
+    }
+    const auto cam = r3d::camera{};
+    const auto light = r3d::pack_light(220, 200, 180);
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [light](const tripoint_bub_ms& /*p*/) { return light; },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    auto glass_faces = 0;
+    auto lamp_faces = 0;
+    for (const auto& batch : mesh.batches) {
+        for (auto i = batch.first_index; i < batch.first_index + batch.index_count; i += 6) {
+            const auto index = mesh.indices[i];
+            const auto quad = std::span(mesh.vertices).subspan(index, 4);
+            const auto uses = [&](const r3d::sprite_ref& source) {
+                return batch.sheet == source.sheet
+                    && std::ranges::all_of(
+                           quad,
+                           [&source](const auto& v) {
+                               return v.u >= source.u0 - 1e-6f && v.u <= source.u1 + 1e-6f
+                                   && v.v >= source.v0 - 1e-6f && v.v <= source.v1 + 1e-6f;
+                           })
+                    && std::ranges::any_of(quad, [&quad](const auto& v) {
+                           return std::abs(v.u - quad[0].u) > 1e-6f;
+                       });
+            };
+            if (uses(glass_art.glass)) {
+                ++glass_faces;
+                CHECK(std::ranges::max(quad, {}, &r3d::vertex::z).z
+                      > std::ranges::min(quad, {}, &r3d::vertex::z).z);
+                for (auto c = 0; c < 4; ++c) {
+                    const auto color = mesh.light[index + c];
+                    const auto red = (color & 255u) / 220.0f;
+                    const auto green = ((color >> 8) & 255u) / 200.0f;
+                    const auto blue = ((color >> 16) & 255u) / 180.0f;
+                    CHECK(red >= 0.64f);
+                    CHECK(red <= 1.0f);
+                    CHECK(red == Approx(green).margin(0.01f));
+                    CHECK(red == Approx(blue).margin(0.01f));
+                }
+            }
+            if (uses(lamp_art.rear)) {
+                ++lamp_faces;
+                CHECK(std::ranges::max(quad, {}, &r3d::vertex::z).z
+                      > std::ranges::min(quad, {}, &r3d::vertex::z).z);
+                CHECK(std::ranges::all_of(quad, [&quad](const auto& v) {
+                    return v.x == Approx(quad[0].x);
+                }));
+            }
+        }
+    }
+    CHECK(glass_faces > 0);
+    CHECK(lamp_faces > 0);
+    for (const auto state : {open_, broken}) {
+        const auto& state_art = cache.named(
+            {.category = C_VEHICLE_PART,
+             .id = "vp_door_front_left",
+             .tiles = *tilecontext,
+             .subtile = state});
+        CHECK_FALSE(state_art.glass.valid);
+        CHECK_FALSE(state_art.cap.valid);
+    }
+    cache.set_presentation_profiles({});
+    CHECK_FALSE(
+        cache
+            .named({.category = C_VEHICLE_PART,
+                    .id = "vp_windshield_horizontal_front",
+                    .tiles = *tilecontext})
+            .glass.valid);
+}
+
+TEST_CASE(
+    "r3d_central_roofs_reach_connected_exterior_materials", "[r3d][vehicle][tiles][materials]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto cache = r3d::tile_info_cache{};
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    cache.set_presentation_profiles(r3d::load_presentation_profiles(input));
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    auto central_roof = -1;
+    for (auto y = 0; y < 4; ++y) {
+        const auto mount = tripoint_mnt_veh(0, y, 0);
+        REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+        const auto part =
+            veh->install_part(mount, vpart_id(y == 3 ? "halfboard_horizontal" : "roof"), true);
+        REQUIRE(part >= 0);
+        if (y == 0) { central_roof = part; }
+    }
+    // An unclassified shutter's dark projected art must not supply the roof above it.
+    REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("door_shutter"), true) >= 0);
+    const auto& material =
+        cache
+            .named(
+                {.category = C_VEHICLE_PART, .id = "vp_halfboard_horizontal", .tiles = *tilecontext})
+            .main();
+    REQUIRE(material.solid_uv);
+    const auto& painted_roof =
+        cache.named({.category = C_VEHICLE_PART, .id = "vp_roof", .tiles = *tilecontext}).cap;
+    REQUIRE(painted_roof.valid);
+    REQUIRE(painted_roof.solid_uv);
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto plain = r3d::build_vehicle_mesh(view);
+    const auto has_roof_sample = [&](const r3d::chunk_mesh& mesh, const bool red) {
+        const auto& source = red ? painted_roof : material;
+        for (const auto& batch : mesh.batches) {
+            if (batch.sheet != source.sheet) { continue; }
+            for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+                const auto index = mesh.indices[i];
+                const auto& v = mesh.vertices[index];
+                if (v.y < -1.0f || v.y > 0.0f || v.z < r3d::floor_height + r3d::vehicle_body_h
+                    || v.u != Approx((*source.solid_uv)[0])
+                    || v.v != Approx((*source.solid_uv)[1])) {
+                    continue;
+                }
+                if (!red
+                    || ((mesh.light[index] & 255u) > 200u
+                        && ((mesh.light[index] >> 8) & 255u) < 40u)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    CHECK(has_roof_sample(plain, false));
+    auto red = RGBColor{};
+    red.r = 240;
+    red.g = 30;
+    red.b = 20;
+    red.a = 255;
+    veh->part(central_roof).set_color(red, red);
+    CHECK(has_roof_sample(r3d::build_vehicle_mesh(view), true));
+}
+
+TEST_CASE(
+    "r3d_rotors_reuse_native_mechanism_art_and_exclude_underbody_thrusters",
+    "[r3d][vehicle][tiles][materials]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UNDEAD_PEOPLE_BASE", {}, false, true, false);
+    auto cache = r3d::tile_info_cache{};
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    cache.set_presentation_profiles(r3d::load_presentation_profiles(input));
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("frame_horizontal"), true) >= 0);
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto thruster =
+        veh->install_part(tripoint_mnt_veh::zero(), vpart_id("vtol_thruster"), true);
+    REQUIRE(thruster >= 0);
+    const auto underbody = r3d::build_vehicle_mesh(view);
+    CHECK(std::ranges::max(underbody.vertices, {}, &r3d::vertex::x).x
+              - std::ranges::min(underbody.vertices, {}, &r3d::vertex::x).x
+          <= 1.01f);
+    const auto rotor =
+        veh->install_part(tripoint_mnt_veh::zero(), vpart_id("small_civilian_rotors"), true);
+    REQUIRE(rotor >= 0);
+    const auto& art = cache.named(
+        {.category = C_VEHICLE_PART, .id = "vp_small_civilian_rotors", .tiles = *tilecontext});
+    REQUIRE(art.main().valid);
+    REQUIRE(art.side.valid);
+    REQUIRE(art.side.solid_uv);
+    CHECK(art.side.sheet == art.main().sheet);
+    CHECK(art.side.u0 == Approx(art.main().u0 + (art.main().u1 - art.main().u0) * 0.125f));
+    CHECK(art.side.v0 == Approx(art.main().v0 + (art.main().v1 - art.main().v0) * 0.125f));
+    CHECK(art.side.u1 == Approx(art.main().u0 + (art.main().u1 - art.main().u0) * 0.3125f));
+    CHECK(art.side.v1 == Approx(art.main().v0 + (art.main().v1 - art.main().v0) * 0.25f));
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    auto blade_samples = 0;
+    auto hub_art = 0;
+    for (const auto& batch : mesh.batches) {
+        if (batch.sheet != art.main().sheet) { continue; }
+        for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+            const auto& v = mesh.vertices[mesh.indices[i]];
+            if (std::abs(v.x - 0.5f) > 2.0f && v.u == Approx((*art.side.solid_uv)[0])
+                && v.v == Approx((*art.side.solid_uv)[1])) {
+                ++blade_samples;
+            }
+            if (v.z == Approx(r3d::floor_height + 0.02f + r3d::vehicle_cabin_h + 0.32f)
+                && v.u == Approx(art.main().u0)) {
+                ++hub_art;
+                CHECK(std::abs(v.x - 0.5f) <= 0.501f);
+            }
+        }
+    }
+    CHECK(blade_samples > 0);
+    CHECK(hub_art > 0);
+}
+
+TEST_CASE(
+    "r3d_live_vehicle_surface_light_ignores_ground_memory_without_changing_visibility",
+    "[r3d][vehicle][tiles][materials]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto& here = get_map();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    g->place_player(origin + point_west);
+    auto* const veh = here.add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    for (auto x = 0; x < 2; ++x) {
+        const auto mount = tripoint_mnt_veh(x, 0, 0);
+        REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+        REQUIRE(veh->install_part(mount, vpart_id("roof"), true) >= 0);
+    }
+    here.build_map_cache(0);
+    here.update_visibility_cache(0);
+    auto& native = here.access_cache(0);
+    const auto adjacent = veh->mount_to_bubble(tripoint_mnt_veh(1, 0, 0));
+    native.lm[native.idx(origin.x(), origin.y())] = LIGHT_AMBIENT_LIT * 2;
+    native.lm[native.idx(adjacent.x(), adjacent.y())] = LIGHT_AMBIENT_LOW;
+    std::ranges::fill(native.visibility_cache, lit_level::MEMORIZED);
+    const auto light = r3d::vehicle_surface_lighting(here);
+    const auto lit = light(origin);
+    const auto dim = light(adjacent);
+    CHECK(lit != dim);
+    CHECK((lit & 255u) == ((lit >> 8) & 255u));
+    CHECK((dim & 255u) == ((dim >> 16) & 255u));
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(205, 188, 160); },
+        .markers = {},
+        .uprights = {},
+        .surface = {},
+        .vehicle_mount_visible = [&here](const tripoint_bub_ms& p) { return here.pl_sees(p, -1); },
+        .vehicle_surface_light = r3d::vehicle_surface_lighting(here)};
+    CHECK(r3d::build_vehicle_mesh(view).empty());
+    native.visibility_cache[native.idx(origin.x(), origin.y())] = lit_level::LOW;
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    REQUIRE_FALSE(mesh.empty());
+    auto roof_faces = 0;
+    for (auto q = size_t{0}; q < mesh.vertices.size(); q += 4) {
+        const auto quad = std::span(mesh.vertices).subspan(q, 4);
+        const auto area =
+            (quad[1].x - quad[0].x) * (quad[3].y - quad[0].y)
+            - (quad[1].y - quad[0].y) * (quad[3].x - quad[0].x);
+        if (std::abs(area) < 1e-6f || !std::ranges::all_of(quad, [](const auto& vertex) {
+                return vertex.z >= r3d::floor_height + r3d::vehicle_body_h;
+            })) {
+            continue;
+        }
+        ++roof_faces;
+        for (auto c = 0; c < 4; ++c) {
+            const auto color = mesh.light[q + c];
+            CHECK((color & 255u) == ((color >> 8) & 255u));
+            CHECK((color & 255u) == ((color >> 16) & 255u));
+        }
+    }
+    CHECK(roof_faces == 2);
+    CHECK(light(adjacent) == dim);
+    CHECK(std::ranges::any_of(mesh.light, [dim](const auto color) {
+        return (color & 0x00ffffffu) == (dim & 0x00ffffffu);
+    }));
+}
+
+TEST_CASE(
+    "r3d_connected_roof_finish_does_not_follow_nearest_projected_panel",
+    "[r3d][vehicle][tiles][materials]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    const auto tileset = GENERATE("UltimateCataclysm", "hoder");
+    tilecontext->load_tileset(tileset, {}, false, true, false);
+    auto cache = r3d::tile_info_cache{};
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    cache.set_presentation_profiles(r3d::load_presentation_profiles(input));
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    auto joined = true;
+    auto door_cap = false;
+    SECTION("continuous_roof") {}
+    SECTION("closed_door_cap_continues_the_roof") { door_cap = true; }
+    SECTION("unroofed_gap_separates_finishes") { joined = false; }
+    for (auto y = -1; y <= 3; ++y) {
+        const auto mount = tripoint_mnt_veh(0, y, 0);
+        REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+        if (y == -1 || y == 3) {
+            REQUIRE(
+                veh->install_part(
+                    mount, vpart_id(y == -1 ? "halfboard_horizontal" : "board_vertical"), true)
+                >= 0);
+        } else if (y == 1 && door_cap) {
+            REQUIRE(veh->install_part(mount, vpart_id("door_shutter"), true) >= 0);
+        } else if (y != 1 || joined) {
+            REQUIRE(veh->install_part(mount, vpart_id("roof"), true) >= 0);
+        }
+    }
+    const auto& full =
+        cache.named({.category = C_VEHICLE_PART, .id = "vp_board_vertical", .tiles = *tilecontext})
+            .cap;
+    const auto& half =
+        cache
+            .named(
+                {.category = C_VEHICLE_PART, .id = "vp_halfboard_horizontal", .tiles = *tilecontext})
+            .main();
+    REQUIRE(full.valid);
+    REQUIRE(full.solid_uv);
+    REQUIRE(half.solid_uv);
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    for (const auto y : {0, 1, 2, 3}) {
+        if (y == 1 && !joined) { continue; }
+        const auto center = veh->mount_to_bubble(tripoint_mnt_veh(0, y, 0));
+        // The exterior full panel occupies the inner 0.4 tiles of its edge cell.
+        const auto target_y =
+            -static_cast<float>(center.y() - origin.y()) - 0.5f + (y == 3 ? 0.3f : 0.0f);
+        const auto& expected = joined || y >= 2 ? full : half;
+        auto roof_faces = 0;
+        for (const auto& batch : mesh.batches) {
+            for (auto i = batch.first_index; i < batch.first_index + batch.index_count; i += 6) {
+                const auto first = mesh.indices[i];
+                const auto quad = std::span(mesh.vertices).subspan(first, 4);
+                const auto cy = (quad[0].y + quad[1].y + quad[2].y + quad[3].y) * 0.25f;
+                const auto area =
+                    (quad[1].x - quad[0].x) * (quad[3].y - quad[0].y)
+                    - (quad[1].y - quad[0].y) * (quad[3].x - quad[0].x);
+                const auto roof_base =
+                    r3d::floor_height + 0.02f
+                    + ((door_cap && y == 1) || y == 3 ? r3d::vehicle_cabin_h : r3d::vehicle_body_h);
+                if (std::abs(cy - target_y) > 0.1f || std::abs(area) < 0.05f
+                    || !std::ranges::all_of(quad, [roof_base](const auto& v) {
+                           return v.z >= roof_base - 1e-5f;
+                       })) {
+                    continue;
+                }
+                ++roof_faces;
+                CHECK(batch.sheet == expected.sheet);
+                for (const auto& vertex : quad) {
+                    CHECK(vertex.u == Approx((*expected.solid_uv)[0]));
+                    CHECK(vertex.v == Approx((*expected.solid_uv)[1]));
+                }
+            }
+        }
+        CHECK(roof_faces == 1);
+    }
+}
+
+TEST_CASE("r3d_solid_vehicle_shoulders_join_the_inset_roof", "[r3d][vehicle][tiles][silhouette]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    const auto mount = tripoint_mnt_veh::zero();
+    REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh->install_part(mount, vpart_id("board_vertical"), true) >= 0);
+    REQUIRE(veh->install_part(mount, vpart_id("roof"), true) >= 0);
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    const auto height = r3d::floor_height + 0.02f + r3d::vehicle_cabin_h;
+    for (const auto x : {0.18f, 0.82f}) {
+        for (const auto y : {-0.18f, -0.82f}) {
+            auto joins = 0;
+            for (auto q = size_t{0}; q < mesh.vertices.size(); q += 4) {
+                const auto quad = std::span(mesh.vertices).subspan(q, 4);
+                if (std::ranges::any_of(quad, [x, y, height](const auto& v) {
+                        return std::abs(v.x - x) < 1e-5f && std::abs(v.y - y) < 1e-5f
+                            && std::abs(v.z - height) < 1e-5f;
+                    })) {
+                    ++joins;
+                }
+            }
+            // Two roof skirts and two wall shoulders meet at each inset corner.
+            // A roof merely floating above vertical walls only supplies the skirts.
+            CHECK(joins >= 4);
+        }
+    }
 }
 
 #endif

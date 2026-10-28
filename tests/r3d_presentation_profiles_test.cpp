@@ -42,6 +42,19 @@ TEST_CASE("r3d_presentation_profiles_reject_invalid_anchors", "[r3d][profiles]")
     CHECK_THROWS(r3d::load_presentation_profiles(anchor_input));
 }
 
+TEST_CASE("r3d_vehicle_profile_aliases_share_explicit_material_roles", "[r3d][profiles][vehicle]") {
+    auto input = std::istringstream(R"({"version":1,"profiles":[{
+        "category":"vehicle_part","id":["vp_door_left","vp_door_right"],
+        "face_sources":[{"face":"glass","tileset":"test","sprite":"vp_door"},
+                        {"face":"rear","tileset":"test","sprite":"vp_lamp"}]}]})");
+    const auto profiles = r3d::load_presentation_profiles(input);
+    for (const auto id : {"vehicle_part:vp_door_left", "vehicle_part:vp_door_right"}) {
+        REQUIRE(profiles.at(id).face_sources.size() == 2);
+        CHECK(profiles.at(id).face_sources[0].face == r3d::profile_face::glass);
+        CHECK(profiles.at(id).face_sources[1].face == r3d::profile_face::rear);
+    }
+}
+
 TEST_CASE("r3d_profile_face_sources_validate_identity_crop_and_ambiguity", "[r3d][profiles]") {
     const auto bad_source = GENERATE(
         R"({"face":"side","tileset":"","sprite":"t_wall"})",

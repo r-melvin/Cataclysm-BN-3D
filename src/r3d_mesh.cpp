@@ -187,6 +187,10 @@ auto apply_profile_materials( const apply_profile_materials_options &options ) -
                 options.out.side_tint = 0xffffffu;
             } else if( source.face == profile_face::front ) {
                 options.out.front = *cropped;
+            } else if( source.face == profile_face::rear ) {
+                options.out.rear = *cropped;
+            } else if( source.face == profile_face::glass ) {
+                options.out.glass = *cropped;
             } else {
                 options.out.cap = *cropped;
                 options.out.cap_tint = 0xffffffu;
@@ -1541,6 +1545,10 @@ auto tile_info_cache::named( const named_options &options ) -> const tile_info &
     }
     auto info = tile_info{};
     resolve_layers( { .tiles = tiles, .id = id, .category = category, .out = info, .subtile = subtile, .rota = rota, .variant = variant, .allow_unknown = options.allow_unknown, .voxel_items = voxel_items_ } );
+    if( category == C_VEHICLE_PART && subtile != open_ && subtile != broken ) {
+        apply_profile_materials( { .profiles = profiles_, .category = "vehicle_part", .id = id,
+                                   .tiles = tiles, .out = info } );
+    }
     return named_.emplace( key, info ).first->second;
 }
 

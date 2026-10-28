@@ -94,6 +94,8 @@ struct entity_view {
     bool upright_billboards = false;
     /// Tile currently hovered by the mouse cursor for 3D item highlighting.
     std::optional<tripoint_bub_ms> hovered{};
+    /// Physical light of an already-visible vehicle, without terrain-memory tint.
+    std::function < auto( const tripoint_bub_ms & ) -> uint32_t > vehicle_surface_light = {};
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.

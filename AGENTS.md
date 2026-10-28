@@ -206,3 +206,11 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - `vehicle_part::wheel_diameter()` and `wheel_width()` return millimetres, even when source item JSON uses inches. Verify runtime units before sizing renderer geometry; fixture part IDs must pass `is_valid()` before installation.
 
 - Extracted renderer emitters must be placed after the UV/light helpers they call (or have explicit declarations); a refactor must not depend on a helper defined later in the translation unit.
+
+- Vehicle rendering must preserve the selected tileset's visual language. Correct native art ownership, source regions and UV placement before adding generic replacement geometry or textures. Runtime-generated replacement assets are a last resort when usable native artwork is genuinely absent; check other tilesets and broken/open states before treating art as missing.
+
+- Authored material crops must keep secondary solid-colour sample UVs inside the cropped region, not only the face UV rectangle. Verify native source sheet and open/broken state as well as UV bounds.
+
+- Live vehicle exterior lighting must not inherit terrain-memory tint from ground or cargo hidden beneath its roof. Keep perception/activation checks separate from surface illumination, and validate the actual runtime lighting producer.
+
+- A boardable supporting frame must not override an installed panel's authored top material with interior-floor shading. Vehicle surface tests must include full panels without roof parts as well as explicit and inferred roof caps.

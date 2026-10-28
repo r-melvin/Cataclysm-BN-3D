@@ -110,7 +110,9 @@ def render_art_gallery(capture, assets_root=None):
     if profile_path.is_file():
         profile_data = json.loads(profile_path.read_text())
         for profile in profile_data.get("profiles", []):
-            authored_profiles[(profile.get("category"), profile.get("id"))] = profile
+            ids = profile.get("id")
+            for profile_id in ids if isinstance(ids, list) else [ids]:
+                authored_profiles[(profile.get("category"), profile_id)] = profile
     copied = {}
     cards = []
     unique_records = {}

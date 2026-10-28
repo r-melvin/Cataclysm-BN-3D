@@ -255,7 +255,7 @@ pickup, SUV, bus and semi-truck and add `2seater2`, each at 0/90/225 degrees;
 both item fingerprints remain unchanged. These changes do not close the broader
 vehicle-state acceptance matrix.
 
-Vehicle recognition follow-up completed (2026-10-28): preserve installed part art
+Vehicle recognition follow-up (2026-10-28, visual acceptance reopened): preserve installed part art
 and assembly while shaping existing helicopter aft half-panels into raised booms,
 tailplanes and fins. Four-facet curved native corners, arched roofs and more
 inward canopy taper soften the low-poly bodies. Cabin proportions use roof extent
@@ -268,7 +268,39 @@ Snapshots cover ten native prototypes at 0/90/225 degrees, with item scenes inta
 Both game/test targets build. The final CPU `[r3d],[wall_edges]` suite passes
 189 cases / 101,749 assertions. Private Xvfb comparisons show helicopter rotor
 centres/tails and the rounded road bodies; evidence: `out/validation/vehicle-silhouettes/`.
-This closes the scoped recognition fixes, not the entire vehicle-state matrix.
+The automated gate passes, but these captures do not meet visual acceptance.
+Astra review identifies single-texel material loss, body-colour multiplication
+of glass, projected sprite details on tops, patchy roof donor selection and
+generic rotor geometry bypassing available tileset art. Correction implemented (2026-10-28): tileset-bound top/body/glass/end-face
+regions keep projected detail on the appropriate surface. Glass receives native
+art and lighting once, crops retain their own solid sample, and available rotor
+mechanism art supplies the existing blade geometry. Live vehicle illumination
+no longer inherits hidden-ground memory sepia. Connected roof components choose
+a consistent native metal finish, with separate native paint retained; gaps and
+broken roofs separate components. Component bounds control the roof crown rather
+than vehicle-wide protrusions. Solid wall shoulders now meet the inset roof.
+Full-board walls retain their own side artwork instead of borrowing pale
+half-panel sides; only the horizontal finish has an explicit source region.
+Closed-door roof continuations share the adjoining finish independently of
+door paint, and Hoder full-panel tops use its native blue metal region.
+A boardable frame beneath a panel no longer turns that panel top into a dark
+interior floor; authored surface roles take precedence over the supporting frame.
+
+These are independently implemented surface-interpretation and connected-group
+concepts informed by [DramaticShape's methodology](https://github.com/absol89/DramaticShapeVoxelMod/blob/99815c14742b95bf50c7b574edd25f57ab547f00/assets/docs/buidling_to_voxel/sprite_to_voxel_methodology.md)
+and [Risaro's renderer](https://github.com/Risaro/cataclysm-3d/tree/875ae1f396afc9db1f8238d570b1a06d10ba96d7),
+without copying their implementation or importing replacement models.
+The first van candidate failed visual acceptance; corrected private Xvfb
+captures are under `out/validation/surface-interpretation/`. They establish
+Ultica/Hoder material separation, not approval of every vehicle's appearance.
+Both binary targets build; CPU `[r3d],[wall_edges]` passes 196 cases / 102,338
+assertions; gallery checks pass nine tests. Thirty intended snapshots update
+car, hatchback, sports car, pickup, SUV, cube van, bus, semi-truck, 2seater2 and
+SmallFlier1 at 0/90/225 degrees; both item scenes are unchanged. The snapshot
+fixture now actually installs the runtime presentation profiles into its cache.
+Global body bounds, wheel-side inference and aircraft-tail heuristics remain
+open for subsequent review; preserve stock helicopter recognition while
+conservatively gating custom/VTOL assemblies.
 
 Source and acceptance matrix:
 [vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).

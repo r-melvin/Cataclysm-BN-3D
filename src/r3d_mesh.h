@@ -85,6 +85,8 @@ struct tile_info {
     sprite_ref side;     // texture for the sides of a wall (see wall_sides), else invalid
     sprite_ref cap;      // the top of such a wall: a plain patch of the same texture
     sprite_ref front;    // optional authored furniture front; preserves native art when absent
+    sprite_ref rear;     // optional vehicle rear-face detail from the active tileset
+    sprite_ref glass;    // vehicle glazing, separate from painted body material
     // >= 0: the wall's sprite is a front elevation (tilesets draw painted walls as a band of
     // framing over coving, paint and skirting); rows below this fraction of the sprite are the
     // side, from coving to skirting, and the rows above it top the wall

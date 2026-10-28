@@ -11,7 +11,7 @@
 namespace r3d
 {
 
-enum class profile_face { side, top, front };
+enum class profile_face { side, top, front, rear, glass };
 
 /// A crop in the unrotated source sprite, bound to an exact tileset and sprite identity.
 struct profile_face_source {

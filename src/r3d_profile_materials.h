@@ -32,6 +32,11 @@ inline auto crop_profile_sprite( const profile_crop_options &options ) -> std::o
     result.v1 = result.v0 + height * crop[3];
     result.u0 += width * crop[0];
     result.v0 += height * crop[1];
+    // A whole-sprite sample can land outside the authored material region (for example
+    // on a window while sampling paint). The crop is the material's source of truth.
+    result.solid_uv = std::array<float, 2> { ( result.u0 + result.u1 ) * 0.5f,
+            ( result.v0 + result.v1 ) * 0.5f
+                                           };
     return result;
 }
 

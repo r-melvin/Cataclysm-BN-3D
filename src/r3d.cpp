@@ -55,6 +55,7 @@
 #include "r3d_scene_rules.h"
 #include "r3d_shapes.h"
 #include "r3d_vehicle_rules.h"
+#include "r3d_vehicle_lighting.h"
 #include "vehicle/vehicle.h"
 #include "vehicle/vpart_position.h"
 #include "r3d_gpu.h"
@@ -2726,7 +2727,8 @@ auto draw( const draw_options &options ) -> bool
         }
         return here.pl_sees( p, -1 ) || here.pl_line_of_sight( p, -1 ) ||
                sampler.color_at( p ) != pack_light( 0, 0, 0 );
-    }, .hovered = s.hovered };
+    }, .hovered = s.hovered,
+       .vehicle_surface_light = vehicle_surface_lighting( here, std::getenv( "CATA_R3D_FULLBRIGHT" ) != nullptr ) };
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
 
     entities_view.upright_billboards = fp;
