@@ -256,10 +256,12 @@ Their integration and validation status is tracked in the backlog. The UI port
 uses BN's own interface rather than CDDA's ImGui frontend.
 
 
-Sink and oven furniture use dedicated geometry: a recessed basin and raised tap,
-and hob rings above a front oven window and handle. Authored face materials apply
-to cabinet panels while hardware retains its material. Missing artwork still
-uses upright diagnostic markers. Radio towers use open braced supports spanning
+Sink and oven furniture retain their existing sprite-derived box geometry.
+Tileset-specific source crops put the original basin/hob artwork on top and the
+original cabinet/oven-door artwork on the front. Plain sides sample the same
+appliance's material. Hoder's top-down sprites remain on top with plain edges;
+no replacement appliance artwork or procedural model is used. Missing artwork
+retains upright diagnostic markers. Radio towers use open braced supports spanning
 their contiguous native vertical column; a standalone marker gets a four-storey
 visual support. These models preserve native furniture and terrain collision.
 

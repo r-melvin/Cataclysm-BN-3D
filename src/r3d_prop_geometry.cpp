@@ -6,7 +6,6 @@
 
 #if defined(TILES)
 #include "r3d_mesh.h"
-#include "r3d_profile_materials.h"
 #endif
 
 namespace r3d
@@ -98,10 +97,7 @@ auto emit_prop_cuboids( const emit_prop_options &options ) -> void
         for( auto side = size_t{ 0 }; side < faces.size(); ++side ) {
             auto corners = corners_t{};
             for( auto i = size_t{ 0 }; i < corners.size(); ++i ) { corners[i] = vertices[faces[side][i]]; }
-            const auto donor = options.face_materials[side];
-            const auto &source = donor && donor->valid ? *donor : material;
-            const auto face_uv = donor && donor->valid ? material_face_uvs( source ) : uv;
-            options.sink.add( { .sprite = source, .corners = corners, .uvs = face_uv,
+            options.sink.add( { .sprite = material, .corners = corners, .uvs = uv,
                                 .ref = { .lx = static_cast<uint8_t>( options.x ), .ly = static_cast<uint8_t>( options.y ), .shade = shades[side] } } );
         }
     }

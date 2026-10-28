@@ -31,8 +31,6 @@ struct emit_prop_options {
     int y;
     float base;
     int facing = 0;
-    /// Optional top, front, back, left, right and underside art for model body panels.
-    std::array<const sprite_ref *, 6> face_materials{};
 };
 auto emit_prop_cuboids( const emit_prop_options &options ) -> void;
 

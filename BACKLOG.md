@@ -183,14 +183,17 @@ and the exact command are in `out/validation/wall-edges/`; the checked-in
 `fixtures/wall_edges.lua` reproduces the scene. Mouse picking and lighting still
 use native tile columns.
 
-Appliance/tower follow-up completed (2026-10-28): dedicated sink recess/tap,
-cabinet fronts, hob rings and oven window/handle replace projected sprite faces.
-Authored face overrides remain on model panels; missing-art markers stay readable.
-Radio towers now have open diagonal bracing spanning contiguous native levels,
-including upper-storey views and tall-column culling/invalidation. Native fixtures
-cover Ultica and Hoder; private Xvfb checks show appliance fronts and a six-storey
-support with aerial panels. Both game/test targets build; the CPU `[r3d],[wall_edges]` suite passes
-187 cases / 57,637 assertions. Evidence: `out/validation/appliances-aircraft/`.
+Appliance/tower follow-up completed (2026-10-28): radio towers have open diagonal
+bracing spanning contiguous native levels, including upper-storey views and tall
+column culling/invalidation. Appliances retain the existing sprite-derived boxes:
+Ultica's original basin/hob crops map to the top and cabinet/oven-window crops to
+the front, with plain material from the same sprite on other faces. Hoder keeps
+its top-down artwork on top with plain edges. Procedural appliance replacements
+and their unused face-donor code are removed. Native regressions verify unchanged
+positions/indices and original source sheets for both tilesets and four facings.
+Both game/test targets build; CPU `[r3d],[wall_edges]` passes 184 cases / 101,622
+assertions. Vehicle/item snapshots are unchanged. Private Xvfb inspection shows
+the corrected original artwork; evidence: `out/validation/sprite-repairs/`.
 
 ## R3D-04: Finish vehicle layer, material and state presentation
 

@@ -200,3 +200,5 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Renderer-owned procedural palettes must upload through `gpu::create_sheet` before the first 3D frame; SDL_Renderer texture uploads wait until present. Release those palette owners before device shutdown.
 
 - Native test invocations share `test_user_dir`; run them serially even on separate virtual displays to avoid save/fixture interference.
+
+- Preserve existing sprite-derived models when repairing presentation: correct source regions, orientation and existing geometry; do not replace their artwork with generic procedural appliances unless explicitly requested.

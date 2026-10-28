@@ -121,12 +121,14 @@ TEST_CASE("r3d_furniture_omitted_axes_preserve_native_fitting", "[r3d][profiles]
 
 #if defined(TILES)
 #    include "cata_tiles.h"
+#    include "cata_utility.h"
 #    include "map/map.h"
 #    include "map/mapdata.h"
 #    include "map/submap.h"
 #    include "r3d_mesh.h"
 #    include "r3d_profile_materials.h"
 #    include "sdltiles.h"
+#    include "state_helpers.h"
 #    include "tile_helpers.h"
 
 TEST_CASE(
@@ -348,10 +350,7 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
     }
     for (auto index = size_t(0); index < baseline.vertices.size(); index += 4) {
         const auto& first = baseline.vertices[index];
-        auto belongs =
-            art.appliance != r3d::appliance_kind::none
-                ? baseline.light_refs[index].lx == 5 && baseline.light_refs[index].ly == 5
-                : first.z == Approx(art.sh.height);
+        auto belongs = first.z == Approx(art.sh.height);
         for (auto corner = size_t(0); corner < 4; ++corner) {
             const auto& vertex = baseline.vertices[index + corner];
             belongs = belongs && vertex.x >= 5.0f && vertex.x <= 6.0f && vertex.y <= -5.0f
@@ -379,11 +378,7 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
                 : face == r3d::profile_face::front
                     ? front
                     : !top && !front;
-            // Detailed models retain their sink/oven geometry and hardware; face donors
-            // replace cabinet panels rather than covering the basin, tap or hob rings.
-            if (art.appliance == r3d::appliance_kind::none) {
-                CHECK(different_uv == should_change);
-            }
+            CHECK(different_uv == should_change);
             if (different_uv) {
                 ++changed;
                 const auto& material =
@@ -412,8 +407,77 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
         CHECK(matched);
     }
     CHECK(changed > 0);
-    if (face != r3d::profile_face::front && art.appliance == r3d::appliance_kind::none) {
-        CHECK(preserved_front > 0);
+    if (face != r3d::profile_face::front) { CHECK(preserved_front > 0); }
+}
+
+TEST_CASE("r3d_appliances_keep_native_art_on_the_existing_box", "[r3d][profiles][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    const auto tileset = std::string(GENERATE("UltimateCataclysm", "hoder"));
+    tilecontext->load_tileset(tileset, {}, false, true, false);
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    REQUIRE(input.good());
+    const auto profiles = r3d::load_presentation_profiles(input);
+    const auto id = std::string(GENERATE("f_sink", "f_oven", "f_rvoven"));
+    const auto facing = GENERATE(0, 1, 2, 3);
+    CAPTURE(tileset, id, facing);
+    const auto origin = tripoint_abs_sm(get_map().get_abs_sub(), 0);
+    auto sm = submap(origin, {});
+    sm.set_all_ter(t_floor);
+    sm.set_furn(point_sm_ms(5, 5), furn_str_id(id).id());
+    const auto backs = std::array<point, 4>{point_north, point_east, point_south, point_west};
+    sm.set_ter(point_sm_ms(5 + backs[facing].x, 5 + backs[facing].y), ter_str_id("t_wall").id());
+    const auto lookup = [&](const tripoint_abs_sm& p) -> const submap* {
+        return p == origin ? &sm : nullptr;
+    };
+    auto cache = r3d::tile_info_cache{};
+    const auto baseline_info = cache.furniture({.id = furn_str_id(id).id(), .tiles = *tilecontext});
+    const auto baseline = r3d::build_chunk_mesh(
+        {.pos = origin, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    cache.set_presentation_profiles(profiles);
+    const auto art = cache.furniture({.id = furn_str_id(id).id(), .tiles = *tilecontext});
+    const auto mesh = r3d::build_chunk_mesh(
+        {.pos = origin, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    REQUIRE_FALSE(art.main().placeholder);
+    CHECK(art.main().sheet == baseline_info.main().sheet);
+    CHECK(art.sh == baseline_info.sh);
+    REQUIRE(mesh.vertices.size() == baseline.vertices.size());
+    CHECK(mesh.indices == baseline.indices);
+    for (auto i = size_t{0}; i < mesh.vertices.size(); ++i) {
+        CHECK(mesh.vertices[i].x == baseline.vertices[i].x);
+        CHECK(mesh.vertices[i].y == baseline.vertices[i].y);
+        CHECK(mesh.vertices[i].z == baseline.vertices[i].z);
+    }
+    // Each authored region must come from this appliance's own art, never a palette model.
+    for (const auto& source : profiles.at("furniture:" + id).face_sources) {
+        if (source.tileset != tileset) { continue; }
+        const auto& donor =
+            cache.named({.category = C_NONE, .id = source.sprite, .tiles = *tilecontext}).main();
+        const auto& material =
+            source.face == r3d::profile_face::top ? art.cap
+            : source.face == r3d::profile_face::front
+                ? art.front
+                : art.side;
+        REQUIRE(material.valid);
+        CHECK(material.sheet == donor.sheet);
+        CHECK(material.u0 == Approx(donor.u0 + (donor.u1 - donor.u0) * source.crop[0]));
+        CHECK(material.v0 == Approx(donor.v0 + (donor.v1 - donor.v0) * source.crop[1]));
+        CHECK(material.u1 == Approx(donor.u0 + (donor.u1 - donor.u0) * source.crop[2]));
+        CHECK(material.v1 == Approx(donor.v0 + (donor.v1 - donor.v0) * source.crop[3]));
+        auto bound = false;
+        for (const auto& batch : mesh.batches) {
+            if (batch.sheet != donor.sheet) { continue; }
+            for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+                const auto& v = mesh.vertices[mesh.indices[i]];
+                if (v.z > r3d::floor_height && v.u >= material.u0 && v.u <= material.u1
+                    && v.v >= material.v0 && v.v <= material.v1) {
+                    bound = true;
+                }
+            }
+        }
+        CHECK(bound);
     }
 }
 

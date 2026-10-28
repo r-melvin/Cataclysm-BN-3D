@@ -12,52 +12,6 @@
 
 namespace r3d
 {
-auto appliance_pieces( const appliance_kind kind ) -> std::vector<fixture_piece>
-{
-    if( kind == appliance_kind::none ) { return {}; }
-    auto pieces = std::vector<fixture_piece> {
-        { .box = { .center = { 0.5f, 0.5f, 0.40f }, .size = { 0.96f, 0.94f, 0.78f } }, .finish = fixture_finish::enamel },
-        { .box = { .center = { 0.5f, 0.5f, 0.04f }, .size = { 0.89f, 0.86f, 0.08f } }, .finish = fixture_finish::dark }
-    };
-    if( kind == appliance_kind::sink ) {
-        // Four rim sections surround an actual recess, rather than a top-down sink decal.
-        for( const auto x : { 0.10f, 0.90f } ) {
-            pieces.push_back( { .box = { .center = { x, 0.5f, 0.98f }, .size = { 0.20f, 1.0f, 0.05f } }, .finish = fixture_finish::enamel } );
-            pieces.push_back( { .box = { .center = { x < 0.5f ? 0.22f : 0.78f, 0.5f, 0.89f }, .size = { 0.04f, 0.60f, 0.18f } }, .detail = fixture_detail::basin } );
-        }
-        for( const auto y : { 0.10f, 0.90f } ) {
-            pieces.push_back( { .box = { .center = { 0.5f, y, 0.98f }, .size = { 0.60f, 0.20f, 0.05f } }, .finish = fixture_finish::enamel } );
-            pieces.push_back( { .box = { .center = { 0.5f, y < 0.5f ? 0.22f : 0.78f, 0.89f }, .size = { 0.56f, 0.04f, 0.18f } }, .detail = fixture_detail::basin } );
-        }
-        pieces.push_back( { .box = { .center = { 0.5f, 0.5f, 0.80f }, .size = { 0.56f, 0.56f, 0.025f } }, .detail = fixture_detail::basin } );
-        pieces.push_back( { .box = { .center = { 0.5f, 0.5f, 0.817f }, .size = { 0.07f, 0.07f, 0.009f } }, .finish = fixture_finish::dark, .detail = fixture_detail::basin } );
-        pieces.push_back( { .box = { .center = { 0.5f, 0.12f, 1.15f }, .size = { 0.045f, 0.045f, 0.32f } }, .detail = fixture_detail::tap } );
-        pieces.push_back( { .box = { .center = { 0.5f, 0.25f, 1.30f }, .size = { 0.045f, 0.29f, 0.04f } }, .detail = fixture_detail::tap } );
-        pieces.push_back( { .box = { .center = { 0.5f, 0.38f, 1.25f }, .size = { 0.045f, 0.045f, 0.12f } }, .detail = fixture_detail::tap } );
-        for( const auto x : { 0.27f, 0.73f } ) {
-            pieces.push_back( { .box = { .center = { x, 0.975f, 0.42f }, .size = { 0.43f, 0.025f, 0.64f } }, .finish = fixture_finish::cabinet } );
-            pieces.push_back( { .box = { .center = { x < 0.5f ? 0.43f : 0.57f, 0.999f, 0.61f }, .size = { 0.025f, 0.025f, 0.12f } }, .finish = fixture_finish::dark, .detail = fixture_detail::handle } );
-        }
-    } else {
-        pieces.push_back( { .box = { .center = { 0.5f, 0.5f, 0.89f }, .size = { 0.96f, 0.94f, 0.22f } }, .finish = fixture_finish::enamel } );
-        pieces.push_back( { .box = { .center = { 0.5f, 0.981f, 0.43f }, .size = { 0.78f, 0.028f, 0.55f } }, .finish = fixture_finish::dark, .detail = fixture_detail::oven_door } );
-        pieces.push_back( { .box = { .center = { 0.5f, 0.999f, 0.43f }, .size = { 0.64f, 0.014f, 0.37f } }, .finish = fixture_finish::glass, .detail = fixture_detail::oven_door } );
-        pieces.push_back( { .box = { .center = { 0.5f, 1.025f, 0.76f }, .size = { 0.74f, 0.055f, 0.045f } }, .finish = fixture_finish::steel, .detail = fixture_detail::handle } );
-        for( const auto x : { 0.20f, 0.40f, 0.60f, 0.80f } ) {
-            pieces.push_back( { .box = { .center = { x, 0.99f, 0.90f }, .size = { 0.06f, 0.04f, 0.06f } }, .finish = fixture_finish::dark } );
-        }
-        for( const auto x : { 0.26f, 0.74f } ) {
-            for( const auto y : { 0.26f, 0.70f } ) {
-                for( auto segment = 0; segment < 12; ++segment ) {
-                    const auto angle = segment * std::numbers::pi_v<float> / 6.0f;
-                    pieces.push_back( { .box = { .center = { x + 0.115f * std::cos( angle ), y + 0.115f * std::sin( angle ), 1.012f }, .size = { 0.065f, 0.035f, 0.025f }, .yaw = angle + std::numbers::pi_v<float> * 0.5f }, .finish = fixture_finish::dark, .detail = fixture_detail::burner } );
-                }
-            }
-        }
-    }
-    return pieces;
-}
-
 auto radio_tower_pieces( const float height ) -> std::vector<fixture_piece>
 {
     auto pieces = std::vector<fixture_piece> {};
@@ -136,13 +90,7 @@ auto emit_fixture( const emit_fixture_options &options ) -> void
         box.yaw += ( options.facing & 3 ) * std::numbers::pi_v<float> * 0.5f;
         box.size[2] *= options.height;
         const auto boxes = std::vector<prop_cuboid> { box };
-        auto faces = std::array<const sprite_ref *, 6> {};
-        if( options.materials && piece.detail == fixture_detail::body ) {
-            faces = { &options.materials->cap, &options.materials->front, &options.materials->side,
-                      &options.materials->side, &options.materials->side, &options.materials->side
-                    };
-        }
-        emit_prop_cuboids( { .sink = options.sink, .material = material, .boxes = boxes, .x = options.x, .y = options.y, .base = options.base, .face_materials = faces } );
+        emit_prop_cuboids( { .sink = options.sink, .material = material, .boxes = boxes, .x = options.x, .y = options.y, .base = options.base } );
     }
 }
 #endif

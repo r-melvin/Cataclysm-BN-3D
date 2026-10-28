@@ -72,7 +72,6 @@ struct sprite_ref {
 struct tile_info {
     shape sh;
     solid_prop prop = solid_prop::none;
-    appliance_kind appliance = appliance_kind::none;
     bool radio_tower = false;
     bool stair_flight = false;
     bool stairs_down = false;

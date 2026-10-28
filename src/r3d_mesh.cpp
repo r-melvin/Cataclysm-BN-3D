@@ -541,7 +541,6 @@ struct emit_box_options {
     float depth_scale = 1.0f;
     const tile_info *materials = nullptr;
     std::array<float, 4> wall_gaps{};
-    const sprite_ref *palette = nullptr;
 };
 
 auto emit_box( const emit_box_options &options ) -> void
@@ -574,13 +573,6 @@ auto emit_box( const emit_box_options &options ) -> void
     if( wall_contacts != 0 && options.materials ) {
         bounds = fit_furniture_to_wall_edges( { .bounds = bounds, .profile = options.materials->proportions,
                                                 .facing = facing, .contacts = wall_contacts, .gaps = options.wall_gaps } );
-    }
-    if( options.materials && options.palette && options.palette->valid &&
-        options.materials->appliance != appliance_kind::none ) {
-        emit_fixture( { .sink = sink, .palette = *options.palette,
-                        .pieces = appliance_pieces( options.materials->appliance ), .bounds = bounds,
-                        .x = x, .y = y, .base = z0, .height = z1 - z0, .facing = facing, .materials = options.materials } );
-        return;
     }
     const auto fx0 = static_cast<float>( bounds.x0 );
     const auto fx1 = static_cast<float>( bounds.x1 );
@@ -1588,9 +1580,6 @@ auto tile_info_cache::furniture( const furniture_options &options ) -> const til
             const auto candidate = furn_str_id( art_id );
             art_id = candidate.is_valid() ? candidate.obj().looks_like : std::string();
         }
-        // looks_like is an art donor: a dishwasher borrowing an oven sprite is not a range.
-        if( f.id.str() == "f_sink" ) { info.appliance = appliance_kind::sink; }
-        if( f.id.str() == "f_oven" || f.id.str() == "f_rvoven" ) { info.appliance = appliance_kind::oven; }
         info.sh = classify_furniture( traits );
         resolve_layers( { .tiles = tiles, .id = f.id.str(), .category = C_FURNITURE, .out = info, .subtile = subtile, .rota = rota } );
         if( f.id.str() == "f_bench" ) {
@@ -1608,7 +1597,6 @@ auto tile_info_cache::furniture( const furniture_options &options ) -> const til
         }
         if( info.prop == solid_prop::none && info.main().placeholder ) {
             info.sh.kind = shape_kind::upright;
-            info.appliance = appliance_kind::none;
         }
         if( info.sh.kind == shape_kind::prism ) {
             const auto profile = profiles_.find( presentation_profile_key( "furniture", f.id.str() ) );
@@ -2517,7 +2505,7 @@ auto build_chunk_mesh( const build_chunk_mesh_options &options ) -> chunk_mesh
             }
             const auto box_faces = uint8_t( visible_faces( fs, nb ) | ( fs.slab > 0.0f ? 0 : all_sides ) );
             emit_box( { .sink = sink, .s = spr, .x = lx, .y = ly, .z0 = furniture_base + furn.base_offset, .z1 = fs.height, .b = layout, .faces = box_faces, .refs = refs, .facing = facing, .joined = joined,
-                        .wall_contacts = wall_contacts, .slab = fs.slab, .depth_scale = furn.depth_scale, .materials = &furn, .wall_gaps = wall_gaps, .palette = &cache.fixture_palette() } );
+                        .wall_contacts = wall_contacts, .slab = fs.slab, .depth_scale = furn.depth_scale, .materials = &furn, .wall_gaps = wall_gaps } );
 
         }
     }

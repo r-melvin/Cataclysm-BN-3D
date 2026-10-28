@@ -34,6 +34,72 @@
           "crop": [ 0.3125, 0.59375, 0.65625, 0.9375 ]
         }
       ]
+    },
+    {
+      "category": "furniture",
+      "id": "f_sink",
+      "face_sources": [
+        { "face": "top", "tileset": "UltimateCataclysm", "sprite": "f_sink", "crop": [ 0.03125, 0, 0.96875, 0.625 ] },
+        {
+          "face": "front",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_sink",
+          "crop": [ 0.0625, 0.6875, 0.9375, 0.9375 ]
+        },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_sink",
+          "crop": [ 0.09375, 0.71875, 0.375, 0.90625 ]
+        },
+        { "face": "top", "tileset": "hoder", "sprite": "f_sink", "crop": [ 0.0625, 0.0625, 0.9375, 0.9375 ] },
+        { "face": "front", "tileset": "hoder", "sprite": "f_sink", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] },
+        { "face": "side", "tileset": "hoder", "sprite": "f_sink", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] }
+      ]
+    },
+    {
+      "category": "furniture",
+      "id": "f_oven",
+      "face_sources": [
+        { "face": "top", "tileset": "UltimateCataclysm", "sprite": "f_oven", "crop": [ 0.03125, 0.4375, 0.96875, 0.78125 ] },
+        {
+          "face": "front",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_oven",
+          "crop": [ 0.03125, 0.8125, 0.96875, 0.96875 ]
+        },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_oven",
+          "crop": [ 0.09375, 0.8125, 0.1875, 0.9375 ]
+        },
+        { "face": "top", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.0625, 0.0625, 0.9375, 0.9375 ] },
+        { "face": "front", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] },
+        { "face": "side", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] }
+      ]
+    },
+    {
+      "category": "furniture",
+      "id": "f_rvoven",
+      "face_sources": [
+        { "face": "top", "tileset": "UltimateCataclysm", "sprite": "f_oven", "crop": [ 0.03125, 0.4375, 0.96875, 0.78125 ] },
+        {
+          "face": "front",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_oven",
+          "crop": [ 0.03125, 0.8125, 0.96875, 0.96875 ]
+        },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_oven",
+          "crop": [ 0.09375, 0.8125, 0.1875, 0.9375 ]
+        },
+        { "face": "top", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.0625, 0.0625, 0.9375, 0.9375 ] },
+        { "face": "front", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] },
+        { "face": "side", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] }
+      ]
     }
   ]
 }

@@ -113,8 +113,8 @@ collision.
 Paste `appliances_radio.lua` into the inspected Lua console of a private world.
 It preflights the footprint and six vertical levels, then creates two appliance
 rows and a six-storey radio tower while preserving vehicles. Exit the console
-and wait a normal turn to refresh visibility. Inspect the sink recess and raised
-tap, oven window/handle below the hob rings, and open tower bracing with aerial
+and wait a normal turn to refresh visibility. Inspect the original sink and hob
+art on top, cabinet/oven-door art on the front, and open tower bracing with aerial
 panels at the crown. Zoom out to see the entire tower.
 
 While standing on a disposable private test vehicle, paste
