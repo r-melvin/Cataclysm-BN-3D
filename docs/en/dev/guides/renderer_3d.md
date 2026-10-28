@@ -254,3 +254,19 @@ Native BN implementations of UI/HUD/weather, first-person camera and guided
 onboarding exist on separate feature branches and are not included on `main`.
 Their integration and validation status is tracked in the backlog. The UI port
 uses BN's own interface rather than CDDA's ImGui frontend.
+
+
+Sink and oven furniture use dedicated geometry: a recessed basin and raised tap,
+and hob rings above a front oven window and handle. Authored face materials apply
+to cabinet panels while hardware retains its material. Missing artwork still
+uses upright diagnostic markers. Radio towers use open braced supports spanning
+their contiguous native vertical column; a standalone marker gets a four-storey
+visual support. These models preserve native furniture and terrain collision.
+
+Metal vehicle roofs follow adjacent exterior materials instead of generic blue
+roof filler, while distinct native roof paint remains visible. Roof crowns and
+bonnet slopes soften the silhouette without changing the native footprint.
+Helicopter main rotors use the native rotor diameter and mount position, with
+masts, hubs, blades and broken stubs. Blades are currently posed, without rotor
+animation. Private reproduction scenes are documented in
+`tools/r3d_spike/fixtures/README.md`.

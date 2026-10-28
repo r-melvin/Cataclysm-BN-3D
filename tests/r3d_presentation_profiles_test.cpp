@@ -348,7 +348,10 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
     }
     for (auto index = size_t(0); index < baseline.vertices.size(); index += 4) {
         const auto& first = baseline.vertices[index];
-        auto belongs = first.z == Approx(art.sh.height);
+        auto belongs =
+            art.appliance != r3d::appliance_kind::none
+                ? baseline.light_refs[index].lx == 5 && baseline.light_refs[index].ly == 5
+                : first.z == Approx(art.sh.height);
         for (auto corner = size_t(0); corner < 4; ++corner) {
             const auto& vertex = baseline.vertices[index + corner];
             belongs = belongs && vertex.x >= 5.0f && vertex.x <= 6.0f && vertex.y <= -5.0f
@@ -376,7 +379,11 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
                 : face == r3d::profile_face::front
                     ? front
                     : !top && !front;
-            CHECK(different_uv == should_change);
+            // Detailed models retain their sink/oven geometry and hardware; face donors
+            // replace cabinet panels rather than covering the basin, tap or hob rings.
+            if (art.appliance == r3d::appliance_kind::none) {
+                CHECK(different_uv == should_change);
+            }
             if (different_uv) {
                 ++changed;
                 const auto& material =
@@ -405,7 +412,9 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
         CHECK(matched);
     }
     CHECK(changed > 0);
-    if (face != r3d::profile_face::front) { CHECK(preserved_front > 0); }
+    if (face != r3d::profile_face::front && art.appliance == r3d::appliance_kind::none) {
+        CHECK(preserved_front > 0);
+    }
 }
 
 TEST_CASE("r3d_furniture_profiles_parse_explicit_front_sources", "[r3d][profiles]") {

@@ -37,6 +37,7 @@
 #include "r3d_sprite_voxels.h"
 #include "r3d_shapes.h"
 #include "r3d_vehicle_rules.h"
+#include "r3d_vehicle_details.h"
 #include "enums.h"
 #include "units_utility.h"
 #include "vehicle/vehicle.h"
@@ -900,6 +901,7 @@ auto neighbour_trim( const neighbour_trim_options &options ) -> std::optional<fl
 
 struct vehicle_paint_sample {
     const sprite_ref *sprite = nullptr;
+    int part_idx = -1;
     int priority = -1;
 };
 
@@ -1110,7 +1112,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 // Keep each mount's exterior material instead of averaging a whole vehicle.
                 auto &material = mount_materials[veh.cpart( i ).mount];
                 if( score > material.priority ) {
-                    material = { .sprite = spr, .priority = score };
+                    material = { .sprite = spr, .part_idx = i, .priority = score };
                 }
             }
         }
@@ -1141,7 +1143,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             }
 
             auto roof_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
-            if( cell.accessory_part_idx >= 0 ) {
+            if( cell.accessory_part_idx >= 0 && !veh.part_flag( cell.accessory_part_idx, "ROTOR" ) ) {
                 const auto &id = veh.cpart( cell.accessory_part_idx ).proxy_part_id.is_null() ? veh.part_info(
                                      cell.accessory_part_idx ).id : veh.cpart( cell.accessory_part_idx ).proxy_part_id;
                 if( !id.is_null() ) {
@@ -1325,23 +1327,29 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             const auto is_rear_windshield = is_windshield &&
                                             windshield_front_height >= 0.70f && windshield_rear_height <= 0.55f;
 
-            const auto shaped_panel = cell.corner != panel_corner::none && !cell.show_roof &&
+            const auto sloped_hood = !cell.show_roof && cell.height <= vehicle_body_h &&
+                                     h_fwd == 0.0f && nit_rear != cells.end() && is_windshield_cell( nit_rear->second );
+            const auto panel_top = [&]( const float forward ) {
+                const auto drop = sloped_hood ? 0.10f * std::clamp( ( forward - f_bot ) / ( f_top - f_bot ), 0.0f,
+                                  1.0f ) : 0.0f;
+                return z_base + cell.height - drop;
+            };
+            const auto shaped_panel = ( cell.corner != panel_corner::none || sloped_hood ) && !cell.show_roof &&
                                       !cell.is_windshield && !is_sloped_rear;
             if( !main_vox && shaped_panel && side_spr && side_spr->valid ) {
                 const auto outline = panel_outline( { .corner = cell.corner, .front = f_top,
                                                       .rear = f_bot, .left = r_l, .right = r_r } );
                 const auto &spr = *side_spr;
-                const auto z_top = z_base + cell.height;
                 const auto &wall_spr = paint_spr ? *paint_spr : spr;
                 for( auto index = size_t{1}; index + 1 < outline.size(); ++index ) {
                     const auto a = transform.apply( outline[0][0], outline[0][1] );
                     const auto b = transform.apply( outline[index][0], outline[index][1] );
                     const auto c = transform.apply( outline[index + 1][0], outline[index + 1][1] );
-                    const auto corners = corners_t{{ {a.x, a.y, z_top}, {b.x, b.y, z_top}, {c.x, c.y, z_top}, {c.x, c.y, z_top} }};
+                    const auto corners = corners_t{{ {a.x, a.y, panel_top( outline[0][0] )}, {b.x, b.y, panel_top( outline[index][0] )}, {c.x, c.y, panel_top( outline[index + 1][0] )}, {c.x, c.y, panel_top( outline[index + 1][0] )} }};
                     sink.add_colored( { .sprite = wall_spr, .corners = corners, .uvs = make_solid_uvs( wall_spr ), .ref = light_ref{}, .color = no_pull( modulate_light( cell.light, 1.0f ) ) } );
 
-                    const auto z_decal = static_cast<float>( z_top + 0.004f );
-                    const auto corners_decal = corners_t{{ {a.x, a.y, z_decal}, {b.x, b.y, z_decal}, {c.x, c.y, z_decal}, {c.x, c.y, z_decal} }};
+                    auto corners_decal = corners;
+                    for( auto &vertex : corners_decal ) { vertex[2] += 0.004f; }
                     const auto uv_at = [&]( const auto & point ) {
                         return map_sprite_uv( spr, ( point[1] - r_l ) / ( r_r - r_l ),
                                               ( f_top - point[0] ) / ( f_top - f_bot ) );
@@ -1364,7 +1372,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     }
                     const auto pa = transform.apply( a[0], a[1] );
                     const auto pb = transform.apply( b[0], b[1] );
-                    const auto corners = corners_t{{ {pa.x, pa.y, z_top}, {pb.x, pb.y, z_top},
+                    const auto corners = corners_t{{ {pa.x, pa.y, panel_top( a[0] )}, {pb.x, pb.y, panel_top( b[0] )},
                             {pb.x, pb.y, z_base + vehicle_clearance_h}, {pa.x, pa.y, z_base + vehicle_clearance_h}
                         }};
                     const auto length = std::hypot( b[0] - a[0], b[1] - a[1] );
@@ -1670,9 +1678,52 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     }};
 
                 if( ( paint_spr && paint_spr->valid ) || ( side_spr && side_spr->valid ) ) {
-                    const auto &rspr = paint_spr ? *paint_spr : *side_spr;
-                    sink.add_colored( { .sprite = rspr, .corners = c_roof, .uvs = make_solid_uvs( rspr ),
-                                        .ref = light_ref{}, .color = no_pull( modulate_light( cell.light, 1.0f ) ) } );
+                    auto roof_material = *( paint_spr ? paint_spr : side_spr );
+                    auto roof_light = cell.light;
+                    if( cell.roof_part_idx >= 0 && veh.part_info( cell.roof_part_idx ).id.str() == "roof" ) {
+                        const vehicle_paint_sample *donor = nullptr;
+                        for( const auto &[mount, candidate] : mount_materials ) {
+                            const auto distance = std::abs( mount.x() - cell.mount.x() ) + std::abs(
+                                                      mount.y() - cell.mount.y() );
+                            if( candidate.priority >= 20 && distance <= 1 &&
+                                !veh.cpart( candidate.part_idx ).get_base().made_of( material_id( "wood" ) ) &&
+                                ( !donor || candidate.priority > donor->priority ) ) { donor = &candidate; }
+                        }
+                        const auto own_paint = veh.cpart( cell.roof_part_idx ).get_color( true );
+                        const auto donor_paint = donor ? veh.cpart( donor->part_idx ).get_color( true ) : RGBColorPair{};
+                        const auto distinct_paint = ( own_paint.bg.a || own_paint.fg.a ) &&
+                                                    ( own_paint.bg != donor_paint.bg || own_paint.fg != donor_paint.fg );
+                        if( distinct_paint && view.cache.fixture_palette().valid ) {
+                            roof_material = view.cache.fixture_palette();
+                            roof_material.solid_uv = std::array<float, 2> { 6.5f / 7.0f, 0.5f };
+                            const auto color = own_paint.fg.a ? own_paint.fg : own_paint.bg;
+                            roof_light = modulate_paint( pack_light( color.r, color.g, color.b ), cell.light, 1.0f );
+                        } else if( donor ) {
+                            roof_material = *donor->sprite;
+                        } else if( view.cache.fixture_palette().valid ) {
+                            roof_material = view.cache.fixture_palette();
+                            roof_material.solid_uv = std::array<float, 2> { 1.5f / 7.0f, 0.5f };
+                        }
+                    }
+                    const auto crown_center = ( min_mount_y + max_mount_y ) * 0.5f - pivot_mnt.y();
+                    const auto crown_radius = ( max_mount_y - min_mount_y + 1 ) * 0.5f;
+                    const auto crown_l = roof_crown( ( r_l_roof - crown_center ) / crown_radius );
+                    const auto crown_r = roof_crown( ( r_r_roof - crown_center ) / crown_radius );
+                    auto crowned = c_roof;
+                    crowned[0][2] += crown_l;
+                    crowned[1][2] += crown_r;
+                    crowned[2][2] += crown_r;
+                    crowned[3][2] += crown_l;
+                    sink.add_colored( { .sprite = roof_material, .corners = crowned, .uvs = make_solid_uvs( roof_material ),
+                                        .ref = light_ref{}, .color = no_pull( roof_light ) } );
+                    // Close the crown down to the cabin, including front and rear end caps.
+                    for( auto edge = size_t{ 0 }; edge < 4; ++edge ) {
+                        const auto next = ( edge + 1 ) % 4;
+                        if( crowned[edge][2] == c_roof[edge][2] && crowned[next][2] == c_roof[next][2] ) { continue; }
+                        const auto skirt = corners_t{{ crowned[edge], crowned[next], c_roof[next], c_roof[edge] }};
+                        sink.add_colored( { .sprite = roof_material, .corners = skirt, .uvs = make_solid_uvs( roof_material ),
+                                            .ref = light_ref{}, .color = no_pull( modulate_light( roof_light, 0.88f ) ) } );
+                    }
                 }
 
             } else {
@@ -1967,6 +2018,40 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 }
             }
         }
+        for( auto part = 0; part < veh.part_count(); ++part ) {
+            const auto &native = veh.cpart( part );
+            if( native.removed || !veh.part_flag( part, "ROTOR" ) ) { continue; }
+            const auto found = cells.find( point( native.mount.x(), native.mount.y() ) );
+            if( found == cells.end() || !view.cache.fixture_palette().valid ) { continue; }
+            const auto &info = veh.part_info( part );
+            const auto blades = info.id.str() == "heavy_duty_military_osprey_rotors" ? 3 :
+                                info.id.str().starts_with( "heavy_duty_military" ) ? 4 : 2;
+            const auto pieces = rotor_pieces( { .diameter = static_cast<float>( info.rotor_diameter() ),
+                                                .blades = blades, .broken = native.is_broken() } );
+            for( const auto &piece : pieces ) {
+                auto material = view.cache.fixture_palette();
+                const auto u = ( static_cast<float>( piece.finish ) + 0.5f ) / 7.0f;
+                material.solid_uv = std::array<float, 2> { u, 0.5f };
+                auto vertices = std::array<std::array<float, 3>, 8> {};
+                for( auto v = size_t{ 0 }; v < vertices.size(); ++v ) {
+                    const auto x = ( v & 1 ? 0.5f : -0.5f ) * piece.box.size[0];
+                    const auto y = ( v & 2 ? 0.5f : -0.5f ) * piece.box.size[1];
+                    const auto z = ( v & 4 ? 0.5f : -0.5f ) * piece.box.size[2];
+                    const auto p = transform.apply( native.mount.x() - pivot_mnt.x() + piece.box.center[0] - 0.5f + x *
+                                                    std::cos( piece.box.yaw ) - y * std::sin( piece.box.yaw ),
+                                                    native.mount.y() - pivot_mnt.y() + piece.box.center[1] - 0.5f + x * std::sin(
+                                                        piece.box.yaw ) + y * std::cos( piece.box.yaw ) );
+                    vertices[v] = { p.x, p.y, z_base + vehicle_cabin_h + 0.04f + piece.box.center[2] + z };
+                }
+                constexpr auto faces = std::array<std::array<int, 4>, 6> {{ {4, 5, 7, 6}, {6, 7, 3, 2}, {5, 4, 0, 1}, {4, 6, 2, 0}, {7, 5, 1, 3}, {2, 3, 1, 0} }};
+                for( const auto &face : faces ) {
+                    const auto corners = corners_t{{ vertices[face[0]], vertices[face[1]], vertices[face[2]], vertices[face[3]] }};
+                    sink.add_colored( { .sprite = material, .corners = corners, .uvs = make_solid_uvs( material ),
+                                        .ref = light_ref{}, .color = no_pull( found->second.light ) } );
+                }
+            }
+        }
+
     }
 }
 

@@ -139,7 +139,7 @@ TEST_CASE("r3d_geometry_matches_snapshot", "[r3d][geometry][tiles]") {
         actual[scene] = format_line(scene, fingerprint(mesh));
     };
 
-    for (const auto* proto : {"car", "pickup", "suv", "bus", "semi_truck"}) {
+    for (const auto* proto : {"car", "pickup", "suv", "bus", "semi_truck", "2seater2"}) {
         for (const auto degrees : {0, 90, 225}) {
             const auto scene = std::string("vehicle_") + proto + "_" + std::to_string(degrees);
             render(

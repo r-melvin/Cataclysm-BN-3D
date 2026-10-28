@@ -776,7 +776,7 @@ TEST_CASE("r3d_car_hatch_blueprint_rules", "[r3d][vehicle][tiles][car_hatch]") {
     // Verify presence of sloped quads (both z_low ~0.55f and z_high ~0.85f on same quad)
     auto has_sloped_windshield = false;
     auto has_sloped_hatch = false;
-    auto has_hood_deck = false;
+    auto has_sloped_hood = false;
     auto has_rear_deck = false;
     auto front_wall_max_z = 0.0f;
     for (auto q = size_t{0}; q + 3 < mesh.vertices.size(); q += 4) {
@@ -800,14 +800,15 @@ TEST_CASE("r3d_car_hatch_blueprint_rules", "[r3d][vehicle][tiles][car_hatch]") {
                 has_sloped_hatch = true;
             }
         }
-        // Horizontal deck at body_h
         const auto expected_deck_z = r3d::floor_height + 0.02f + r3d::vehicle_body_h;
-        if (std::abs(max_z - min_z) < 0.01f && std::abs(min_z - expected_deck_z) < 0.05f) {
-            if (rel_min_x > 1.0f) {
-                has_hood_deck = true;
-            } else if (rel_max_x < -1.0f) {
-                has_rear_deck = true;
-            }
+        // The bonnet joins body height at the windshield and drops 0.10 toward the nose.
+        if (rel_min_x > 1.0f && std::abs(max_z - expected_deck_z) < 0.01f
+            && std::abs(min_z - (expected_deck_z - 0.10f)) < 0.01f) {
+            has_sloped_hood = true;
+        }
+        if (rel_max_x < -1.0f && std::abs(max_z - min_z) < 0.01f
+            && std::abs(min_z - expected_deck_z) < 0.05f) {
+            has_rear_deck = true;
         }
         // Vertical front bumper wall
         if (std::abs(max_x - min_x) < 0.02f && rel_max_x > 2.0f && max_z > min_z) {
@@ -816,9 +817,10 @@ TEST_CASE("r3d_car_hatch_blueprint_rules", "[r3d][vehicle][tiles][car_hatch]") {
     }
     CHECK(has_sloped_windshield);
     CHECK(has_sloped_hatch);
-    CHECK(has_hood_deck);
+    CHECK(has_sloped_hood);
     CHECK(has_rear_deck);
-    CHECK(front_wall_max_z >= (r3d::floor_height + 0.02f + r3d::vehicle_body_h) - 0.02f);
+    CHECK(front_wall_max_z
+          == Approx(r3d::floor_height + 0.02f + r3d::vehicle_body_h - 0.10f).margin(0.01f));
 }
 TEST_CASE("r3d_vehicle_solid_faces_sample_opaque_pixels", "[r3d][vehicle][tiles]") {
     const auto cleanup = on_out_of_scope([] { clear_all_state(); });
@@ -969,20 +971,33 @@ TEST_CASE("r3d_vehicle_mounts_keep_their_material_without_double_tint", "[r3d][v
     const auto deck_height = r3d::floor_height + 0.02f + r3d::vehicle_body_h;
     for (auto i = 0; i < static_cast<int>(panels.size()); ++i) {
         CAPTURE(panels[i]);
-        const auto& material =
-            cache
-                .named({.category = C_VEHICLE_PART,
-                        .id = std::string("vp_") + panels[i],
-                        .tiles = *tilecontext})
-                .main();
+        auto material =
+            panels[i] == std::string_view("roof")
+                ? cache.fixture_palette()
+                : cache
+                      .named({.category = C_VEHICLE_PART,
+                              .id = std::string("vp_") + panels[i],
+                              .tiles = *tilecontext})
+                      .main();
+        if (panels[i] == std::string_view("roof")) {
+            material.solid_uv = std::array<float, 2>{1.5f / 7.0f, 0.5f};
+        }
         REQUIRE(material.valid);
         REQUIRE(material.solid_uv);
         auto decks = 0;
         for (auto q = size_t{0}; q < mesh.vertices.size(); q += 4) {
             const auto quad = std::span(mesh.vertices).subspan(q, 4);
-            if (!std::ranges::all_of(quad, [i, deck_height](const auto& vertex) {
-                    return vertex.x >= i && vertex.x <= i + 1 && vertex.z == Approx(deck_height);
-                })) {
+            const auto roof = panels[i] == std::string_view("roof");
+            const auto projected_area =
+                (quad[1].x - quad[0].x) * (quad[3].y - quad[0].y)
+                - (quad[1].y - quad[0].y) * (quad[3].x - quad[0].x);
+            if (std::abs(projected_area) < 1e-6f
+                || !std::ranges::all_of(quad, [i, deck_height, roof](const auto& vertex) {
+                       return vertex.x >= i && vertex.x <= i + 1
+                           && (roof ? vertex.z >= deck_height - 1e-6f
+                                          && vertex.z <= deck_height + 0.061f
+                                    : vertex.z == Approx(deck_height));
+                   })) {
                 continue;
             }
             ++decks;
@@ -1004,6 +1019,120 @@ TEST_CASE("r3d_vehicle_mounts_keep_their_material_without_double_tint", "[r3d][v
         }
         CHECK(decks > 0);
     }
+}
+
+TEST_CASE(
+    "r3d_native_helicopter_rotors_extend_beyond_their_mount_and_keep_broken_hubs",
+    "[r3d][vehicle][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto& here = get_map();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = here.add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    const auto mount = tripoint_mnt_veh::zero();
+    REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh->install_part(mount, vpart_id("roof"), true) >= 0);
+    const auto rotor = veh->install_part(mount, vpart_id("small_civilian_rotors"), true);
+    REQUIRE(rotor >= 0);
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto intact = r3d::build_vehicle_mesh(view);
+    REQUIRE_FALSE(intact.vertices.empty());
+    const auto span = [](const auto& mesh) {
+        return std::ranges::max(mesh.vertices, {}, &r3d::vertex::x).x
+             - std::ranges::min(mesh.vertices, {}, &r3d::vertex::x).x;
+    };
+    CHECK(span(intact) > 6.0f);
+    CHECK(std::ranges::max(intact.vertices, {}, &r3d::vertex::z).z > r3d::vehicle_cabin_h + 0.2f);
+    veh->set_hp(veh->part(rotor), 0);
+    const auto broken = r3d::build_vehicle_mesh(view);
+    CHECK(span(broken) < 2.0f);
+    CHECK(std::ranges::max(broken.vertices, {}, &r3d::vertex::z).z > r3d::vehicle_cabin_h + 0.2f);
+}
+
+TEST_CASE(
+    "r3d_roofs_match_adjacent_body_art_and_keep_distinct_native_paint", "[r3d][vehicle][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto& here = get_map();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = here.add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    const auto body_mount = tripoint_mnt_veh::zero();
+    const auto roof_mount = tripoint_mnt_veh(0, 1, 0);
+    REQUIRE(veh->install_part(body_mount, vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh->install_part(body_mount, vpart_id("halfboard_horizontal"), true) >= 0);
+    REQUIRE(veh->install_part(roof_mount, vpart_id("frame_horizontal"), true) >= 0);
+    const auto roof_part = veh->install_part(roof_mount, vpart_id("roof"), true);
+    REQUIRE(roof_part >= 0);
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto& body =
+        cache
+            .named(
+                {.category = C_VEHICLE_PART, .id = "vp_halfboard_horizontal", .tiles = *tilecontext})
+            .main();
+    REQUIRE(body.solid_uv);
+    const auto plain = r3d::build_vehicle_mesh(view);
+    auto roof_uses_body = false;
+    for (const auto& batch : plain.batches) {
+        if (batch.sheet != body.sheet) { continue; }
+        for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+            const auto& v = plain.vertices[plain.indices[i]];
+            if (v.y < -1.0f && v.u == Approx((*body.solid_uv)[0])
+                && v.v == Approx((*body.solid_uv)[1])) {
+                roof_uses_body = true;
+            }
+        }
+    }
+    CHECK(roof_uses_body);
+    auto red = RGBColor{};
+    red.r = 240;
+    red.g = 30;
+    red.b = 20;
+    red.a = 255;
+    veh->part(roof_part).set_color(red, red);
+    const auto painted = r3d::build_vehicle_mesh(view);
+    auto explicit_paint = false;
+    for (const auto& batch : painted.batches) {
+        if (batch.sheet != cache.fixture_palette().sheet) { continue; }
+        for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+            const auto index = painted.indices[i];
+            const auto& v = painted.vertices[index];
+            if (v.y < -1.0f && v.u == Approx(6.5f / 7.0f) && (painted.light[index] & 255u) > 200u
+                && ((painted.light[index] >> 8) & 255u) < 40u) {
+                explicit_paint = true;
+            }
+        }
+    }
+    CHECK(explicit_paint);
 }
 
 #endif

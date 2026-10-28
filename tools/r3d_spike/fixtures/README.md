@@ -107,3 +107,19 @@ floor of wall tiles and check that the next step across the strip is blocked.
 Closed doors should open at their edge, rather than on entering that extra floor.
 Toggle full-tile walls to compare the same saved scene and native whole-cell
 collision.
+
+## Detailed appliances, radio towers and helicopter rotors
+
+Paste `appliances_radio.lua` into the inspected Lua console of a private world.
+It preflights the footprint and six vertical levels, then creates two appliance
+rows and a six-storey radio tower while preserving vehicles. Exit the console
+and wait a normal turn to refresh visibility. Inspect the sink recess and raised
+tap, oven window/handle below the hob rings, and open tower bracing with aerial
+panels at the crown. Zoom out to see the entire tower.
+
+While standing on a disposable private test vehicle, paste
+`helicopter_preview.lua`. It replaces that vehicle with the native `2seater2`
+helicopter and clears its landing pad after checking map bounds. Refresh with a
+normal turn and inspect the full eight-metre main rotor from several headings.
+Rotors are static geometry; broken parts retain a hub and short blade stubs.
+These fixtures change private saves and must not run in a normal play world.

@@ -192,3 +192,11 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Projectile regression fixtures must supply a real loaded gun when calling the native attack pipeline; creature hit handling inspects the gun item.
 
 - Automated replacements of repeated expressions must be bounded to the intended function and assert the expected match count before writing.
+
+- Renderer code must use `vehicle_part::get_base()` for item material inspection; the backing `base` field is private outside the vehicle implementation.
+
+- Furniture `looks_like` identifies an art donor, not appliance semantics: `f_dishwasher` borrows `f_oven` art but must not acquire hob/oven geometry. Pin native appliance identities and test donor-only neighbours.
+
+- Renderer-owned procedural palettes must upload through `gpu::create_sheet` before the first 3D frame; SDL_Renderer texture uploads wait until present. Release those palette owners before device shutdown.
+
+- Native test invocations share `test_user_dir`; run them serially even on separate virtual displays to avoid save/fixture interference.

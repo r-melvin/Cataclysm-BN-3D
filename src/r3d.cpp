@@ -109,6 +109,7 @@ struct chunk_key_hash {
 
 struct chunk_gpu {
     bool built = false;
+    float max_height = chunk_max_height;
     uint64_t stamp = 0;
     uint64_t last_used = 0;
     SDL_GPUBuffer *positions = nullptr;
@@ -205,6 +206,7 @@ struct state {
     bool sky_failed = false;
     bool animated_weather = false;
     bool chunks_first_person = false; // the mode the chunk meshes were built for
+    int chunks_lowest_z = -OVERMAP_DEPTH;
     // First-person easing: the player and the heading jump, the picture catches up. The offsets
     // are what is left to show, measured from the logical camera back to where it was.
     bool fp_prev_valid = false;
@@ -333,7 +335,7 @@ auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
     const auto mesh_started = stats.enabled ? std::chrono::steady_clock::now() :
                               std::chrono::steady_clock::time_point{};
     auto mesh = build_chunk_mesh( { .pos = pos, .lookup = lookup, .cache = s.cache, .tiles = *tilecontext,
-                                    .config = { .first_person = s.chunks_first_person, .ceilings = s.chunks_first_person } } );
+                                    .config = { .first_person = s.chunks_first_person, .ceilings = s.chunks_first_person, .lowest_visible_z = s.chunks_lowest_z } } );
     if( stats.enabled ) {
         stats.mesh_ms += std::chrono::duration<double, std::milli>( std::chrono::steady_clock::now() -
                          mesh_started ).count();
@@ -343,6 +345,8 @@ auto rebuild_chunk( const rebuild_chunk_options &options ) -> bool
     release_chunk( s, c );
     c.stamp = stamp;
     c.built = true;
+    c.max_height = chunk_max_height;
+    for( const auto &vertex : mesh.vertices ) { c.max_height = std::max( c.max_height, vertex.z ); }
     c.uprights = std::move( mesh.uprights );
     if( mesh.indices.empty() ) {
         ++stats.rebuilt;
@@ -2117,6 +2121,7 @@ auto shutdown() -> void
     s.sky_failed = false;
     s.animated_weather = false;
     s.tileset_loads = 0;
+    s.cache.set_fixture_palette( {} );
     s.device.shutdown();
     s.epoch_valid = false;
     s.drawn = false;
@@ -2324,7 +2329,8 @@ auto draw_first_person_weapon( const draw_first_person_weapon_options &options )
     const auto data = tilecontext->get_sprite_draw_data( {
         .id = item_id,
         .category = C_ITEM,
-        .pos = you.bub_pos()
+        .pos = you.bub_pos(),
+                  .variant = ""
     } );
     if( !data || !data->texture ) {
         return;
@@ -2410,6 +2416,7 @@ auto draw( const draw_options &options ) -> bool
             s.failed_epoch = render_epoch;
             return false;
         }
+        s.cache.set_fixture_palette( make_fixture_palette( renderer, &s.device ) );
         s.epoch = render_epoch;
         s.epoch_valid = true;
     }
@@ -2529,6 +2536,10 @@ auto draw( const draw_options &options ) -> bool
     const auto z_hi = multi_z && ( open_sky ||
                                    fp ) ? std::min( high_z + max_levels_above, OVERMAP_HEIGHT ) : high_z;
     const auto z_lo = static_cast<int>( std::max( low_z - depth, -OVERMAP_DEPTH ) );
+    if( z_lo != s.chunks_lowest_z ) {
+        release_all_chunks( s );
+        s.chunks_lowest_z = z_lo;
+    }
     const auto base = tripoint_abs_sm( here.get_abs_sub(), view_z );
 
     // Only submaps inside the reality bubble: looking anything else up could load it from disk.
@@ -2650,11 +2661,13 @@ auto draw( const draw_options &options ) -> bool
                 const auto ox = static_cast<float>( chunk_origin.x() - origin.x() );
                 const auto oy = static_cast<float>( -static_cast<float>( chunk_origin.y() - origin.y() ) );
                 const auto oz = static_cast<float>( z - view_z );
-                const auto box = aabb{ .min = { .x = ox, .y = oy - SEEY, .z = oz }, .max = { .x = ox + SEEX, .y = oy, .z = oz + chunk_max_height } };
-                if( !fr.intersects( box ) ) {
-                    continue;
-                }
                 const auto stamp = static_cast<uint64_t>( chunk_stamp( pos, lookup ) );
+                const auto existing = s.chunks.find( chunk_key{ .x = pos.x(), .y = pos.y(), .z = pos.z() } );
+                const auto height = existing != s.chunks.end() && existing->second.built &&
+                                    existing->second.stamp == stamp ? existing->second.max_height :
+                                    static_cast<float>( OVERMAP_HEIGHT - z + 4 );
+                const auto box = aabb{ .min = { .x = ox, .y = oy - SEEY, .z = oz }, .max = { .x = ox + SEEX, .y = oy, .z = oz + height } };
+                if( !fr.intersects( box ) ) { continue; }
                 if( stamp == 0 ) {
                     continue; // not loaded
                 }

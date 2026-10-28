@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <limits>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -18,6 +19,7 @@
 #include "coordinates.h"
 #include "r3d_furniture_profiles.h"
 #include "r3d_prop_geometry.h"
+#include "r3d_fixture_geometry.h"
 #include "r3d_gpu.h"
 #include "r3d_presentation_profiles.h"
 #include "r3d_sprite_voxels.h"
@@ -70,6 +72,8 @@ struct sprite_ref {
 struct tile_info {
     shape sh;
     solid_prop prop = solid_prop::none;
+    appliance_kind appliance = appliance_kind::none;
+    bool radio_tower = false;
     bool stair_flight = false;
     bool stairs_down = false;
     sprite_ref backdrop; // opaque background layer, drawn first when the tileset has one
@@ -132,8 +136,10 @@ struct wall_sides {
 class tile_info_cache
 {
     public:
-        /// Forgets every lookup; the wall side textures stay.
+        /// Forgets every lookup; wall sides and the renderer-owned model palette stay.
         auto clear() -> void;
+        auto fixture_palette() -> const sprite_ref &; // *NOPAD*
+        auto set_fixture_palette( sprite_ref palette ) -> void;
         /// Side textures for walls from now on (nullptr for the tileset sprite); clears.
         auto set_wall_sides( std::shared_ptr<const wall_sides> sides ) -> void;
         /// Whether painted and plain walls take the atlas's plaster texture (true) or their own
@@ -191,6 +197,7 @@ class tile_info_cache
         std::unordered_map<int, tile_info> furniture_;
         std::unordered_map<std::string, tile_info> named_;
         tile_info ground_;
+        sprite_ref fixture_palette_;
         bool ground_loaded_ = false;
         std::shared_ptr<const wall_sides> wall_sides_;
         bool plaster_atlas_ = false;
@@ -301,6 +308,8 @@ struct mesh_options {
     bool first_person = false;
     /// Ceilings under storeys above, which are only seen from below (so only first person).
     bool ceilings = false;
+    /// The first visible storey owns the remaining tower column above it.
+    int lowest_visible_z = std::numeric_limits<int>::lowest();
 };
 
 /// Meshes the terrain and furniture of one submap. Returns an empty mesh if it is not loaded.

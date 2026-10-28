@@ -183,6 +183,15 @@ and the exact command are in `out/validation/wall-edges/`; the checked-in
 `fixtures/wall_edges.lua` reproduces the scene. Mouse picking and lighting still
 use native tile columns.
 
+Appliance/tower follow-up completed (2026-10-28): dedicated sink recess/tap,
+cabinet fronts, hob rings and oven window/handle replace projected sprite faces.
+Authored face overrides remain on model panels; missing-art markers stay readable.
+Radio towers now have open diagonal bracing spanning contiguous native levels,
+including upper-storey views and tall-column culling/invalidation. Native fixtures
+cover Ultica and Hoder; private Xvfb checks show appliance fronts and a six-storey
+support with aerial panels. Both game/test targets build; the CPU `[r3d],[wall_edges]` suite passes
+187 cases / 57,637 assertions. Evidence: `out/validation/appliances-aircraft/`.
+
 ## R3D-04: Finish vehicle layer, material and state presentation
 
 **Status: implementation/visual validation; depends on R3D-03/07.** Role lists,
@@ -232,6 +241,16 @@ snapshots at 0/90/225 degrees retain their quad counts and update their intended
 lighting fingerprints; both item snapshots are unchanged. Private virtual-window
 checks include engine start, taking control, low-speed acceleration and braking.
 These fixes do not complete every vehicle state/material or platform gate.
+
+Screenshot follow-up completed (2026-10-28): generic metal roofs follow adjacent
+exterior materials while preserving distinct native paint. Crowned roofs and
+sloped bonnets soften the silhouette without changing vehicle footprints. Native
+helicopter rotors now have masts, hubs and diameter-scaled blades; broken rotors
+retain short stubs. Rotors are posed, not animated. Private Xvfb inspection covers
+the native `2seater2` helicopter. Intentional geometry snapshots update car,
+pickup, SUV, bus and semi-truck and add `2seater2`, each at 0/90/225 degrees;
+both item fingerprints remain unchanged. These changes do not close the broader
+vehicle-state acceptance matrix.
 
 Source and acceptance matrix:
 [vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).
