@@ -56,7 +56,7 @@ struct camera {
     static constexpr auto min_pitch = static_cast<float>( 0.17f );  // ~10 degrees
     static constexpr auto max_pitch = static_cast<float>
                                       ( 1.553f ); // ~89 degrees, avoids the look_at singularity
-    static constexpr auto min_distance = static_cast<float>( 4.0f );
+    static constexpr auto min_distance = static_cast<float>( 3.0f );
     static constexpr auto max_distance = static_cast<float>( 120.0f );
 
     vec3 target;               // world space, normally the centre of the viewed tile
@@ -66,8 +66,8 @@ struct camera {
     // straight to and from (unstretched) world space.
     float z_scale = 1.0f;
     float yaw = 0.0f;
-    float pitch = 0.96f;       // ~55 degrees
-    float distance = 18.0f;
+    float pitch = 0.42f;       // ~24 degrees: 3rd-person angle from behind the player
+    float distance = 9.0f;     // close 3rd-person follow distance
     float fovy = 0.785f;       // 45 degrees
     bool orthographic = false;
 
@@ -133,6 +133,21 @@ auto eighths_towards( int dx, int dy ) -> int;
 
 /// Extracts the six clip planes from a view-projection matrix (depth range [0, 1]).
 auto frustum_from_matrix( const mat4 &view_proj ) -> frustum;
+
+struct targeting_camera_options {
+    camera base_cam{};
+    vec3 player_tile{};
+    vec3 target_tile{};
+    float aspect = 1.6f;
+    vec3 pan_offset{};
+    float yaw_offset_user = 0.0f;
+    float pitch_offset_user = 0.0f;
+    float zoom_factor_user = 1.0f;
+};
+
+/// Computes an orbit camera framing both the player and the targeted tile/enemy in view,
+/// taking bearing, distance, elevation, and the bottom-left targeting UI panel into account.
+auto compute_targeting_camera( const targeting_camera_options &options ) -> camera;
 
 } // namespace r3d
 

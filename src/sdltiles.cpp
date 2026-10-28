@@ -1611,7 +1611,8 @@ namespace
 {
 auto draw_r3d_hud_texts( const SDL_Rect &bounds ) -> void
 {
-    if( !map_font ) { return; }
+    auto *const hud_font = font ? font.get() : map_font.get();
+    if( !hud_font ) { return; }
     const auto clipped = SDL_RenderClipEnabled( renderer.get() );
     auto old_clip = SDL_Rect{};
     SDL_GetRenderClipRect( renderer.get(), &old_clip );
@@ -1622,7 +1623,7 @@ auto draw_r3d_hud_texts( const SDL_Rect &bounds ) -> void
     if( clipped ) { SDL_GetRectIntersection( &old_clip, &clip, &clip ); }
     SDL_SetRenderClipRect( renderer.get(), &clip );
     for( const auto &t : r3d::hud_texts() ) {
-        const auto width = float( utf8_width( t.text ) * map_font->width );
+        const auto width = float( utf8_width( t.text ) * hud_font->width );
         const auto left = t.align < 0 ? t.x : t.align > 0 ? t.x - width : t.x - width * 0.5f;
         if( t.boxed ) {
             auto blend = SDL_BLENDMODE_NONE;
@@ -1634,12 +1635,12 @@ auto draw_r3d_hud_texts( const SDL_Rect &bounds ) -> void
             SDL_GetRenderDrawColor( renderer.get(), &red, &green, &blue, &alpha );
             SDL_SetRenderDrawBlendMode( renderer.get(), SDL_BLENDMODE_BLEND );
             SDL_SetRenderDrawColor( renderer.get(), 0, 0, 0, 170 );
-            const auto box = SDL_FRect{ left - 3, t.y - 1, width + 6, float( map_font->height ) + 2 };
+            const auto box = SDL_FRect{ left - 3, t.y - 1, width + 6, float( hud_font->height ) + 2 };
             SDL_RenderFillRect( renderer.get(), &box );
             SDL_SetRenderDrawBlendMode( renderer.get(), blend );
             SDL_SetRenderDrawColor( renderer.get(), red, green, blue, alpha );
         }
-        draw_string( *map_font, renderer, geometry, t.text, point( int( left ), int( t.y ) ), t.color );
+        draw_string( *hud_font, renderer, geometry, t.text, point( int( left ), int( t.y ) ), t.color );
     }
 }
 }
@@ -1681,7 +1682,11 @@ void cata_cursesport::curses_drawwindow( const catacurses::window &w )
             draw_flat();
             tilecontext->restore_frame_markers( markers );
         }
-        if( map_font ) { r3d::set_text_cell( map_font->width, map_font->height ); }
+        if( font ) {
+            r3d::set_text_cell( font->width, font->height );
+        } else if( map_font ) {
+            r3d::set_text_cell( map_font->width, map_font->height );
+        }
         const auto drawn_3d = r3d::draw( { .renderer = renderer.get(), .x = float( win->pos.x * fontwidth ),
                                            .y = float( win->pos.y * fontheight ), .w = float( TERRAIN_WINDOW_TERM_WIDTH * font->width ),
                                            .h = float( TERRAIN_WINDOW_TERM_HEIGHT * font->height ), .center = g->ter_view_p, .render_epoch = 0 } );

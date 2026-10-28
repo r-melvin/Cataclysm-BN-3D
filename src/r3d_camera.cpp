@@ -246,4 +246,55 @@ auto frustum_from_matrix( const mat4 &m ) -> frustum
     return f;
 }
 
+auto compute_targeting_camera( const targeting_camera_options &options ) -> camera
+{
+    auto cam = options.base_cam;
+    cam.mode = camera_mode::orbit;
+    cam.orthographic = false;
+    cam.tween_yaw = 0.0f;
+    cam.tilt_pitch = 0.0f;
+
+    const auto dx = options.target_tile.x - options.player_tile.x;
+    const auto dy = options.target_tile.y - options.player_tile.y;
+    const auto dz = options.target_tile.z - options.player_tile.z;
+    const auto horiz_dist = std::hypot( dx, dy );
+
+    constexpr auto two_pi = static_cast<float>( 6.2831853f );
+    const auto dist_t = std::clamp( ( horiz_dist - 1.0f ) / 10.0f, 0.0f, 1.0f );
+    if( horiz_dist > 1e-3f ) {
+        const auto bearing = std::atan2( dx, -dy );
+        const auto shoulder_angle = 0.24f * ( 1.0f - dist_t ) + 0.09f * dist_t;
+        cam.yaw = std::fmod( -bearing - shoulder_angle + options.yaw_offset_user, two_pi );
+    } else {
+        cam.yaw = std::fmod( options.base_cam.yaw + options.yaw_offset_user, two_pi );
+    }
+
+    const auto base_pitch = 0.28f + 0.05f * dist_t;
+    const auto elev_adj = std::clamp(
+                              -std::atan2( dz * cam.z_scale, std::max( horiz_dist, 1.5f ) ) * 0.55f,
+                              -0.22f, 0.28f );
+    cam.pitch = std::clamp( base_pitch + elev_adj + options.pitch_offset_user,
+                            camera::min_pitch, camera::max_pitch );
+
+    const auto base_dist = 5.4f + 1.0f * dist_t;
+    cam.distance = std::clamp( base_dist * std::max( options.zoom_factor_user, 0.25f ),
+                               camera::min_distance, camera::max_distance );
+
+    const auto dir_x = horiz_dist > 1e-3f ? ( dx / horiz_dist ) : std::sin( -cam.yaw );
+    const auto dir_y = horiz_dist > 1e-3f ? ( dy / horiz_dist ) : -std::cos( -cam.yaw );
+    const auto look_ahead = std::clamp( horiz_dist * 0.45f, 0.65f, 2.5f );
+    const auto look_z_frac = horiz_dist > 1e-3f ?
+                             std::clamp( look_ahead / horiz_dist, 0.0f, 1.0f ) : 0.0f;
+    const auto inv_z = 1.0f / std::max( cam.z_scale, 0.5f );
+    const auto anchor_tile = vec3{
+        .x = options.player_tile.x + dir_x * look_ahead,
+        .y = options.player_tile.y + dir_y * look_ahead,
+        .z = options.player_tile.z + dz * look_z_frac + 0.52f * inv_z
+    };
+    constexpr auto shoulder_shift = 0.48f;
+    cam.target = tile_to_world( anchor_tile ) - cam.ground_right() * shoulder_shift +
+                 options.pan_offset;
+    return cam;
+}
+
 } // namespace r3d

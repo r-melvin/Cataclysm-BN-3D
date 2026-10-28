@@ -2101,8 +2101,11 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
         return static_cast<float>( p.z() - view.center.z() );
     };
 
+    const auto special_creature_pass = view.avatar_only || view.target_outline_only ||
+                                       view.target_body_only;
+
     // Fields and items change independently of the terrain mesh, including between turns.
-    for( auto z = static_cast<int>( view.z_lo ); z <= view.z_hi && !view.avatar_only; ++z ) {
+    for( auto z = static_cast<int>( view.z_lo ); z <= view.z_hi && !special_creature_pass; ++z ) {
         for( auto dy = -creature_radius; dy <= creature_radius; ++dy ) {
             for( auto dx = -creature_radius; dx <= creature_radius; ++dx ) {
                 const auto p = tripoint_bub_ms( view.center.x() + dx, view.center.y() + dy, z );
@@ -2223,7 +2226,7 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
 
     // Trees and tall furniture of the visible chunks; unseen ones are drawn like their tile.
     for( const entity_view::standing &u : view.uprights ) {
-        if( view.avatar_only || !u.info ) {
+        if( special_creature_pass || !u.info ) {
             continue;
         }
         emit_billboard( { .sink = sink, .layers = { u.info }, .right_world = right, .up_world = up, .toward_world = toward, .z_scale = view.cam.z_scale, .cx = frame_x( u.pos ),
@@ -2240,7 +2243,17 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
         if( !in_range( p, creature_radius ) ) {
             continue;
         }
+        const auto is_targeted = view.targeted_creature && p == *view.targeted_creature &&
+                                 !critter.is_avatar();
+        const auto is_hit_flashed = view.hit_flash_creature && p == *view.hit_flash_creature &&
+                                    !critter.is_avatar();
         if( view.avatar_only && !critter.is_avatar() ) {
+            continue;
+        }
+        if( view.target_outline_only && !is_targeted ) {
+            continue;
+        }
+        if( view.target_body_only && !is_targeted && !is_hit_flashed ) {
             continue;
         }
         if( critter.is_avatar() ? upright : !you.sees( critter ) ) {
@@ -2290,12 +2303,99 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
             cx += ahead_x * slide;
             cy += ahead_y * slide;
         }
+        const auto z_base = frame_z( p ) + view.surface( p );
+        if( is_targeted && !view.target_body_only ) {
+            struct outline_offset {
+                float dr = 0.0f;
+                float du = 0.0f;
+            };
+            constexpr auto outline_off = 0.042f;
+            constexpr auto back_step = 0.024f;
+            const auto back_x = -toward.x * back_step;
+            const auto back_y = toward.y * back_step;
+            const auto back_z = -toward.z * back_step / std::max( view.cam.z_scale, 0.1f );
+            const auto outline_color = pack_light( 255, 45, 40 );
+            const auto offsets = std::array<outline_offset, 4> {{
+                    { .dr = -outline_off, .du = 0.0f },
+                    { .dr = outline_off, .du = 0.0f },
+                    { .dr = 0.0f, .du = -outline_off },
+                    { .dr = 0.0f, .du = outline_off }
+                }
+            };
+            for( const auto &off : offsets ) {
+                const auto ox = cx + back_x + right.x * off.dr + up.x * off.du;
+                const auto oy = cy + back_y - right.y * off.dr - up.y * off.du;
+                const auto oz = z_base + back_z +
+                                ( up.z * off.du ) / std::max( view.cam.z_scale, 0.1f );
+                emit_billboard( { .sink = sink, .layers = layers, .right_world = right, .up_world = up,
+                                  .toward_world = toward, .z_scale = view.cam.z_scale,
+                                  .cx = ox, .cy = oy, .z_base = oz,
+                                  .color = outline_color, .mirrored = mirrored } );
+            }
+            if( view.target_outline_only ) {
+                continue;
+            }
+        }
+        const auto lit_color = color == pack_light( 0, 0, 0 ) ? seen_in_dark_light : color;
+        const auto final_color = is_hit_flashed ? view.hit_flash_color :
+                                 ( is_targeted ? pack_light( 255, 95, 90 ) : lit_color );
         emit_billboard( { .sink = sink, .layers = layers, .right_world = right, .up_world = up, .toward_world = toward, .z_scale = view.cam.z_scale, .cx = cx, .cy = cy,
-                          .z_base = frame_z( p ) + view.surface( p ), .color = color == pack_light( 0, 0, 0 ) ? seen_in_dark_light : color,
+                          .z_base = z_base, .color = final_color,
                           .mirrored = mirrored } );
     }
-    if( view.avatar_only ) {
+    if( special_creature_pass ) {
         return sink.finish();
+    }
+    for( const entity_view::beam_segment &b : view.beams ) {
+        const auto *spr = b.sprite;
+        if( !spr || !spr->valid ) {
+            const auto &fallback = view.cache.named( { .category = C_NONE, .id = "cursor", .tiles = view.tiles } );
+            spr = fallback.sprite.valid ? &fallback.sprite : &fallback.backdrop;
+        }
+        if( !spr || !spr->valid ) {
+            continue;
+        }
+        const auto dx = b.to.x - b.from.x;
+        const auto dy = b.to.y - b.from.y;
+        const auto dz = b.to.z - b.from.z;
+        if( dx * dx + dy * dy + dz * dz < 1e-5f ) {
+            continue;
+        }
+        const auto hw = std::max( b.width * 0.5f, 0.004f );
+        const auto hz = hw / std::max( view.cam.z_scale, 0.5f );
+        const auto len_xy = std::hypot( dx, dy );
+        const auto px = len_xy > 1e-4f ? ( -dy / len_xy * hw ) : hw;
+        const auto py = len_xy > 1e-4f ? ( dx / len_xy * hw ) : 0.0f;
+        const auto solid_uv = make_solid_uvs( *spr );
+        const auto vcol = no_pull( b.color );
+
+        const auto h_top = corners_t{{
+                { b.from.x - px, b.from.y - py, b.from.z },
+                { b.to.x - px, b.to.y - py, b.to.z },
+                { b.to.x + px, b.to.y + py, b.to.z },
+                { b.from.x + px, b.from.y + py, b.from.z }
+            }};
+        const auto h_bot = corners_t{{
+                { b.from.x + px, b.from.y + py, b.from.z },
+                { b.to.x + px, b.to.y + py, b.to.z },
+                { b.to.x - px, b.to.y - py, b.to.z },
+                { b.from.x - px, b.from.y - py, b.from.z }
+            }};
+        const auto v_side1 = corners_t{{
+                { b.from.x, b.from.y, b.from.z + hz },
+                { b.to.x, b.to.y, b.to.z + hz },
+                { b.to.x, b.to.y, b.to.z - hz },
+                { b.from.x, b.from.y, b.from.z - hz }
+            }};
+        const auto v_side2 = corners_t{{
+                { b.from.x, b.from.y, b.from.z - hz },
+                { b.to.x, b.to.y, b.to.z - hz },
+                { b.to.x, b.to.y, b.to.z + hz },
+                { b.from.x, b.from.y, b.from.z + hz }
+            }};
+        for( const auto &quad : { h_top, h_bot, v_side1, v_side2 } ) {
+            sink.add_colored( { .sprite = *spr, .corners = quad, .uvs = solid_uv, .ref = light_ref{}, .color = vcol } );
+        }
     }
     // Markers last; they sit just above the surface so the depth test keeps them in front of it.
     for( const entity_view::marker &m : view.markers ) {
@@ -2305,32 +2405,36 @@ auto build_entity_mesh( const entity_view &view ) -> chunk_mesh
         const auto x0 = static_cast<float>( m.pos.x() - view.center.x() );
         const auto y0 = static_cast<float>( m.pos.y() - view.center.y() );
         const auto z = static_cast<float>( frame_z( m.pos ) + m.top + 0.03f );
+        const auto is_targeted_marker = view.targeted_creature && m.pos == *view.targeted_creature;
+        const auto marker_color = is_targeted_marker ? pack_light( 245, 55, 48 ) : m.color;
+        const auto draw_box = m.box && !is_targeted_marker;
+        const auto draw_large = m.large && !is_targeted_marker;
 
         if( m.heard ) {
             const auto &s = m.sprite->main();
             if( upright && s.valid ) {
-                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + heard_post_height, .color = white, .size = heard_post_width } );
+                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + heard_post_height, .color = marker_color, .size = heard_post_width } );
             }
             continue;
         }
-        emit_flat( { .sink = sink, .sprite = *m.sprite, .cx = x0 + 0.5f, .cy = y0 + 0.5f, .z = z, .color = white, .size = 1.0f } );
+        emit_flat( { .sink = sink, .sprite = *m.sprite, .cx = x0 + 0.5f, .cy = y0 + 0.5f, .z = z, .color = marker_color, .size = 1.0f } );
 
-        if( upright && !m.box && !m.large ) {
+        if( upright && !draw_box && !draw_large ) {
             // A point along a line of fire: a post that can be seen from eye level.
             const auto &s = m.sprite->main();
             if( s.valid ) {
-                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + post_height, .color = white, .size = post_width } );
+                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + post_height, .color = marker_color, .size = post_width } );
             }
-        } else if( upright && !m.box ) {
+        } else if( upright && !draw_box ) {
             const auto &s = m.sprite->main();
             if( s.valid ) {
-                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + marker_box_height, .color = white } );
+                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + marker_box_height, .color = marker_color } );
             }
         }
-        if( m.box ) {
+        if( draw_box ) {
             const auto &s = m.sprite->sprite.valid ? m.sprite->sprite : m.sprite->backdrop;
             if( s.valid ) {
-                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + marker_box_height, .color = white } );
+                emit_marker_box( { .sink = sink, .s = s, .x0 = x0, .y0 = y0, .z0 = z, .z1 = z + marker_box_height, .color = marker_color } );
             }
         }
     }

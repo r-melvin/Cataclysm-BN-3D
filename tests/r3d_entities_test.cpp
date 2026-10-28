@@ -17,6 +17,7 @@
 #    include "item.h"
 #    include "map/map.h"
 #    include "map_helpers.h"
+#    include "monster.h"
 #    include "options.h"
 #    include "options_helpers.h"
 #    include "r3d_entities.h"
@@ -369,6 +370,138 @@ TEST_CASE("r3d_missing_item_art_stays_readable_with_voxel_items_enabled", "[r3d]
     CHECK(enabled.vertices.size() == disabled.vertices.size());
     CHECK(enabled.indices == disabled.indices);
     CHECK(here.i_at(origin).size() == 1);
+}
+
+TEST_CASE(
+    "r3d_targeted_creature_renders_red_vats_highlight_without_white_cursor_box",
+    "[r3d][entities][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    const auto enemy_pos = origin + tripoint_rel_ms(2, 0, 0);
+    get_avatar().setpos(origin);
+    auto& zombie = spawn_test_monster("mon_zombie", enemy_pos);
+    REQUIRE(zombie.bub_pos() == enemy_pos);
+    get_map().update_visibility_cache(0);
+    get_avatar().recalc_sight_limits();
+
+    auto cache = r3d::tile_info_cache{};
+    const auto& cursor_sprite = cache.named(
+        {.category = C_NONE, .id = "cursor", .tiles = *tilecontext});
+    auto cam = r3d::camera{};
+    cam.mode = r3d::camera_mode::orbit;
+
+    auto untargeted_view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .z_lo = 0,
+        .z_hi = 0,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers =
+            {{.pos = enemy_pos, .top = r3d::floor_height, .sprite = &cursor_sprite, .box = true}},
+        .surface = [](const tripoint_bub_ms& /*p*/) { return r3d::floor_height; }};
+    const auto untargeted_mesh = r3d::build_entity_mesh(untargeted_view);
+
+    auto targeted_view = untargeted_view;
+    targeted_view.targeted_creature = enemy_pos;
+    const auto targeted_mesh = r3d::build_entity_mesh(targeted_view);
+
+    targeted_view.target_outline_only = true;
+    const auto outline_mesh = r3d::build_entity_mesh(targeted_view);
+    targeted_view.target_outline_only = false;
+
+    targeted_view.target_body_only = true;
+    const auto body_mesh = r3d::build_entity_mesh(targeted_view);
+    targeted_view.target_body_only = false;
+
+    REQUIRE_FALSE(body_mesh.empty());
+    REQUIRE_FALSE(outline_mesh.empty());
+    // 4-way expanded red outline has 4x the vertices of the targeted creature's body billboard
+    CHECK(outline_mesh.vertices.size() == body_mesh.vertices.size() * 4);
+
+    // Every vertex in the outline mesh is colored bright VATS red
+    const auto expected_outline_red = r3d::pack_light(255, 45, 40) & 0x00FFFFFFu;
+    for (const auto light : outline_mesh.light) {
+        CHECK((light & 0x00FFFFFFu) == expected_outline_red);
+    }
+
+    // Every vertex in the targeted body mesh is tinted crimson red
+    const auto expected_body_red = r3d::pack_light(255, 95, 90) & 0x00FFFFFFu;
+    for (const auto light : body_mesh.light) { CHECK((light & 0x00FFFFFFu) == expected_body_red); }
+
+    // The targeted mesh replaces the 16-vertex 3D white cursor box with the 4-way red outline
+    // (net difference: +4 * body_vertices - 16 vertices from suppressing the 4-sided cursor box)
+    CHECK(targeted_mesh.vertices.size() + 16
+          == untargeted_mesh.vertices.size() + outline_mesh.vertices.size());
+}
+
+TEST_CASE(
+    "r3d_deaf_effect_overlay_is_excluded_and_beams_and_hit_flash_render",
+    "[r3d][entities][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    const auto enemy_pos = origin + tripoint_rel_ms(2, 0, 0);
+    auto& you = get_avatar();
+    you.setpos(origin);
+    you.add_effect(efftype_id("deaf"), 10_minutes);
+    REQUIRE(you.has_effect(efftype_id("deaf")));
+
+    const auto char_layers = tilecontext->get_character_layers(you);
+    for (const auto& layer : char_layers.ids) {
+        CHECK(layer.first.find("effect_") == std::string::npos);
+    }
+
+    auto& zombie = spawn_test_monster("mon_zombie", enemy_pos);
+    REQUIRE(zombie.bub_pos() == enemy_pos);
+    get_map().update_visibility_cache(0);
+    you.recalc_sight_limits();
+
+    auto cache = r3d::tile_info_cache{};
+    auto cam = r3d::camera{};
+    cam.mode = r3d::camera_mode::orbit;
+
+    auto base_view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .z_lo = 0,
+        .z_hi = 0,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .surface = [](const tripoint_bub_ms& /*p*/) { return r3d::floor_height; }};
+    const auto base_mesh = r3d::build_entity_mesh(base_view);
+
+    auto fx_view = base_view;
+    const auto flash_col = r3d::pack_light(255, 245, 240);
+    fx_view.hit_flash_creature = enemy_pos;
+    fx_view.hit_flash_color = flash_col;
+    fx_view.beams.push_back(
+        {.from = {0.5f, 0.5f, 0.45f},
+         .to = {4.5f, 0.5f, 0.45f},
+         .width = 0.03f,
+         .color = r3d::pack_light(85, 240, 110)});
+    const auto fx_mesh = r3d::build_entity_mesh(fx_view);
+    // One 3D beam segment emits 4 crossed ribbon quads = 16 vertices and 24 indices
+    CHECK(fx_mesh.vertices.size() == base_mesh.vertices.size() + 16);
+    CHECK(fx_mesh.indices.size() == base_mesh.indices.size() + 24);
+
+    fx_view.target_body_only = true;
+    const auto flash_body_mesh = r3d::build_entity_mesh(fx_view);
+    REQUIRE_FALSE(flash_body_mesh.empty());
+    for (const auto light : flash_body_mesh.light) {
+        CHECK((light & 0x00FFFFFFu) == (flash_col & 0x00FFFFFFu));
+    }
 }
 
 #endif

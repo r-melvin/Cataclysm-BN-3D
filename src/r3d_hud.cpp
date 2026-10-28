@@ -30,6 +30,7 @@
 #include "options.h"
 #include "output.h"
 #include "r3d_hud_math.h"
+#include "r3d_targeting_panel.h"
 #include "sounds.h"
 #include "string_formatter.h"
 #include "translations.h"
@@ -67,27 +68,28 @@ auto hud_frame::screen( const tripoint_bub_ms &p, float height ) const -> std::o
 namespace
 {
 
-// Same colours as the flat view's scrolling combat text (msgtype_to_tilecolor in cata_tiles.cpp).
-auto message_color( game_message_type type, bool old ) -> int
+auto s_sct_ticks = uint64_t{ 0 };
+
+// High-contrast colours for world-anchored 3D scrolling combat text.
+auto message_color( game_message_type type, bool /*old*/ ) -> int
 {
-    const auto bright = static_cast<int>( old ? 0 : 8 );
     switch( type ) {
         case m_good:
-            return bright + catacurses::green;
+            return 10; // bright green
         case m_bad:
-            return bright + catacurses::red;
+            return 9;  // bright red
         case m_mixed:
         case m_headshot:
-            return bright + catacurses::magenta;
+            return 13; // bright magenta
         case m_warning:
         case m_critical:
-            return bright + catacurses::yellow;
+            return 11; // bright yellow
         case m_info:
         case m_grazing:
-            return bright + catacurses::blue;
+            return 14; // bright cyan
         case m_neutral:
         default:
-            return bright + catacurses::white;
+            return 15; // bright white
     }
 }
 
@@ -96,13 +98,20 @@ auto message_color( game_message_type type, bool old ) -> int
 // health to the left) keep their side.
 auto add_combat_text( const hud_frame &frame, std::vector<hud_text> &texts ) -> void
 {
-    if( !frame.sct ) {
+    const auto now = static_cast<uint64_t>( SDL_GetTicks() );
+    if( frame.sct && !SCT.vSCT.empty() ) {
+        s_sct_ticks = now;
+    }
+    if( SCT.vSCT.empty() || ( s_sct_ticks != 0 && now - s_sct_ticks > 1600 ) ) {
         return;
     }
     const auto z = static_cast<int>( get_avatar().bub_pos().z() );
-    constexpr auto head_height = static_cast<float>( 1.1f );
-    constexpr auto rise_per_step = static_cast<float>( 7.0f ); // logical pixels
-    for( const scrollingcombattext::cSCT &sct : SCT.vSCT ) {
+    const auto head_height = floor_height + 0.92f / std::max( frame.cam.z_scale, 0.5f );
+    constexpr auto rise_per_step = static_cast<float>( 6.0f ); // logical pixels
+    const auto anim_rise = s_sct_ticks != 0 ?
+                           std::min( 34.0f, static_cast<float>( now - s_sct_ticks ) * 0.025f ) : 0.0f;
+    for( size_t idx = 0; idx < SCT.vSCT.size(); ++idx ) {
+        const scrollingcombattext::cSCT &sct = SCT.vSCT[idx];
         const auto at = tripoint_bub_ms( sct.getInitPosX(), sct.getInitPosY(), z );
         const auto p = std::optional<vec3>( frame.screen( at, head_height ) );
         if( !p ) {
@@ -112,21 +121,22 @@ auto add_combat_text( const hud_frame &frame, std::vector<hud_text> &texts ) -> 
         const auto old = static_cast<bool>( sct.getStep() >= scrollingcombattext::iMaxSteps / 2 );
         const auto side = point( ( sct.getPosX() > sct.getInitPosX() ) - ( sct.getPosX() <
                                  sct.getInitPosX() ), 0 );
-        const auto sx = static_cast<float>( p->x + static_cast<float>( side.x ) * 18.0f );
-        const auto sy = static_cast<float>( p->y - static_cast<float>( steps ) * rise_per_step );
-        if( sx < frame.x || sx > frame.x + frame.w || sy < frame.y || sy > frame.y + frame.h ) {
-            continue;
-        }
+        const auto sx = std::clamp( p->x + static_cast<float>( side.x ) * 18.0f,
+                                    frame.x + 24.0f, std::max( frame.x + 24.0f, frame.x + frame.w - 24.0f ) );
+        const auto stack_offset = static_cast<float>( idx ) * ( std::max( frame.cell_h, 14.0f ) + 4.0f );
+        const auto sy = std::clamp( p->y - static_cast<float>( steps ) * rise_per_step - anim_rise -
+                                    stack_offset,
+                                    frame.y + 28.0f, std::max( frame.y + 28.0f, frame.y + frame.h - 24.0f ) );
         const auto first = std::string( sct.getText( "first" ) );
         const auto second = std::string( sct.getText( "second" ) );
         const auto align = static_cast<int>( side.x > 0 ? -1 : side.x < 0 ? 1 : 0 );
         if( second.empty() ) {
-            texts.push_back( { .x = sx, .y = sy, .text = first, .color = message_color( sct.getMsgType( "first" ), old ), .align = align, .boxed = false } );
+            texts.push_back( { .x = sx, .y = sy, .text = first, .color = message_color( sct.getMsgType( "first" ), old ), .align = align, .boxed = true } );
         } else {
             // Two coloured parts on one line: the second starts where the first ends (the caller
             // measures text in cells, so split around x).
-            texts.push_back( { .x = sx, .y = sy, .text = first, .color = message_color( sct.getMsgType( "first" ), old ), .align = 1, .boxed = false } );
-            texts.push_back( { .x = sx, .y = sy, .text = second, .color = message_color( sct.getMsgType( "second" ), old ), .align = -1, .boxed = false } );
+            texts.push_back( { .x = sx - 2.0f, .y = sy, .text = first, .color = message_color( sct.getMsgType( "first" ), old ), .align = 1, .boxed = true } );
+            texts.push_back( { .x = sx + 2.0f, .y = sy, .text = second, .color = message_color( sct.getMsgType( "second" ), old ), .align = -1, .boxed = true } );
         }
     }
 }
@@ -428,7 +438,8 @@ auto add_status_badges( const hud_frame &frame, std::vector<hud_text> &texts ) -
 {
     const auto &you = get_avatar();
     auto x = frame.x + 8.0f;
-    const auto y = frame.y + frame.h - frame.cell_h - 8.0f;
+    const auto y = has_targeting_panel() ? ( frame.y + 8.0f ) : ( frame.y + frame.h - frame.cell_h -
+                   8.0f );
     // Use BN's own sidebar descriptions and thresholds.
     const auto needs = std::array{ you.get_hunger_description(), you.get_thirst_description(),
                                    you.get_fatigue_description(), you.get_pain_description() };
@@ -590,7 +601,8 @@ auto hud_animation_pending() -> bool
     const auto &ev = events();
     const auto now = SDL_GetTicks();
     return ( ev.hit_ticks != 0 && now - ev.hit_ticks <= 1000 ) ||
-           ( ev.place_ticks != 0 && now - ev.place_ticks <= 3500 );
+           ( ev.place_ticks != 0 && now - ev.place_ticks <= 3500 ) ||
+           ( !SCT.vSCT.empty() && s_sct_ticks != 0 && now - s_sct_ticks <= 1600 );
 }
 
 auto draw_hud( const draw_hud_options &options ) -> void

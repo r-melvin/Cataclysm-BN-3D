@@ -186,10 +186,38 @@ struct state {
     dynamic_mesh_buffers dyn;
     dynamic_mesh_buffers veh;
     dynamic_mesh_buffers silhouette;
+    dynamic_mesh_buffers target_outline;
+    dynamic_mesh_buffers target_body;
     dynamic_mesh_buffers fx;
     shown_view shown;
     bool map_drawn = false; // the game's map view has been on screen (a game is running)
     vec3 pan; // free camera: offset of the camera target from the viewed tile, world space
+    bool was_targeting = false;
+    camera saved_pre_target_cam{};
+    vec3 saved_pre_target_pan{};
+    tripoint_bub_ms last_targeting_player{};
+    tripoint_bub_ms last_targeting_dst{};
+    float targeting_yaw_offset = 0.0f;
+    float targeting_pitch_offset = 0.0f;
+    float targeting_zoom_factor = 1.0f;
+    struct active_shot_fx {
+        uint64_t start_ticks = 0;
+        tripoint_bub_ms origin{};
+        tripoint_bub_ms impact{};
+        std::optional<tripoint_bub_ms> hit_creature{};
+    };
+    std::vector<active_shot_fx> shot_fx_queue{};
+    float recoil_pitch = 0.0f;
+    float recoil_yaw = 0.0f;
+    float recoil_pitch_vel = 0.0f;
+    float recoil_yaw_vel = 0.0f;
+    uint64_t last_combat_ticks = 0;
+    uint64_t last_shot_ticks = 0;
+    uint64_t vats_exit_ticks = 0;
+    bool vats_camera_initialized = false;
+    camera vats_last_cam{};
+    tripoint_bub_ms vats_last_center{};
+    bool combat_animating = false;
     bool walls_on = false; // whether the cache was given the wall side rules and atlas
     bool asset_request_started = false;
     bool thin_walls = true;
@@ -234,7 +262,7 @@ auto st() -> state & // *NOPAD*
 
 auto release_dynamic( state &s ) -> void
 {
-    for( auto *buffers : { &s.dyn, &s.veh, &s.silhouette, &s.fx } ) {
+    for( auto *buffers : { &s.dyn, &s.veh, &s.silhouette, &s.target_outline, &s.target_body, &s.fx } ) {
         s.device.release_buffer( buffers->positions );
         s.device.release_buffer( buffers->lights );
         s.device.release_buffer( buffers->indices );
@@ -799,7 +827,7 @@ auto set_cutaway( const set_cutaway_options &options ) -> void
 
     // Radius in tiles around the player's middle, and the height (above their floor) below which
     // nothing is cut, so the floor and low furniture around them stay.
-    constexpr auto radius = static_cast<float>( 0.55f );
+    const auto radius = cam.pitch < 0.65f ? 0.90f : 0.55f;
     constexpr auto keep_below = static_cast<float>( 0.3f );
     const auto base = static_cast<float>( floor_height );
     const auto middle = vec3( tile_to_world( { .x = static_cast<float>( p.x() - center.x() ) + 0.5f,
@@ -1925,13 +1953,17 @@ auto face_towards( int dx, int dy ) -> void
 {
     auto &s = st();
     const auto &you = get_avatar();
-    if( you.controlling_vehicle ) {
+    if( you.controlling_vehicle || ( dx == 0 && dy == 0 ) ) {
         return;
     }
-    if( s.cam.first_person() && ( dx != 0 || dy != 0 ) ) {
-        s.cam.heading = eighths_towards( dx, dy );
+    const auto heading = eighths_towards( dx, dy );
+    if( s.cam.first_person() ) {
+        s.cam.heading = heading;
         remember_heading( s );
         end_glance();
+    } else {
+        constexpr auto eighth = static_cast<float>( 0.78539816f );
+        s.cam.yaw = -static_cast<float>( heading ) * eighth;
     }
 }
 
@@ -1943,6 +1975,9 @@ auto rotate( int dir ) -> void
     if( s.cam.first_person() && you.controlling_vehicle ) {
         return;
     }
+    if( s.was_targeting && !s.cam.first_person() ) {
+        s.targeting_yaw_offset += static_cast<float>( dir ) * 0.78539816f;
+    }
     s.cam.rotate_steps( dir );
 
     if( s.cam.first_person() ) {
@@ -1953,13 +1988,19 @@ auto rotate( int dir ) -> void
 
 auto pitch( int dir ) -> void
 {
-    st().cam.pitch_steps( dir );
+    auto &s = st();
+    if( s.was_targeting && !s.cam.first_person() ) {
+        s.targeting_pitch_offset = std::clamp(
+                                       s.targeting_pitch_offset + static_cast<float>( dir ) * 0.0873f, -0.6f, 0.6f );
+    }
+    s.cam.pitch_steps( dir );
 }
 
 auto zoom( int dir ) -> void
 {
 
-    auto &cam = st().cam;
+    auto &s = st();
+    auto &cam = s.cam;
     if( cam.first_person() ) {
         // There is no distance to change: the same keys look one level up or down, which is a
         // 45 degree tilt of the view and back.
@@ -1968,6 +2009,11 @@ auto zoom( int dir ) -> void
         cam.look_pitch = static_cast<float>( std::clamp( now + ( dir > 0 ? 1 : -1 ), -1, 1 ) ) *
                          level_tilt;
         return;
+    }
+    if( s.was_targeting ) {
+        s.targeting_zoom_factor = std::clamp(
+                                      s.targeting_zoom_factor * std::pow( 1.0f / 1.1f, static_cast<float>( dir ) ),
+                                      0.35f, 3.0f );
     }
     cam.zoom_steps( dir );
 }
@@ -1983,6 +2029,18 @@ auto reset() -> void
     s.cam.mode = mode;
     s.cam.heading = heading;
     s.pan = vec3{};
+    s.was_targeting = false;
+    s.targeting_yaw_offset = 0.0f;
+    s.targeting_pitch_offset = 0.0f;
+    s.targeting_zoom_factor = 1.0f;
+    s.shot_fx_queue.clear();
+    s.recoil_pitch = 0.0f;
+    s.recoil_yaw = 0.0f;
+    s.recoil_pitch_vel = 0.0f;
+    s.recoil_yaw_vel = 0.0f;
+    s.vats_exit_ticks = 0;
+    s.vats_camera_initialized = false;
+    s.combat_animating = false;
     s.env_camera_applied = false;
     s.was_controlling_vehicle = false;
     s.last_vehicle_yaw = 0.0f;
@@ -2006,7 +2064,8 @@ auto hovered_tile() -> std::optional<tripoint_bub_ms>
 
 auto drag_orbit( float dx, float dy ) -> void
 {
-    auto &cam = st().cam;
+    auto &s = st();
+    auto &cam = s.cam;
     constexpr auto yaw_per_pixel = static_cast<float>( 0.008f );
     constexpr auto pitch_per_pixel = static_cast<float>( 0.006f );
     constexpr auto two_pi = static_cast<float>( 6.2831853f );
@@ -2021,6 +2080,11 @@ auto drag_orbit( float dx, float dy ) -> void
                                        -camera::max_look_pitch - cam.look_pitch,
                                        camera::max_look_pitch - cam.look_pitch );
         return;
+    }
+    if( s.was_targeting ) {
+        s.targeting_yaw_offset = std::fmod( s.targeting_yaw_offset - dx * yaw_per_pixel, two_pi );
+        s.targeting_pitch_offset = std::clamp( s.targeting_pitch_offset + dy * pitch_per_pixel,
+                                               -0.6f, 0.6f );
     }
     cam.yaw = std::fmod( cam.yaw - dx * yaw_per_pixel, two_pi );
     cam.pitch = std::clamp( cam.pitch + dy * pitch_per_pixel, camera::min_pitch, camera::max_pitch );
@@ -2123,13 +2187,56 @@ auto shutdown() -> void
     s.last_chunk_report = {};
 }
 
+auto record_shot_fx( const shot_fx_event &event ) -> void
+{
+    auto &s = st();
+    const auto now = static_cast<uint64_t>( SDL_GetTicks() );
+    std::erase_if( s.shot_fx_queue, [now]( const state::active_shot_fx & fx ) {
+        return now > fx.start_ticks && ( now - fx.start_ticks ) > 320;
+    } );
+    s.shot_fx_queue.push_back( {
+        .start_ticks = now,
+        .origin = event.origin,
+        .impact = event.impact,
+        .hit_creature = event.hit_creature
+    } );
+    s.last_shot_ticks = now;
+    const auto strength = std::clamp(
+                              static_cast<float>( std::max( event.recoil, 45 ) ) / 420.0f, 0.20f, 1.35f );
+    s.recoil_pitch = std::min( s.recoil_pitch + 0.048f * strength, 0.15f );
+    s.recoil_pitch_vel = std::min( s.recoil_pitch_vel + 0.34f * strength, 0.95f );
+    const auto yaw_sign = ( ( s.shot_fx_queue.size() +
+                              static_cast<size_t>( std::abs( event.impact.x() + event.impact.y() ) ) ) % 2 == 0 ) ?
+                          1.0f : -1.0f;
+    s.recoil_yaw = std::clamp( s.recoil_yaw + yaw_sign * 0.018f * strength, -0.08f, 0.08f );
+    s.recoil_yaw_vel = std::clamp( s.recoil_yaw_vel + yaw_sign * 0.14f * strength, -0.45f, 0.45f );
+    s.combat_animating = true;
+}
+
+auto combat_fx_active() -> bool
+{
+    const auto &s = st();
+    if( !active() ) {
+        return false;
+    }
+    const auto now = static_cast<uint64_t>( SDL_GetTicks() );
+    for( const auto &fx : s.shot_fx_queue ) {
+        if( now >= fx.start_ticks && ( now - fx.start_ticks ) <= 260 ) {
+            return true;
+        }
+    }
+    return s.combat_animating || hud_animation_pending();
+}
+
 auto refresh_pending_assets() -> void
 {
     auto &s = st();
     if( !g || !active() ||
-        ( !assets_pending( s ) && !s.animated_weather && !s.fp_easing && !hud_animation_pending() ) ) { return; }
+        ( !assets_pending( s ) && !s.animated_weather && !s.fp_easing && !s.combat_animating &&
+          !hud_animation_pending() ) ) { return; }
     const auto now = std::chrono::steady_clock::now();
-    if( now - s.last_asset_refresh < std::chrono::milliseconds( s.fp_easing ? 16 : 33 ) ) { return; }
+    const auto fast = s.fp_easing || s.combat_animating || hud_animation_pending();
+    if( now - s.last_asset_refresh < std::chrono::milliseconds( fast ? 16 : 33 ) ) { return; }
     s.last_asset_refresh = now;
     g->invalidate_main_ui_adaptor();
     ui_manager::redraw_invalidated();
@@ -2519,8 +2626,58 @@ auto draw( const draw_options &options ) -> bool
     const auto open_sky = static_cast<bool>( !multi_z || !here.inbounds( overhead ) ||
                           s.cache.terrain( { .id = here.ter( overhead ), .tiles = *tilecontext } ).sh.kind ==
                           shape_kind::empty );
-    const auto fp = s.cam.first_person();
+    const auto now_ticks = static_cast<uint64_t>( SDL_GetTicks() );
+    const auto dt_combat = s.last_combat_ticks == 0 ? 0.016f :
+                           std::clamp( static_cast<float>( now_ticks - s.last_combat_ticks ) * 0.001f,
+                                       0.001f, 0.05f );
+    s.last_combat_ticks = now_ticks;
+    auto still_animating = static_cast<bool>( false );
+
     const auto player_pos = tripoint_bub_ms( get_avatar().bub_pos() );
+    const auto targeting_active = !s.comparison_camera && has_targeting_panel() &&
+                                  get_targeting_panel_data().target_pos.has_value();
+    if( targeting_active ) {
+        const auto &panel_data = get_targeting_panel_data();
+        const auto p_pos = panel_data.player_pos.value_or( player_pos );
+        const auto t_pos = *panel_data.target_pos;
+        if( !s.was_targeting ) {
+            s.was_targeting = true;
+            if( s.vats_exit_ticks == 0 ) {
+                s.saved_pre_target_cam = s.cam;
+                s.saved_pre_target_pan = s.pan;
+            }
+            s.vats_exit_ticks = 0;
+            s.pan = vec3{};
+            s.targeting_yaw_offset = 0.0f;
+            s.targeting_pitch_offset = 0.0f;
+            s.targeting_zoom_factor = 1.0f;
+            s.last_targeting_player = p_pos;
+            s.last_targeting_dst = t_pos;
+        } else if( p_pos != s.last_targeting_player || t_pos != s.last_targeting_dst ) {
+            s.pan = vec3{};
+            s.targeting_yaw_offset = 0.0f;
+            s.targeting_pitch_offset = 0.0f;
+            s.targeting_zoom_factor = 1.0f;
+            s.last_targeting_player = p_pos;
+            s.last_targeting_dst = t_pos;
+        }
+        s.cam.mode = camera_mode::orbit;
+    } else if( s.was_targeting ) {
+        s.pan = s.saved_pre_target_pan;
+        s.was_targeting = false;
+        s.vats_exit_ticks = now_ticks;
+        if( s.saved_pre_target_cam.first_person() ) {
+            s.cam = s.saved_pre_target_cam;
+            s.vats_exit_ticks = 0;
+            s.vats_camera_initialized = false;
+            sync_camera_mode( s.cam );
+        }
+    }
+    if( s.cam.first_person() != s.chunks_first_person ) {
+        release_all_chunks( s );
+        s.chunks_first_person = s.cam.first_person();
+    }
+    const auto fp = s.cam.first_person();
     // In first person the eye stays on the player even when look mode moves the viewed tile, so
     // the levels cover both, and the storeys above are always drawn (they are the ceilings).
     const auto low_z = fp ? std::min( view_z, player_pos.z() ) : view_z;
@@ -2615,12 +2772,164 @@ auto draw( const draw_options &options ) -> bool
                            level_tilt;
         s.cam.fovx = static_cast<float>( get_option<int>( "R3D_FP_FOV" ) ) * 0.017453293f;
         s.cam.eye_height = static_cast<float>( get_option<int>( "R3D_FP_EYE_HEIGHT" ) ) / 100.0f;
+    } else if( targeting_active ) {
+        s.fp_prev_valid = false;
+        s.fp_easing = false;
+        s.cam.tween_yaw = 0.0f;
+        s.cam.tilt_pitch = 0.0f;
+        const auto &panel_data = get_targeting_panel_data();
+        const auto p_pos = panel_data.player_pos.value_or( player_pos );
+        const auto t_pos = *panel_data.target_pos;
+        const auto p_tile = vec3{
+            .x = static_cast<float>( p_pos.x() - center.x() ) + 0.5f,
+            .y = static_cast<float>( p_pos.y() - center.y() ) + 0.5f,
+            .z = static_cast<float>( p_pos.z() - center.z() ) + surface_height( s, here, p_pos )
+        };
+        const auto t_tile = vec3{
+            .x = static_cast<float>( t_pos.x() - center.x() ) + 0.5f,
+            .y = static_cast<float>( t_pos.y() - center.y() ) + 0.5f,
+            .z = static_cast<float>( t_pos.z() - center.z() ) + surface_height( s, here, t_pos )
+        };
+        auto base_cam = s.saved_pre_target_cam;
+        base_cam.z_scale = s.cam.z_scale;
+        const auto frame_aspect = static_cast<float>( target_w ) / static_cast<float>( target_h );
+        const auto desired_cam = compute_targeting_camera( {
+            .base_cam = base_cam,
+            .player_tile = p_tile,
+            .target_tile = t_tile,
+            .aspect = frame_aspect,
+            .pan_offset = s.pan,
+            .yaw_offset_user = s.targeting_yaw_offset,
+            .pitch_offset_user = s.targeting_pitch_offset,
+            .zoom_factor_user = s.targeting_zoom_factor
+        } );
+        if( !s.vats_camera_initialized ) {
+            s.vats_last_cam = desired_cam;
+            s.vats_last_center = center;
+            s.vats_camera_initialized = true;
+        } else {
+            if( center != s.vats_last_center ) {
+                s.vats_last_cam.target = s.vats_last_cam.target + tile_to_world( {
+                    .x = static_cast<float>( s.vats_last_center.x() - center.x() ),
+                    .y = static_cast<float>( s.vats_last_center.y() - center.y() ),
+                    .z = static_cast<float>( s.vats_last_center.z() - center.z() )
+                } );
+                s.vats_last_center = center;
+            }
+            const auto alpha = std::clamp( 1.0f - std::exp( -14.0f * dt_combat ), 0.15f, 1.0f );
+            const auto dyaw = wrap_angle( desired_cam.yaw - s.vats_last_cam.yaw );
+            const auto dpitch = desired_cam.pitch - s.vats_last_cam.pitch;
+            const auto ddist = desired_cam.distance - s.vats_last_cam.distance;
+            const auto dtarget = desired_cam.target - s.vats_last_cam.target;
+            s.vats_last_cam.yaw = wrap_angle( s.vats_last_cam.yaw + dyaw * alpha );
+            s.vats_last_cam.pitch = s.vats_last_cam.pitch + dpitch * alpha;
+            s.vats_last_cam.distance = s.vats_last_cam.distance + ddist * alpha;
+            s.vats_last_cam.target = s.vats_last_cam.target + dtarget * alpha;
+            s.vats_last_cam.z_scale = desired_cam.z_scale;
+            s.vats_last_cam.fovy = desired_cam.fovy;
+            s.vats_last_cam.orthographic = desired_cam.orthographic;
+            s.vats_last_cam.mode = desired_cam.mode;
+            if( std::abs( dyaw ) > 0.002f || std::abs( dpitch ) > 0.002f ||
+                std::abs( ddist ) > 0.01f || length( dtarget ) > 0.01f ) {
+                still_animating = true;
+            }
+        }
+        s.cam = s.vats_last_cam;
     } else {
         s.fp_prev_valid = false;
         s.fp_easing = false;
         s.cam.tween_yaw = 0.0f;
         s.cam.tilt_pitch = 0.0f;
-        s.cam.target = tile_to_world( { .x = 0.5f, .y = 0.5f, .z = 0.5f } ) + s.pan;
+        const auto stand = surface_height( s, here, center );
+        const auto inv_z = 1.0f / std::max( s.cam.z_scale, 0.5f );
+        const auto follow_player = !s.comparison_camera && center == player_pos;
+        const auto ref_cam = ( s.vats_exit_ticks != 0 ) ? s.saved_pre_target_cam : s.cam;
+        const auto right = ref_cam.ground_right();
+        const auto ahead = vec3{ .x = -right.y, .y = right.x, .z = 0.0f };
+        const auto look_ahead = follow_player ?
+                                std::clamp( ( 0.68f - ref_cam.pitch ) * 2.4f, 0.0f, 1.15f ) : 0.0f;
+        const auto z_lift = ( follow_player ? 0.48f : 0.15f ) * inv_z;
+        const auto orbit_target = tile_to_world( {
+            .x = 0.5f,
+            .y = 0.5f,
+            .z = stand + z_lift
+        } ) + ahead *look_ahead + s.pan;
+        if( !s.comparison_camera && s.vats_exit_ticks != 0 && s.vats_camera_initialized ) {
+            if( center != s.vats_last_center ) {
+                s.vats_last_cam.target = s.vats_last_cam.target + tile_to_world( {
+                    .x = static_cast<float>( s.vats_last_center.x() - center.x() ),
+                    .y = static_cast<float>( s.vats_last_center.y() - center.y() ),
+                    .z = static_cast<float>( s.vats_last_center.z() - center.z() )
+                } );
+                s.vats_last_center = center;
+            }
+            const auto since_exit = now_ticks >= s.vats_exit_ticks ?
+                                    ( now_ticks - s.vats_exit_ticks ) : uint64_t{ 0 };
+            const auto shot_recent = s.last_shot_ticks != 0 &&
+                                     s.vats_exit_ticks >= s.last_shot_ticks &&
+                                     ( s.vats_exit_ticks - s.last_shot_ticks ) <= 650;
+            const auto hold_ms = shot_recent ? uint64_t{ 250 } : uint64_t{ 0 };
+            if( since_exit < hold_ms ) {
+                s.vats_last_cam.z_scale = s.cam.z_scale;
+                s.cam = s.vats_last_cam;
+                still_animating = true;
+            } else if( since_exit < hold_ms + 480 ) {
+                const auto alpha = std::clamp( 1.0f - std::exp( -10.5f * dt_combat ), 0.12f, 1.0f );
+                const auto dyaw = wrap_angle( s.saved_pre_target_cam.yaw - s.vats_last_cam.yaw );
+                const auto dpitch = s.saved_pre_target_cam.pitch - s.vats_last_cam.pitch;
+                const auto ddist = s.saved_pre_target_cam.distance - s.vats_last_cam.distance;
+                const auto dtarget = orbit_target - s.vats_last_cam.target;
+                s.vats_last_cam.yaw = wrap_angle( s.vats_last_cam.yaw + dyaw * alpha );
+                s.vats_last_cam.pitch = s.vats_last_cam.pitch + dpitch * alpha;
+                s.vats_last_cam.distance = s.vats_last_cam.distance + ddist * alpha;
+                s.vats_last_cam.target = s.vats_last_cam.target + dtarget * alpha;
+                s.vats_last_cam.z_scale = s.cam.z_scale;
+                s.cam = s.vats_last_cam;
+                if( std::abs( dyaw ) < 0.002f && std::abs( dpitch ) < 0.002f &&
+                    std::abs( ddist ) < 0.01f && length( dtarget ) < 0.01f ) {
+                    s.cam = s.saved_pre_target_cam;
+                    s.cam.z_scale = static_cast<float>( get_option<int>( "R3D_LEVEL_HEIGHT" ) ) / 100.0f;
+                    s.cam.target = orbit_target;
+                    s.vats_exit_ticks = 0;
+                    s.vats_camera_initialized = false;
+                    sync_camera_mode( s.cam );
+                } else {
+                    still_animating = true;
+                }
+            } else {
+                s.cam = s.saved_pre_target_cam;
+                s.cam.z_scale = static_cast<float>( get_option<int>( "R3D_LEVEL_HEIGHT" ) ) / 100.0f;
+                s.cam.target = orbit_target;
+                s.vats_exit_ticks = 0;
+                s.vats_camera_initialized = false;
+                sync_camera_mode( s.cam );
+            }
+        } else {
+            s.vats_exit_ticks = 0;
+            s.vats_camera_initialized = false;
+            s.cam.target = orbit_target;
+        }
+    }
+    if( !s.comparison_camera && ( std::abs( s.recoil_pitch ) > 1e-4f ||
+                                  std::abs( s.recoil_pitch_vel ) > 1e-3f ||
+                                  std::abs( s.recoil_yaw ) > 1e-4f ||
+                                  std::abs( s.recoil_yaw_vel ) > 1e-3f ) ) {
+        s.recoil_pitch_vel -= ( 240.0f * s.recoil_pitch + 16.0f * s.recoil_pitch_vel ) * dt_combat;
+        s.recoil_pitch += s.recoil_pitch_vel * dt_combat;
+        s.recoil_yaw_vel -= ( 240.0f * s.recoil_yaw + 16.0f * s.recoil_yaw_vel ) * dt_combat;
+        s.recoil_yaw += s.recoil_yaw_vel * dt_combat;
+        if( !fp ) {
+            s.cam.pitch = std::clamp( s.cam.pitch - s.recoil_pitch * 0.55f,
+                                      camera::min_pitch, camera::max_pitch );
+            s.cam.yaw = wrap_angle( s.cam.yaw + s.recoil_yaw );
+            s.cam.target.z += s.recoil_pitch * 1.45f / std::max( s.cam.z_scale, 0.5f );
+        }
+        still_animating = true;
+    } else {
+        s.recoil_pitch = 0.0f;
+        s.recoil_pitch_vel = 0.0f;
+        s.recoil_yaw = 0.0f;
+        s.recoil_yaw_vel = 0.0f;
     }
     const auto aspect = static_cast<float>( static_cast<float>( target_w ) / static_cast<float>
                                             ( target_h ) );
@@ -2716,6 +3025,148 @@ auto draw( const draw_options &options ) -> bool
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
 
     entities_view.upright_billboards = fp;
+    const auto inv_z_scene = 1.0f / std::max( s.cam.z_scale, 0.5f );
+    const sprite_ref *solid_white_spr = s.sky.loaded() ? &s.sky.cells[sky_sprites::snow] : nullptr;
+    if( has_targeting_panel() ) {
+        const auto &panel_data = get_targeting_panel_data();
+        if( panel_data.target_pos ) {
+            const auto t_pos = *panel_data.target_pos;
+            const auto *critter = g->critter_at( t_pos, true );
+            if( panel_data.has_target || ( critter && !critter->is_avatar() && you.sees( *critter ) ) ) {
+                entities_view.targeted_creature = t_pos;
+            }
+            const auto p_pos = panel_data.player_pos.value_or( player_pos );
+            if( p_pos != t_pos ) {
+                const auto p_scene = vec3{
+                    .x = static_cast<float>( p_pos.x() - center.x() ) + 0.5f,
+                    .y = static_cast<float>( p_pos.y() - center.y() ) + 0.5f,
+                    .z = static_cast<float>( p_pos.z() - center.z() ) +
+                         surface_height( s, here, p_pos ) + 0.55f * inv_z_scene
+                };
+                const auto t_scene = vec3{
+                    .x = static_cast<float>( t_pos.x() - center.x() ) + 0.5f,
+                    .y = static_cast<float>( t_pos.y() - center.y() ) + 0.5f,
+                    .z = static_cast<float>( t_pos.z() - center.z() ) +
+                         surface_height( s, here, t_pos ) + 0.55f * inv_z_scene
+                };
+                const auto ray = t_scene - p_scene;
+                const auto ray_len = length( ray );
+                const auto start_pt = ray_len > 0.55f ?
+                                      ( p_scene + ray * ( 0.28f / ray_len ) ) : p_scene;
+                const auto hit_pct = effective_targeting_hit_chance().value_or( panel_data.hit_chance );
+                const auto sight_col = sightline_color_for_hit_chance( hit_pct, panel_data.out_of_range );
+                entities_view.beams.push_back( {
+                    .from = start_pt,
+                    .to = t_scene,
+                    .width = 0.026f,
+                    .color = sight_col,
+                    .sprite = solid_white_spr
+                } );
+            }
+        }
+    }
+    if( !s.shot_fx_queue.empty() ) {
+        std::erase_if( s.shot_fx_queue, [now_ticks]( const state::active_shot_fx & fx ) {
+            return now_ticks > fx.start_ticks && ( now_ticks - fx.start_ticks ) > 260;
+        } );
+        for( const auto &fx : s.shot_fx_queue ) {
+            const auto age_ms = now_ticks >= fx.start_ticks ? ( now_ticks - fx.start_ticks ) : uint64_t{ 0 };
+            still_animating = true;
+            const auto o_scene = vec3{
+                .x = static_cast<float>( fx.origin.x() - center.x() ) + 0.5f,
+                .y = static_cast<float>( fx.origin.y() - center.y() ) + 0.5f,
+                .z = static_cast<float>( fx.origin.z() - center.z() ) +
+                     surface_height( s, here, fx.origin ) + 0.58f * inv_z_scene
+            };
+            const auto impact_z_off = ( fx.hit_creature ? 0.54f : 0.16f ) * inv_z_scene;
+            const auto i_scene = vec3{
+                .x = static_cast<float>( fx.impact.x() - center.x() ) + 0.5f,
+                .y = static_cast<float>( fx.impact.y() - center.y() ) + 0.5f,
+                .z = static_cast<float>( fx.impact.z() - center.z() ) +
+                     surface_height( s, here, fx.impact ) + impact_z_off
+            };
+            const auto d_vec = i_scene - o_scene;
+            const auto d_len = length( d_vec );
+            const auto dir = d_len > 1e-4f ? ( d_vec * ( 1.0f / d_len ) ) : vec3{ .x = 1.0f, .y = 0.0f, .z = 0.0f };
+            const auto muzzle_pt = o_scene + dir * std::min( 0.36f, d_len * 0.4f );
+
+            if( age_ms <= 165 && d_len > 0.15f ) {
+                const auto fade = std::clamp( 1.0f - static_cast<float>( age_ms ) / 165.0f, 0.15f, 1.0f );
+                const auto trail_col = pack_light(
+                                           static_cast<uint8_t>( 255.0f * fade ),
+                                           static_cast<uint8_t>( 220.0f * fade ),
+                                           static_cast<uint8_t>( 120.0f * fade ) );
+                entities_view.beams.push_back( {
+                    .from = muzzle_pt,
+                    .to = i_scene,
+                    .width = 0.022f * ( 0.5f + 0.5f * fade ),
+                    .color = trail_col,
+                    .sprite = solid_white_spr
+                } );
+                const auto head_t = std::clamp( static_cast<float>( age_ms + 30 ) / 110.0f, 0.25f, 1.0f );
+                const auto tail_t = std::clamp( static_cast<float>( age_ms ) / 145.0f, 0.0f, head_t - 0.15f );
+                entities_view.beams.push_back( {
+                    .from = muzzle_pt + ( i_scene - muzzle_pt ) *tail_t,
+                    .to = muzzle_pt + ( i_scene - muzzle_pt ) *head_t,
+                    .width = 0.044f,
+                    .color = pack_light( 255, 250, 210 ),
+                    .sprite = solid_white_spr
+                } );
+            }
+            if( age_ms <= 115 && s.sky.loaded() ) {
+                const auto m_scale = std::clamp( 1.0f - static_cast<float>( age_ms ) / 120.0f, 0.25f, 1.0f );
+                entities_view.particles.push_back( {
+                    .x = muzzle_pt.x,
+                    .y = muzzle_pt.y,
+                    .z = muzzle_pt.z,
+                    .size = 0.46f * m_scale,
+                    .sprite = &s.sky.cells[sky_sprites::sun],
+                    .color = pack_light( 255, 200, 80 )
+                } );
+                entities_view.particles.push_back( {
+                    .x = muzzle_pt.x + dir.x * 0.04f,
+                    .y = muzzle_pt.y + dir.y * 0.04f,
+                    .z = muzzle_pt.z,
+                    .size = 0.62f * m_scale,
+                    .sprite = &s.sky.cells[sky_sprites::snow],
+                    .color = pack_light( 255, 252, 220 )
+                } );
+            }
+            if( age_ms <= 240 ) {
+                const auto p_t = static_cast<float>( age_ms ) / 240.0f;
+                if( fx.hit_creature ) {
+                    entities_view.hit_flash_creature = *fx.hit_creature;
+                    entities_view.hit_flash_color = age_ms < 100 ?
+                                                    pack_light( 255, 245, 240 ) :
+                                                    pack_light( 255, 115, 100 );
+                }
+                if( s.sky.loaded() ) {
+                    constexpr auto spark_dirs = std::array<std::array<float, 3>, 5> {{
+                            { -0.28f, -0.18f, 0.26f },
+                            { 0.26f, -0.20f, 0.30f },
+                            { -0.20f, 0.26f, 0.22f },
+                            { 0.24f, 0.22f, 0.28f },
+                            { 0.0f, 0.0f, 0.38f }
+                        }
+                    };
+                    const auto spark_col = fx.hit_creature ?
+                                           pack_light( 255, 95, 75 ) :
+                                           pack_light( 250, 215, 135 );
+                    for( const auto &sd : spark_dirs ) {
+                        entities_view.particles.push_back( {
+                            .x = i_scene.x + sd[0] * p_t,
+                            .y = i_scene.y + sd[1] * p_t,
+                            .z = i_scene.z + ( sd[2] * p_t - 0.16f * p_t * p_t ) *inv_z_scene,
+                            .size = 0.22f * ( 1.0f - p_t * 0.65f ),
+                            .sprite = &s.sky.cells[sky_sprites::snow],
+                            .color = spark_col
+                        } );
+                    }
+                }
+            }
+        }
+    }
+    s.combat_animating = still_animating;
     // The game queues its cursors and highlights for cata_tiles::draw, which is skipped here.
     auto queued_sct = static_cast<bool>( false );
     {
@@ -2723,10 +3174,10 @@ auto draw( const draw_options &options ) -> bool
         queued_sct = queued.sct;
         append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.line, .id = "animation_line", .box = false, .large = false } );
         if( queued.line_end && !queued.line_end_id.empty() ) {
-            append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = { *queued.line_end }, .id = queued.line_end_id, .box = false, .large = true } );
+            append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = { *queued.line_end }, .id = queued.line_end_id, .box = false, .large = !has_targeting_panel() } );
         }
         append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.highlights, .id = "highlight", .box = false, .large = true } );
-        append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.cursors, .id = "cursor", .box = true, .large = true } );
+        append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = queued.cursors, .id = "cursor", .box = !has_targeting_panel(), .large = !has_targeting_panel() } );
         if( s.hovered ) {
             append_frame_markers( { .s = s, .here = here, .entities_view = entities_view, .where = { *s.hovered }, .id = "highlight", .box = false, .large = false } );
         }
@@ -2834,6 +3285,24 @@ auto draw( const draw_options &options ) -> bool
     const auto entities = chunk_mesh( build_entity_mesh( entities_view ) );
     const auto draw_entities = upload_mesh( s, s.dyn, entities );
 
+    auto target_outline_mesh = chunk_mesh{};
+    auto draw_target_outline = static_cast<bool>( false );
+    auto target_body_mesh = chunk_mesh{};
+    auto draw_target_body = static_cast<bool>( false );
+    if( entities_view.targeted_creature || entities_view.hit_flash_creature ) {
+        if( entities_view.targeted_creature ) {
+            entities_view.target_outline_only = true;
+            target_outline_mesh = build_entity_mesh( entities_view );
+            entities_view.target_outline_only = false;
+            draw_target_outline = upload_mesh( s, s.target_outline, target_outline_mesh );
+        }
+
+        entities_view.target_body_only = true;
+        target_body_mesh = build_entity_mesh( entities_view );
+        entities_view.target_body_only = false;
+        draw_target_body = upload_mesh( s, s.target_body, target_body_mesh );
+    }
+
     auto avatar_silhouette = chunk_mesh{};
     auto draw_avatar_silhouette = static_cast<bool>( false );
     // The silhouette shows the player behind walls; not while driving (the cab hides them by
@@ -2940,6 +3409,80 @@ auto draw( const draw_options &options ) -> bool
                                    .sheet = b.sheet, .uniforms = uniforms } );
         }
     }
+    const auto highlight_pos = entities_view.hit_flash_creature ?
+                               entities_view.hit_flash_creature :
+                               entities_view.targeted_creature;
+    if( ( draw_target_outline || draw_target_body ) && highlight_pos ) {
+        s.device.bind_entity_pipeline();
+        const auto saved_fog0 = uniforms.fog[0];
+        const auto saved_fog1 = uniforms.fog[1];
+        const auto saved_fog2 = uniforms.fog[2];
+        const auto saved_fog3 = uniforms.fog[3];
+        const auto saved_fog2_0 = uniforms.fog2[0];
+        const auto saved_fog2_1 = uniforms.fog2[1];
+        const auto saved_fog2_2 = uniforms.fog2[2];
+
+        const auto toward = vec3( normalize( s.cam.eye() - s.cam.stretched_target() ) );
+        uniforms.cut[3] = 0.0f;
+        uniforms.flags[0] = 0.0f;
+        uniforms.offset[0] = 0.0f;
+        uniforms.offset[1] = 0.0f;
+        uniforms.offset[2] = 0.0f;
+        uniforms.pull[0] = toward.x;
+        uniforms.pull[1] = toward.y;
+        uniforms.pull[2] = toward.z / s.cam.z_scale;
+        uniforms.pull[3] = fp ? 0.0f : max_billboard_pull;
+
+        const auto t_pos = *highlight_pos;
+        const auto t_world = tile_to_world( {
+            .x = static_cast<float>( t_pos.x() - center.x() ) + 0.5f,
+            .y = static_cast<float>( t_pos.y() - center.y() ) + 0.5f,
+            .z = 0.0f
+        } );
+        uniforms.fog2[0] = t_world.x + 100.0f;
+        uniforms.fog2[1] = t_world.y;
+        uniforms.fog2[2] = 0.0f;
+
+        if( draw_target_outline ) {
+            uniforms.fog[0] = 0.98f;
+            uniforms.fog[1] = 0.14f;
+            uniforms.fog[2] = 0.12f;
+            uniforms.fog[3] = 1.0f;
+            for( const mesh_batch &b : target_outline_mesh.batches ) {
+                s.device.draw_block( { .positions = s.target_outline.positions,
+                                       .lights = s.target_outline.lights,
+                                       .indices = s.target_outline.indices,
+                                       .first_index = b.first_index,
+                                       .index_count = b.index_count,
+                                       .sheet = b.sheet,
+                                       .uniforms = uniforms } );
+            }
+        }
+        if( draw_target_body ) {
+            const auto flashing = entities_view.hit_flash_creature.has_value();
+            uniforms.fog[0] = flashing ? 1.0f : 0.96f;
+            uniforms.fog[1] = flashing ? 0.86f : 0.14f;
+            uniforms.fog[2] = flashing ? 0.82f : 0.12f;
+            uniforms.fog[3] = flashing ? 0.0115f : 0.0068f;
+            for( const mesh_batch &b : target_body_mesh.batches ) {
+                s.device.draw_block( { .positions = s.target_body.positions,
+                                       .lights = s.target_body.lights,
+                                       .indices = s.target_body.indices,
+                                       .first_index = b.first_index,
+                                       .index_count = b.index_count,
+                                       .sheet = b.sheet,
+                                       .uniforms = uniforms } );
+            }
+        }
+
+        uniforms.fog[0] = saved_fog0;
+        uniforms.fog[1] = saved_fog1;
+        uniforms.fog[2] = saved_fog2;
+        uniforms.fog[3] = saved_fog3;
+        uniforms.fog2[0] = saved_fog2_0;
+        uniforms.fog2[1] = saved_fog2_1;
+        uniforms.fog2[2] = saved_fog2_2;
+    }
 
     if( draw_particles ) {
         uniforms.cut[3] = 0.0f;
@@ -2975,9 +3518,21 @@ auto draw( const draw_options &options ) -> bool
     frame.sky = &s.sky;
     draw_hud( { .renderer = renderer, .frame = frame, .air = air, .texts = s.texts } );
     if( has_targeting_panel() ) {
+        auto target_screen = std::optional<vec3> {};
+        auto target_head_screen = std::optional<vec3> {};
+        const auto &panel_data = get_targeting_panel_data();
+        if( panel_data.target_pos ) {
+            const auto t_pos = *panel_data.target_pos;
+            const auto stand = surface_height( s, here, t_pos );
+            const auto inv_z = 1.0f / std::max( s.cam.z_scale, 0.5f );
+            target_screen = frame.screen( t_pos, stand + 0.48f * inv_z );
+            target_head_screen = frame.screen( t_pos, stand + 0.98f * inv_z );
+        }
         draw_targeting_panel( { .renderer = renderer, .view_x = x, .view_y = y, .view_w = w, .view_h = h,
                                 .texts = s.texts, .cell_w = static_cast<float>( s.text_w ),
-                                .cell_h = static_cast<float>( s.text_h ) } );
+                                .cell_h = static_cast<float>( s.text_h ),
+                                .target_screen_pos = target_screen,
+                                .target_head_screen_pos = target_head_screen } );
     }
 
     const auto report_time = debug_chunk_work ? std::chrono::steady_clock::now() :

@@ -240,6 +240,7 @@ auto resolve_layers( const resolve_layers_options &options ) -> void
         for( const auto &fallback : fallbacks ) {
             if( const auto unknown = tiles.get_sprite_draw_data( { .id = fallback, .category = C_NONE, .pos = origin, .variant = "" } ) ) {
                 out.sprite = to_sprite_ref( *unknown );
+                out.sprite.placeholder = true;
                 break;
             }
         }

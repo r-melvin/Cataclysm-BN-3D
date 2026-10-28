@@ -118,7 +118,8 @@ auto cata_tiles::get_sprite_draw_data( const sprite_request &request ) ->
 std::optional<texture_draw_data>
 {
     auto lookup = find_tile_looks_like( request.id, request.category );
-    const auto placeholder = !lookup || lookup->id().starts_with( "unknown" );
+    const auto placeholder = !lookup || lookup->id().starts_with( "unknown" ) ||
+                             lookup->id().starts_with( "ASCII_" );
     if( !lookup ) {
         auto symbol = uint32_t{};
         auto color = c_white;
@@ -236,6 +237,9 @@ auto cata_tiles::get_character_layers( const Character &ch ) -> character_layers
     out.ids.emplace_back( ch.is_npc() ? ( ch.male ? "npc_male" : "npc_female" ) :
                           ( ch.male ? "player_male" : "player_female" ), C_NONE );
     for( const auto &overlay : ch.get_overlay_ids() ) {
+        if( overlay.id.starts_with( "effect_" ) ) {
+            continue;
+        }
         auto id = std::string{};
         if( find_overlay_looks_like( ch.male, overlay.id, id ) ) { out.ids.emplace_back( id, C_NONE ); }
     }

@@ -8,7 +8,9 @@
 
 #if defined(TILES)
 #include <SDL3/SDL.h>
+#include "coordinates.h"
 #include "r3d.h"
+#include "r3d_math.h"
 #endif
 
 namespace r3d
@@ -49,10 +51,18 @@ struct targeting_panel_data {
     bool can_switch_mode = false;///< Whether switching gun mode is possible
     bool can_switch_ammo = false;///< Whether switching ammo is possible
     bool has_target = false;     ///< Whether a creature target is selected
+    std::vector<targeting_action_item> aim_tiers;  ///< Inline aim tier pills ([1] Immediate .. [4] Precise)
     std::vector<targeting_action_item> presets;    ///< Aim presets & firing actions
     std::optional<targeting_action_item> aim_only; ///< Dedicated aim-only action
     std::vector<targeting_action_item>
     controls;   ///< Auxiliary controls: mode, ammo, prev, next, cancel
+    std::optional<tripoint_bub_ms> player_pos{};   ///< Shooter position in bubble coordinates
+    std::optional<tripoint_bub_ms> target_pos{};   ///< Aimed tile/creature position in bubble coordinates
+    int hit_chance = 0;                            ///< Total percentage chance to hit (0-100)
+    int great_chance = 0;                          ///< Critical hit percentage (0-100)
+    int normal_chance = 0;                         ///< Normal hit percentage (0-100)
+    int graze_chance = 0;                          ///< Grazing hit percentage (0-100)
+    bool show_hit_chance = false;                  ///< Whether VATS hit percentage callout is shown
 };
 
 /// Registration and query API for 3D targeting panel
@@ -60,6 +70,7 @@ auto set_targeting_panel_data( const targeting_panel_data &data ) -> void;
 auto clear_targeting_panel_data() -> void;
 auto has_targeting_panel() -> bool;
 auto get_targeting_panel_data() -> const targeting_panel_data &; // *NOPAD*
+auto effective_targeting_hit_chance() -> std::optional<int>;
 
 /// Checks if a screen pixel coordinate (x, y) falls inside the targeting panel bounds.
 auto targeting_panel_contains( float x, float y ) -> bool;
@@ -79,10 +90,30 @@ struct draw_targeting_panel_options {
     std::vector<hud_text> &texts;
     float cell_w;
     float cell_h;
+    std::optional<vec3> target_screen_pos{};
+    std::optional<vec3> target_head_screen_pos{};
 };
 
 /// Draws the compact graphical panel onto the SDL_Renderer.
 auto draw_targeting_panel( const draw_targeting_panel_options &options ) -> void;
+
+/// Transient shot feedback event emitted when a ranged weapon fires.
+struct shot_fx_event {
+    tripoint_bub_ms origin{};
+    tripoint_bub_ms impact{};
+    std::optional<tripoint_bub_ms> hit_creature{};
+    int recoil = 0;
+};
+
+/// Color-graded RGBA8 light colour (pack_light format: R low byte, G byte 1, B byte 2, 0xFF byte 3)
+/// for the 3D chest-height sightline and VATS accuracy bar (red -> amber -> bright green).
+auto sightline_color_for_hit_chance( int hit_pct, bool out_of_range = false ) -> uint32_t;
+
+/// Records a fired shot for 3D tracer, muzzle flash, target hit flash, and camera recoil impulse.
+auto record_shot_fx( const shot_fx_event &event ) -> void;
+
+/// Returns true while shot tracers, muzzle flashes, recoil spring, or VATS camera ease-out are animating.
+auto combat_fx_active() -> bool;
 
 #else
 
@@ -90,6 +121,7 @@ inline auto has_targeting_panel() -> bool { return false; }
 inline auto targeting_panel_contains( float /*x*/, float /*y*/ ) -> bool { return false; }
 inline auto targeting_panel_mouse_move( float /*x*/, float /*y*/ ) -> bool { return false; }
 inline auto targeting_panel_mouse_click( float /*x*/, float /*y*/ ) -> std::optional<std::string> { return std::nullopt; }
+inline auto combat_fx_active() -> bool { return false; }
 
 #endif
 

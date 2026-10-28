@@ -3294,7 +3294,7 @@ bool game::handle_action()
                 break;
 
             case ACTION_R3D_FACE_THREAT:
-                if( r3d::first_person() ) {
+                if( r3d::active() ) {
                     // Free: only the picture turns. The nearest hostile the player can see.
                     auto nearest = static_cast<Creature *>( nullptr );
                     auto nearest_distance = 0;

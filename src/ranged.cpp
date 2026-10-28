@@ -1435,6 +1435,8 @@ int ranged::fire_gun( Character &who, const tripoint_bub_ms &target, int max_sho
             }
             auto shell_hit = false;
             auto shell_headshot = false;
+            auto last_impact = aim;
+            auto last_hit_critter = std::optional<tripoint_bub_ms> {};
             const auto shell_target = shot_count > 1 ? get_shot_target( {
                 .source = who.bub_pos(),
                              .target = aim,
@@ -1452,6 +1454,14 @@ int ranged::fire_gun( Character &who, const tripoint_bub_ms &target, int max_sho
                 auto shot = projectile_attack( render_projectile, who.bub_pos(), pellet_target, pellet_dispersion,
                                                &who,
                                                &gun, in_veh, shot_count > 1 );
+                if( !shot.trajectory.empty() ) {
+                    last_impact = shot.trajectory.back();
+                } else {
+                    last_impact = pellet_target;
+                }
+                if( shot.hit_critter != nullptr ) {
+                    last_hit_critter = shot.hit_critter->bub_pos();
+                }
                 if( render_multishot ) {
                     projectile_trajectories.push_back( shot.trajectory );
                 }
@@ -1467,6 +1477,19 @@ int ranged::fire_gun( Character &who, const tripoint_bub_ms &target, int max_sho
                 g->events().send<event_type::character_gets_headshot>( who.getID() );
                 shell_headshot = true;
             }
+#if defined(TILES)
+            if( r3d::active() ) {
+                const Character &shooter_ref = who;
+                const auto fx_recoil = gun.gun_recoil(
+                                           ranged::can_use_heavy_weapon( shooter_ref, here, shooter_ref.bub_pos() ) );
+                r3d::record_shot_fx( {
+                    .origin = who.bub_pos(),
+                    .impact = last_impact,
+                    .hit_creature = last_hit_critter,
+                    .recoil = fx_recoil
+                } );
+            }
+#endif
 
             if( render_multishot ) {
                 draw_bullet_trajectories( {
@@ -3147,26 +3170,48 @@ target_handler::trajectory target_ui::run()
         // Wait for user input (or use value retrieved from activity)
         if( action.empty() ) {
             int timeout = get_option<int>( "EDGE_SCROLL" );
+            if( r3d::active() && r3d::combat_fx_active() ) {
+                timeout = ( timeout > 0 ) ? std::min( timeout, 16 ) : 16;
+            }
             action = ctxt.handle_input( timeout );
         }
 
         if( r3d::active() ) {
 #if defined(TILES)
-            float mx = 0.0f;
-            float my = 0.0f;
-            SDL_GetMouseState( &mx, &my );
-            const auto scale = get_scaling_factor();
-            const auto smx = mx / scale;
-            const auto smy = my / scale;
-            if( r3d::targeting_panel_contains( smx, smy ) ) {
-                const auto clicked = r3d::targeting_panel_mouse_click( smx, smy );
-                if( clicked ) {
-                    action = *clicked;
-                } else {
-                    continue;
+            if( action == "SELECT" ) {
+                float mx = 0.0f;
+                float my = 0.0f;
+                SDL_GetMouseState( &mx, &my );
+                const auto scale = get_scaling_factor();
+                const auto smx = mx / scale;
+                const auto smy = my / scale;
+                if( r3d::targeting_panel_contains( smx, smy ) ) {
+                    const auto clicked = r3d::targeting_panel_mouse_click( smx, smy );
+                    if( clicked ) {
+                        action = *clicked;
+                    } else {
+                        continue;
+                    }
+                }
+            } else if( mode == TargetMode::Fire ) {
+                const int raw_key = ctxt.get_raw_input().get_first_input();
+                if( raw_key >= '1' && raw_key <= '4' ) {
+                    const auto tier_idx = static_cast<size_t>( raw_key - '1' );
+                    if( tier_idx < aim_types.size() ) {
+                        action = "SELECT_AIM_" + std::to_string( tier_idx );
+                    }
                 }
             }
 #endif
+        }
+
+        if( mode == TargetMode::Fire && action.starts_with( "SELECT_AIM_" ) ) {
+            const auto tier_idx = static_cast<size_t>( std::atoi( action.c_str() + 11 ) );
+            if( tier_idx < aim_types.size() ) {
+                aim_mode = std::next( aim_types.begin(), static_cast<ptrdiff_t>( tier_idx ) );
+                you->preferred_aiming_mode = aim_mode->action;
+            }
+            continue;
         }
 
         // If an aiming mode is selected, use "*_SHOT" instead of "FIRE"
@@ -3383,7 +3428,7 @@ bool target_ui::handle_cursor_movement( const std::string &action, bool &skip_re
         // Shift pos and/or view via edge scrolling
         auto edge_scroll = g->mouse_edge_scrolling_terrain( ctxt );
         if( edge_scroll == tripoint_rel_ms::zero() ) {
-            skip_redraw = true;
+            skip_redraw = !( action == "TIMEOUT" && r3d::active() && r3d::combat_fx_active() );
         } else {
             if( action == "MOUSE_MOVE" ) {
                 edge_scroll += edge_scroll;
@@ -3887,6 +3932,39 @@ void target_ui::apply_aim_turning_penalty()
 
 void target_ui::action_switch_mode()
 {
+    if( r3d::active() && relevant ) {
+        const std::map<gun_mode_id, gun_mode> &all_gun_modes = relevant->gun_all_modes();
+        std::vector<gun_mode_id> ranged_modes;
+        for( const auto &entry : all_gun_modes ) {
+            if( !entry.second.melee() ) {
+                ranged_modes.push_back( entry.first );
+            }
+        }
+        if( ranged_modes.size() > 1 ) {
+            const gun_mode_id cur = relevant->gun_get_mode_id();
+            auto it = std::ranges::find( ranged_modes, cur );
+            const size_t next_idx = ( it != ranged_modes.end() ) ?
+                                    ( ( static_cast<size_t>( std::distance( ranged_modes.begin(), it ) ) + 1 ) %
+                                      ranged_modes.size() ) :
+                                    size_t{ 0 };
+            relevant->gun_set_mode( ranged_modes[next_idx] );
+        } else if( !aim_types.empty() ) {
+            auto next_aim = aim_mode;
+            if( next_aim != aim_types.end() ) {
+                ++next_aim;
+            }
+            if( next_aim == aim_types.end() ) {
+                next_aim = aim_types.begin();
+            }
+            aim_mode = next_aim;
+            you->preferred_aiming_mode = aim_mode->action;
+        }
+        ensure_ranged_gun_mode();
+        update_ammo_range_from_gun_mode();
+        on_range_ammo_changed();
+        return;
+    }
+
     uilist menu;
     menu.settext( _( "Select preferences" ) );
 
@@ -4202,6 +4280,8 @@ void target_ui::update_r3d_targeting_panel()
     data.max_range = range;
     data.elevation = dst.z() - src.z();
     data.out_of_range = ( status == Status::OutOfRange );
+    data.player_pos = src;
+    data.target_pos = dst;
 
     if( dst_critter && you->sees( *dst_critter ) ) {
         data.has_target = true;
@@ -4268,13 +4348,30 @@ void target_ui::update_r3d_targeting_panel()
                    ranged::time_to_attack( *you, *relevant, load_loc );
         };
 
-        for( const ranged::aim_type &at : aim_types ) {
+        for( size_t tier_idx = 0; tier_idx < aim_types.size(); ++tier_idx ) {
+            const ranged::aim_type &at = aim_types[tier_idx];
             const auto disp = dispersion_fun( at );
             const double range_val = rl_dist( you->bub_pos(), dst );
             const double confidence = confidence_estimate( range_val, target_size, disp );
             const int great = std::min<int>( 100, 100.0 * accuracy_critical * confidence );
             const int normal = std::min<int>( 100, 100.0 * accuracy_standard * confidence ) - great;
             const int graze = std::min<int>( 100, 100.0 * accuracy_grazing * confidence ) - ( great + normal );
+            const bool is_active_tier = ( at.action == aim_mode->action ) ||
+                                        ( !at.has_threshold && !aim_mode->has_threshold );
+
+            data.aim_tiers.push_back( {
+                .action_id = "SELECT_AIM_" + std::to_string( tier_idx ),
+                .label = at.name.empty() ? _( "Immediate" ) : at.name,
+                .shortcut_text = std::to_string( tier_idx + 1 ),
+                .moves_cost = cost_fun( at ),
+                .chance_great = great,
+                .chance_normal = normal,
+                .chance_graze = graze,
+                .has_accuracy = true,
+                .enabled = true,
+                .is_aim_only = false,
+                .is_primary = is_active_tier
+            } );
 
             data.presets.push_back( {
                 .action_id = at.has_threshold ? at.action : "FIRE",
@@ -4287,7 +4384,7 @@ void target_ui::update_r3d_targeting_panel()
                            .has_accuracy = true,
                            .enabled = ( status == Status::Good ),
                            .is_aim_only = false,
-                           .is_primary = ( at.action == aim_mode->action ) || ( !at.has_threshold && !aim_mode->has_threshold )
+                           .is_primary = is_active_tier
             } );
         }
 
@@ -4349,7 +4446,7 @@ void target_ui::update_r3d_targeting_panel()
     if( data.can_switch_mode ) {
         data.controls.push_back( {
             .action_id = "SWITCH_MODE",
-            .label = _( "Mode" ),
+            .label = data.mode_text.empty() ? _( "Mode" ) : string_format( _( "Mode: %s" ), data.mode_text ),
             .shortcut_text = get_shortcut( "SWITCH_MODE", "s" ),
             .moves_cost = -1,
             .chance_great = 0,

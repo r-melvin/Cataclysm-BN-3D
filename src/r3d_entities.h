@@ -51,6 +51,7 @@ struct entity_view {
         // First person: a sound the player heard but cannot see, drawn as a post with normal
         // depth (walls and creatures in front hide it; the compass points at hidden ones).
         bool heard = false;
+        uint32_t color = 0xFFFFFFFFu;
     };
     std::vector<marker> markers{};
 
@@ -94,6 +95,26 @@ struct entity_view {
     bool upright_billboards = false;
     /// Tile currently hovered by the mouse cursor for 3D item highlighting.
     std::optional<tripoint_bub_ms> hovered{};
+    /// Tile of the currently targeted creature in ranged targeting mode (for VATS red highlight).
+    std::optional<tripoint_bub_ms> targeted_creature{};
+    /// Build only the 4-way expanded silhouette outline of the targeted creature.
+    bool target_outline_only = false;
+    /// Build only the targeted creature's sprite layers for VATS red highlight blending.
+    bool target_body_only = false;
+    /// Tile of a creature briefly flashing on projectile impact.
+    std::optional<tripoint_bub_ms> hit_flash_creature{};
+    uint32_t hit_flash_color = 0xFFFFFFFFu;
+
+    /// Elevated 3D laser sightlines and transient bullet tracer ribbons in scene-frame tile space
+    /// (x east, y south, z up in levels).
+    struct beam_segment {
+        vec3 from{};
+        vec3 to{};
+        float width = 0.032f;
+        uint32_t color = 0xFFFFFFFFu;
+        const sprite_ref *sprite = nullptr;
+    };
+    std::vector<beam_segment> beams{};
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.
