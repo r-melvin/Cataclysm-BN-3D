@@ -153,6 +153,19 @@ matching saved scene; broader vehicle layer/state presentation and cross-tileset
 material acceptance remain in R3D-04/07. These shelter regressions are fixed;
 that does not mark the broader presentation-profile contract complete.
 
+Readability follow-up (2026-10-28): patterned wall elevations now use the
+material atlas rather than repeating top-down caps/studs. Appliances use the
+closed box face mapper, preserving their full classified height and authored
+front/side/top donors instead of extruding a top-down silhouette. Real-art
+profile regressions reproduced 13 failures before the fix. Both game and test
+targets build; all 167 renderer cases pass (55,337 assertions). A reusable
+`fixtures/readability.lua` scene covers brick/timber walls, door/window and sink,
+oven, fridge, dishwasher and washer. Private Xvfb/software-Vulkan comparisons
+cover oblique, reverse and native 2D views; evidence is in
+`out/validation/readability/`. Thin walls retain full-tile native movement,
+projectile and picking rules: the visible gap beside a thin mesh is not walkable.
+The guide documents the full-block option; sub-tile physics is not introduced.
+
 ## R3D-04: Finish vehicle layer, material and state presentation
 
 **Status: implementation/visual validation; depends on R3D-03/07.** Role lists,
@@ -190,6 +203,18 @@ vehicle appearance/state acceptance matrix. A private software-Vulkan virtual-wi
 with adjoining body/window panels (`out/validation/dan-recovery/rebased-screen.png`).
 The automatic one-shot did not reach its frame threshold while idle; the virtual
 window was captured directly. This is one fixture, not the original outdoor save.
+
+Material follow-up (2026-10-28): resolve each installed layer directly;
+`part_id_string` selects the flattened 2D part at that mount and was allowing
+frames/seats to stand in for roof and panel skins. Keep mount-local materials
+and apply their colour once, without multiplying a second vehicle-wide paint
+average. A native mixed metal/wood/roof mesh test verifies UVs, bound sheets and
+lighting; it caught the flattened roof lookup before correction. The complete
+renderer suite passes as recorded above. The car, pickup, SUV, bus and semi-truck
+snapshots at 0/90/225 degrees retain their quad counts and update their intended
+lighting fingerprints; both item snapshots are unchanged. Private virtual-window
+checks include engine start, taking control, low-speed acceleration and braking.
+These fixes do not complete every vehicle state/material or platform gate.
 
 Source and acceptance matrix:
 [vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).

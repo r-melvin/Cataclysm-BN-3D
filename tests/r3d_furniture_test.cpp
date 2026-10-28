@@ -67,10 +67,8 @@ TEST_CASE( "r3d_appliances_and_containers_have_locked_facing", "[r3d][tiles]" )
             return vertex.x >= 5.0f && vertex.x <= 6.0f && vertex.y <= -5.0f && vertex.y >= -6.0f &&
                    vertex.z > r3d::floor_height;
         } ) );
-        if( info.sprite.alpha_mask && info.sprite.alpha_width > 0 && info.sprite.alpha_height > 0 ) {
-            CHECK( info.sprite.ortho_voxel_mesh != nullptr );
-            CHECK_FALSE( info.sprite.ortho_voxel_mesh->quads.empty() );
-        }
+        // Top-down furniture masks must not become elevations; retain face materials.
+        CHECK_FALSE( info.sprite.alpha_mask );
     }
 
     // Placing against a wall or window locks the facing into the room.

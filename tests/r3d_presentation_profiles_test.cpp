@@ -305,7 +305,8 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
     const auto contexts = tile_context_fixture(true);
     REQUIRE(contexts.valid());
     tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
-    const auto id = std::string(GENERATE("f_locker", "f_chair", "f_trashcan", "f_table"));
+    const auto id = std::string(GENERATE(
+        "f_locker", "f_chair", "f_trashcan", "f_table", "f_sink", "f_oven", "f_dishwasher"));
     const auto face =
         GENERATE(r3d::profile_face::top, r3d::profile_face::side, r3d::profile_face::front);
     CAPTURE(id, static_cast<int>(face));
@@ -574,5 +575,46 @@ TEST_CASE("r3d_bundled_trashcan_materials_are_opaque_and_attached", "[r3d][profi
     CHECK(art.front.sheet == art.main().sheet);
     CHECK(art.side.sheet == art.main().sheet);
     CHECK(art.cap.sheet == art.main().sheet);
+}
+#endif
+
+#if defined(TILES)
+TEST_CASE(
+    "r3d_patterned_walls_use_elevations_instead_of_top_down_studs", "[r3d][profiles][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto cache = r3d::tile_info_cache{};
+    const auto donor =
+        cache.named({.category = C_TERRAIN, .id = "t_grass", .tiles = *tilecontext}).main();
+    REQUIRE(donor.valid);
+    auto sides = std::make_shared<r3d::wall_sides>();
+    sides->atlas = donor.owner;
+    auto width = 0.0f;
+    auto height = 0.0f;
+    REQUIRE(SDL_GetTextureSize(sides->atlas.get(), &width, &height));
+    sides->width = static_cast<int>(width);
+    sides->height = static_cast<int>(height);
+    sides->cell = std::max(1, std::min(sides->width, sides->height) / 2);
+    sides->names = {"brick", "wood"};
+    sides->rules.by_id = {{"t_brick_wall", "brick"}, {"t_wall_wood", "wood"}};
+    cache.set_wall_sides(sides);
+    cache.set_plaster_atlas(false);
+    const auto id = std::string(GENERATE("t_brick_wall", "t_wall_wood"));
+    CAPTURE(id, sides->width, sides->height);
+    const auto wall = cache.terrain({.id = ter_str_id(id).id(), .tiles = *tilecontext});
+    REQUIRE(wall.side.valid);
+    CHECK_FALSE(wall.elevation.valid);
+    CHECK(wall.side.sheet == sides->atlas.get());
+    const auto expected = r3d::atlas_cell(
+        {.index = id == "t_brick_wall" ? 0 : 1,
+         .cell = sides->cell,
+         .atlas_w = sides->width,
+         .atlas_h = sides->height});
+    REQUIRE(expected.valid);
+    CHECK(wall.side.u0 == Approx(expected.u0));
+    CHECK(wall.side.v0 == Approx(expected.v0));
+    CHECK(wall.side.u1 == Approx(expected.u1));
+    CHECK(wall.side.v1 == Approx(expected.v1));
 }
 #endif

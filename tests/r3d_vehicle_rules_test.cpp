@@ -936,4 +936,74 @@ TEST_CASE("r3d_first_person_driver_sees_through_own_windshield", "[r3d][vehicle]
     CHECK(mesh_size(fp_cam) == orbit);
 }
 
+TEST_CASE("r3d_vehicle_mounts_keep_their_material_without_double_tint", "[r3d][vehicle][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto& here = get_map();
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = here.add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    const auto panels = std::array{"halfboard_horizontal", "woodhalfboard_horizontal", "roof"};
+    for (auto i = 0; i < static_cast<int>(panels.size()); ++i) {
+        const auto mount = tripoint_mnt_veh(i, 0, 0);
+        REQUIRE(veh->install_part(mount, vpart_id("frame_horizontal"), true) >= 0);
+        REQUIRE(veh->install_part(mount, vpart_id(panels[i]), true) >= 0);
+    }
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto light = r3d::pack_light(220, 200, 180);
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [light](const tripoint_bub_ms& /*p*/) { return light; },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    const auto deck_height = r3d::floor_height + 0.02f + r3d::vehicle_body_h;
+    for (auto i = 0; i < static_cast<int>(panels.size()); ++i) {
+        CAPTURE(panels[i]);
+        const auto& material =
+            cache
+                .named({.category = C_VEHICLE_PART,
+                        .id = std::string("vp_") + panels[i],
+                        .tiles = *tilecontext})
+                .main();
+        REQUIRE(material.valid);
+        REQUIRE(material.solid_uv);
+        auto decks = 0;
+        for (auto q = size_t{0}; q < mesh.vertices.size(); q += 4) {
+            const auto quad = std::span(mesh.vertices).subspan(q, 4);
+            if (!std::ranges::all_of(quad, [i, deck_height](const auto& vertex) {
+                    return vertex.x >= i && vertex.x <= i + 1 && vertex.z == Approx(deck_height);
+                })) {
+                continue;
+            }
+            ++decks;
+            for (auto c = size_t{0}; c < 4; ++c) {
+                CHECK(quad[c].u == Approx((*material.solid_uv)[0]));
+                CHECK(quad[c].v == Approx((*material.solid_uv)[1]));
+                CHECK((mesh.light[q + c] & 0x00ffffffu) == (light & 0x00ffffffu));
+            }
+            auto bound = false;
+            for (const auto& batch : mesh.batches) {
+                const auto indices =
+                    std::span(mesh.indices).subspan(batch.first_index, batch.index_count);
+                if (std::ranges::contains(indices, static_cast<uint32_t>(q))) {
+                    CHECK(batch.sheet == material.sheet);
+                    bound = true;
+                }
+            }
+            CHECK(bound);
+        }
+        CHECK(decks > 0);
+    }
+}
+
 #endif

@@ -31,7 +31,15 @@ In **Options > Graphics > Choose tileset**, select **UltimateCataclysm** (Ultica
 for the recommended 3D artwork. The renderer uses the selected game tileset;
 enabling 3D does not change an existing selection such as Hoder. Smaller/older
 tilesets have incomplete asset coverage. Missing wall art uses a generic material
-instead of stretching the tileset’s unknown marker across the wall.
+instead of stretching the tileset’s unknown marker across the wall. Brick, timber,
+stone and metal walls use elevation textures tinted from the tileset; top-down
+studs and wall caps are not repeated over their sides. Painted walls retain
+their native elevation unless the plaster texture option is enabled.
+
+**3D thin walls** changes presentation only. BN still blocks movement and resolves
+projectiles by terrain tile, and mouse picking uses the tile's full column.
+The visible space beside a thin wall is therefore not walkable. Disable thin
+walls to draw full-tile blocks that show the blocked footprint more directly.
 
 In Options > Graphics, select the `gpu` renderer, restart if changing renderers,
 and enable **Voxelised 3D renderer (experimental)**. This setting is off by
@@ -58,9 +66,14 @@ cyan silhouette of the avatar where world geometry hides them. It uses the same
 visible player sprite layers and does not reveal other creatures or items. It can
 be used alongside the cutaway setting.
 
+Appliances use closed boxes with separate top, front and side materials. Their
+full height is independent of the transparent margins in top-down artwork, and
+face profiles apply to sinks, ovens and dishwashers as well as storage furniture.
+
 Vehicle quarterpanels (`HALF_BOARD`) stay at body height even beneath a roof;
 full panels and windshields keep cabin height. Roof caps take the exterior panel
-material, while rooftop equipment keeps its own sprite. Native `shapes` direction
+material from their own mount, while rooftop equipment keeps its own sprite.
+Body faces sample that material once, without a second vehicle-wide paint tint. Native `shapes` direction
 variants ending in `_nw`, `_ne`, `_sw`, or `_se` trim the corresponding body corner.
 These are generated part IDs, not new map or vehicle rules. Once a vehicle has a
 renderable mount, its rigid model stays complete rather than disappearing in

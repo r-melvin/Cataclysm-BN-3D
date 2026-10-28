@@ -74,3 +74,17 @@ exercise that lifecycle. When diagnosing a regression, count native
 injected SDL motion batch. There must be no camera drawing between its events;
 the final state must be drawn and presented afterwards. Check repeated batches
 for unbounded process mappings/memory growth and inspect the game/crash logs.
+
+## Buildings, appliances and vehicle materials
+
+Paste `readability.lua` into a private scene with a vehicle beside the avatar.
+It builds brick and timber walls, a door and window, and two rows of appliances:
+sink, oven, fridge, dishwasher and washer, west to east. The 19 × 15 footprint is
+checked before any tile is changed. Existing vehicles remain in place.
+
+Inspect from both sides and above, with cutaways disabled for material checks.
+Wall elevations must form continuous solid surfaces. Appliance heights must not
+shrink with sprite margins; oven hobs belong on top, and doors on the front.
+Compare vehicle materials at adjoining mounts; body colour must not be multiplied
+by a second paint tint. Repeat with cutaways enabled and while driving in the
+private world. Switch to 2D for the same native placements.

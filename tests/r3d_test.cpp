@@ -638,7 +638,6 @@ TEST_CASE( "r3d_furniture_shapes", "[r3d]" )
     const r3d::shape transparent_container = r3d::classify_furniture( t );
     CHECK( transparent_container.kind == r3d::shape_kind::prism );
     CHECK( transparent_container.slab == 0.0f );
-    CHECK( transparent_container.voxel );
     CHECK( transparent_container.height > r3d::floor_height );
     CHECK( transparent_container.height < locker.height );
 
@@ -646,7 +645,6 @@ TEST_CASE( "r3d_furniture_shapes", "[r3d]" )
     const r3d::shape opaque_container = r3d::classify_furniture( t );
     CHECK( opaque_container.kind == r3d::shape_kind::prism );
     CHECK( opaque_container.slab == 0.0f );
-    CHECK( opaque_container.voxel );
     CHECK( opaque_container.height > transparent_container.height );
 
     t = {};
