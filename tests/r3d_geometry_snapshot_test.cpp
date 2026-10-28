@@ -120,8 +120,12 @@ TEST_CASE("r3d_geometry_matches_snapshot", "[r3d][geometry][tiles]") {
         rng_set_engine_seed(12345);
         setup();
         auto cache = r3d::tile_info_cache{};
+        cache.set_presentation_profiles(profiles);
         cache.set_voxel_items(true);
-        const auto cam = r3d::camera{};
+        // Fingerprints describe fixed scenes, independently of gameplay camera defaults.
+        auto cam = r3d::camera{};
+        cam.pitch = 0.96f;
+        cam.distance = 18.0f;
         auto view = r3d::entity_view{
             .tiles = *tilecontext,
             .cache = cache,
@@ -139,7 +143,9 @@ TEST_CASE("r3d_geometry_matches_snapshot", "[r3d][geometry][tiles]") {
         actual[scene] = format_line(scene, fingerprint(mesh));
     };
 
-    for (const auto* proto : {"car", "pickup", "suv", "bus", "semi_truck"}) {
+    for (const auto* proto :
+         {"car", "car_hatch", "car_sports", "pickup", "suv", "cube_van", "bus", "semi_truck",
+          "2seater2", "SmallFlier1"}) {
         for (const auto degrees : {0, 90, 225}) {
             const auto scene = std::string("vehicle_") + proto + "_" + std::to_string(degrees);
             render(

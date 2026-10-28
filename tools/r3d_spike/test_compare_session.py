@@ -51,7 +51,7 @@ class SessionPackagingTest(unittest.TestCase):
                 "support_anchor": [0.5, 0.5, 0], "depth_fraction": 0.38,
                 "material_regions": [{"name": "tank_shell", "role": "painted metal",
                                       "palette_indices": [1]}]}, {
-                "category": "terrain", "id": "t_floor",
+                "category": "terrain", "id": ["t_floor", "t_floor_wax"],
                 "face_sources": [{"face": "top", "tileset": "UltimateCataclysm",
                                   "sprite": "<source>", "crop": [0.25, 0.25, 0.75, 0.75]}]}]}))
             with mock.patch.object(session_tool, "ROOT", root):

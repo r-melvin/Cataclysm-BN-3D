@@ -2,6 +2,7 @@
 
 #    include "sdltiles.h" // IWYU pragma: associated
 #    include "r3d.h"
+#    include "wall_edges.h"
 #    include "r3d_asset_loader.h"
 #    include "r3d_targeting_panel.h"
 
@@ -347,6 +348,8 @@ static void WinCreate()
         throwErrorIf( !SetupRenderTarget(),
                       "Failed to initialize display buffer under software rendering, unable to continue." );
     }
+
+    wall_edges::set_rendering_available( SDL_GetGPURendererDevice( renderer.get() ) != nullptr );
 
     SDL_SetWindowMinimumSize( ::window.get(), fontwidth * FULL_SCREEN_WIDTH * scaling_factor,
                               fontheight * FULL_SCREEN_HEIGHT * scaling_factor );
@@ -4480,6 +4483,7 @@ const SDL_Renderer_Ptr &get_sdl_renderer()
 
 auto set_sdl_renderer( SDL_Renderer_Ptr r ) -> void
 {
+    wall_edges::set_rendering_available( !r || SDL_GetGPURendererDevice( r.get() ) != nullptr );
     renderer = std::move( r );
 }
 

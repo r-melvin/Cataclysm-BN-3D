@@ -159,6 +159,7 @@ auto panel_outline( const panel_outline_options &options ) -> std::vector<std::a
             {o.front, o.left}, {o.front, o.right}, {o.rear, o.right}, {o.rear, o.left}
         }
     };
+    if( cut <= 0.0f ) { return std::vector<std::array<float, 2>>( corners.begin(), corners.end() ); }
     const auto selected = o.corner == panel_corner::front_left ? 0 :
                           o.corner == panel_corner::front_right ? 1 :
                           o.corner == panel_corner::rear_right ? 2 :
@@ -166,10 +167,22 @@ auto panel_outline( const panel_outline_options &options ) -> std::vector<std::a
     for( auto index = 0; index < 4; ++index ) {
         const auto &current = corners[index];
         if( index != selected ) { result.push_back( current ); continue; }
-        for( const auto adjacent : { ( index + 3 ) % 4, ( index + 1 ) % 4 } ) {
-            const auto &next = corners[adjacent];
-            result.push_back( { current[0] + ( next[0] > current[0] ? cut : next[0] < current[0] ? -cut : 0.0f ),
-                                current[1] + ( next[1] > current[1] ? cut : next[1] < current[1] ? -cut : 0.0f ) } );
+        const auto &previous = corners[( index + 3 ) % 4];
+        const auto &next = corners[( index + 1 ) % 4];
+        const auto start = std::array<float, 2> { current[0] + ( previous[0] - current[0] ) / ( o.front - o.rear ) *cut,
+                current[1] + ( previous[1] - current[1] ) / ( o.right - o.left ) *cut
+                                                };
+        const auto end = std::array<float, 2> { current[0] + ( next[0] - current[0] ) / ( o.front - o.rear ) *cut,
+                                                current[1] + ( next[1] - current[1] ) / ( o.right - o.left ) *cut
+                                              };
+        const auto center = std::array<float, 2> { start[0] + end[0] - current[0], start[1] + end[1] - current[1] };
+        // Four broad facets make a quarter-round corner without changing its native bounds.
+        for( auto segment = 0; segment <= 4; ++segment ) {
+            if( segment == 0 ) { result.push_back( start ); continue; }
+            if( segment == 4 ) { result.push_back( end ); continue; }
+            const auto angle = segment * std::numbers::pi_v<float> / 8.0f;
+            result.push_back( { center[0] + ( start[0] - center[0] ) * std::cos( angle ) + ( end[0] - center[0] ) * std::sin( angle ),
+                                center[1] + ( start[1] - center[1] ) * std::cos( angle ) + ( end[1] - center[1] ) * std::sin( angle ) } );
         }
     }
     return result;

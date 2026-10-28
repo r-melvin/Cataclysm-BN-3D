@@ -31,11 +31,30 @@ In **Options > Graphics > Choose tileset**, select **UltimateCataclysm** (Ultica
 for the recommended 3D artwork. The renderer uses the selected game tileset;
 enabling 3D does not change an existing selection such as Hoder. Smaller/older
 tilesets have incomplete asset coverage. Missing wall art uses a generic material
-instead of stretching the tileset’s unknown marker across the wall.
+instead of stretching the tileset’s unknown marker across the wall. Brick, timber,
+stone and metal walls use elevation textures tinted from the tileset; top-down
+studs and wall caps are not repeated over their sides. Painted walls retain
+their native elevation unless the plaster texture option is enabled.
+
+**3D thin walls** draws ¼-tile walls at tile edges, with the room floor extending
+beneath the wall tiles, including corners. Exterior faces sit against the far
+edge from the room. Interior partitions and ambiguous walls consistently use
+the north/west edge. Doors, windows, surrounds and fitted cabinetry follow the
+same line. Floor roof metadata identifies building interiors even when the
+terrain lacks an `INDOORS` flag.
+
+With 3D thin walls enabled, characters keep whole-tile positions but can enter
+the free floor in a wall tile. Crossing the wall strip is blocked. Player and AI
+movement, routes, melee/reach and projectiles use that boundary; closed doors
+open when their edge is reached. Vehicle parts sweep their native tile footprint
+against the strips. Terrain IDs, materials and damage states remain native.
+Disabling thin walls or 3D restores whole-cell collision. Mouse picking and the
+lighting grid still use native tile columns.
 
 In Options > Graphics, select the `gpu` renderer, restart if changing renderers,
-and enable **Voxelised 3D renderer (experimental)**. This setting is off by
-default; disable it in the same menu to return to the standard isometric view.
+and enable **Voxelised 3D renderer (experimental)**. Disable it in the same menu
+to return to the standard isometric view. Flat-renderer fallback retains native
+whole-cell collision.
 New configurations prefer `gpu` when SDL provides it. Unsupported graphics
 backends retain BN's ordinary 2D view.
 
@@ -58,9 +77,14 @@ cyan silhouette of the avatar where world geometry hides them. It uses the same
 visible player sprite layers and does not reveal other creatures or items. It can
 be used alongside the cutaway setting.
 
+Appliances use closed boxes with separate top, front and side materials. Their
+full height is independent of the transparent margins in top-down artwork, and
+face profiles apply to sinks, ovens and dishwashers as well as storage furniture.
+
 Vehicle quarterpanels (`HALF_BOARD`) stay at body height even beneath a roof;
 full panels and windshields keep cabin height. Roof caps take the exterior panel
-material, while rooftop equipment keeps its own sprite. Native `shapes` direction
+material from their own mount, while rooftop equipment keeps its own sprite.
+Body faces sample that material once, without a second vehicle-wide paint tint. Native `shapes` direction
 variants ending in `_nw`, `_ne`, `_sw`, or `_se` trim the corresponding body corner.
 These are generated part IDs, not new map or vehicle rules. Once a vehicle has a
 renderable mount, its rigid model stays complete rather than disappearing in
@@ -230,3 +254,36 @@ Native BN implementations of UI/HUD/weather, first-person camera and guided
 onboarding exist on separate feature branches and are not included on `main`.
 Their integration and validation status is tracked in the backlog. The UI port
 uses BN's own interface rather than CDDA's ImGui frontend.
+
+
+Sink and oven furniture retain their existing sprite-derived box geometry.
+Tileset-specific source crops put the original basin/hob artwork on top and the
+original cabinet/oven-door artwork on the front. Plain sides sample the same
+appliance's material. Hoder's top-down sprites remain on top with plain edges;
+no replacement appliance artwork or procedural model is used. Missing artwork
+retains upright diagnostic markers. Radio towers use open braced supports spanning
+their contiguous native vertical column; a standalone marker gets a four-storey
+visual support. These models preserve native furniture and terrain collision.
+
+Metal vehicle roofs follow adjacent exterior materials instead of generic blue
+roof filler, while distinct native roof paint remains visible. Roof crowns and
+bonnet slopes soften the silhouette without changing the native footprint.
+Helicopter main rotors use native diameters and the installed assembly, with
+masts, hubs, blades and broken stubs. Blades are currently posed, without rotor
+animation. Private reproduction scenes are documented in
+`tools/r3d_spike/fixtures/README.md`.
+
+Vehicle proportions follow the installed assembly: short cabins sit lower, long
+enclosed bodies sit taller, and wheel diameter/width use native millimetres.
+Existing corner panels use four broad facets around their curved edge; roofs
+arch across their width and length, with inward-tapering canopy edges. Sprite
+materials, doors, cargo and native gameplay footprints remain in use. Roof
+accessories sit above the arched roof surface.
+
+On enclosed helicopters with one main rotor, the visible mast is centred over
+the roof/cabin rather than offset onto its installation tile. Multiple main
+rotors keep their separate native positions. The civilian main rotor has four
+blades. Existing aft half-panels form the raised boom, tailplane and fin; a
+vertical visual tail rotor is added on conventional single-main-rotor tails.
+It follows fin damage, has no separate gameplay part or collision, and is omitted
+when no supporting fin remains. Rotor blades remain static.

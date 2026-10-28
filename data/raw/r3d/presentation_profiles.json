@@ -34,6 +34,380 @@
           "crop": [ 0.3125, 0.59375, 0.65625, 0.9375 ]
         }
       ]
+    },
+    {
+      "category": "furniture",
+      "id": "f_sink",
+      "face_sources": [
+        { "face": "top", "tileset": "UltimateCataclysm", "sprite": "f_sink", "crop": [ 0.03125, 0, 0.96875, 0.625 ] },
+        {
+          "face": "front",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_sink",
+          "crop": [ 0.0625, 0.6875, 0.9375, 0.9375 ]
+        },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_sink",
+          "crop": [ 0.09375, 0.71875, 0.375, 0.90625 ]
+        },
+        { "face": "top", "tileset": "hoder", "sprite": "f_sink", "crop": [ 0.0625, 0.0625, 0.9375, 0.9375 ] },
+        { "face": "front", "tileset": "hoder", "sprite": "f_sink", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] },
+        { "face": "side", "tileset": "hoder", "sprite": "f_sink", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] }
+      ]
+    },
+    {
+      "category": "furniture",
+      "id": "f_oven",
+      "face_sources": [
+        { "face": "top", "tileset": "UltimateCataclysm", "sprite": "f_oven", "crop": [ 0.03125, 0.4375, 0.96875, 0.78125 ] },
+        {
+          "face": "front",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_oven",
+          "crop": [ 0.03125, 0.8125, 0.96875, 0.96875 ]
+        },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_oven",
+          "crop": [ 0.09375, 0.8125, 0.1875, 0.9375 ]
+        },
+        { "face": "top", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.0625, 0.0625, 0.9375, 0.9375 ] },
+        { "face": "front", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] },
+        { "face": "side", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] }
+      ]
+    },
+    {
+      "category": "furniture",
+      "id": "f_rvoven",
+      "face_sources": [
+        { "face": "top", "tileset": "UltimateCataclysm", "sprite": "f_oven", "crop": [ 0.03125, 0.4375, 0.96875, 0.78125 ] },
+        {
+          "face": "front",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_oven",
+          "crop": [ 0.03125, 0.8125, 0.96875, 0.96875 ]
+        },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "f_oven",
+          "crop": [ 0.09375, 0.8125, 0.1875, 0.9375 ]
+        },
+        { "face": "top", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.0625, 0.0625, 0.9375, 0.9375 ] },
+        { "face": "front", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] },
+        { "face": "side", "tileset": "hoder", "sprite": "f_oven", "crop": [ 0.8125, 0.1875, 0.875, 0.6875 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": [
+        "vp_board",
+        "vp_board_horizontal",
+        "vp_board_horizontal_front",
+        "vp_board_horizontal_rear",
+        "vp_board_vertical",
+        "vp_board_vertical_left",
+        "vp_board_vertical_right",
+        "vp_board_wheel_left",
+        "vp_board_wheel_right",
+        "vp_board_nw",
+        "vp_board_ne",
+        "vp_board_sw",
+        "vp_board_se",
+        "vp_board_ne_edge",
+        "vp_board_nw_edge"
+      ],
+      "face_sources": [
+        {
+          "face": "top",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_board_horizontal",
+          "crop": [ 0.0625, 0.354167, 0.9375, 0.958333 ]
+        },
+        { "face": "top", "tileset": "hoder", "sprite": "vp_board_vertical", "crop": [ 0.3125, 0.125, 0.6875, 0.875 ] },
+        {
+          "face": "side",
+          "tileset": "hoder",
+          "sprite": "vp_board_horizontal",
+          "crop": [ 0.1875, 0.3125, 0.8125, 0.75 ]
+        }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": "vp_roof",
+      "face_sources": [
+        {
+          "face": "top",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "top",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": [ "vp_halfboard_nw", "vp_aluminum_halfboard_nw" ],
+      "face_sources": [
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "top",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "side",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        },
+        {
+          "face": "top",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        },
+        { "face": "front", "tileset": "hoder", "sprite": "vp_halfboard_nw", "crop": [ 0.125, 0.0625, 0.75, 0.375 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": [ "vp_halfboard_ne", "vp_aluminum_halfboard_ne" ],
+      "face_sources": [
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "top",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "side",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        },
+        {
+          "face": "top",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        },
+        { "face": "front", "tileset": "hoder", "sprite": "vp_halfboard_ne", "crop": [ 0.25, 0.0625, 0.875, 0.375 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": [ "vp_halfboard_sw", "vp_aluminum_halfboard_sw" ],
+      "face_sources": [
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "top",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "side",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        },
+        {
+          "face": "top",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        },
+        {
+          "face": "rear",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_sw",
+          "crop": [ 0.375, 0.6875, 0.75, 0.875 ]
+        },
+        { "face": "rear", "tileset": "hoder", "sprite": "vp_halfboard_sw", "crop": [ 0.125, 0.25, 0.625, 0.875 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": [ "vp_halfboard_se", "vp_aluminum_halfboard_se" ],
+      "face_sources": [
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "top",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_horizontal",
+          "crop": [ 0.125, 0.416667, 0.875, 0.833333 ]
+        },
+        {
+          "face": "side",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        },
+        {
+          "face": "top",
+          "tileset": "hoder",
+          "sprite": "vp_halfboard_vertical",
+          "crop": [ 0.1875, 0.1875, 0.8125, 0.8125 ]
+        },
+        {
+          "face": "rear",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_halfboard_se",
+          "crop": [ 0.25, 0.6875, 0.625, 0.875 ]
+        },
+        { "face": "rear", "tileset": "hoder", "sprite": "vp_halfboard_se", "crop": [ 0.375, 0.25, 0.875, 0.875 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": [
+        "vp_windshield",
+        "vp_windshield_horizontal_front",
+        "vp_windshield_ne",
+        "vp_windshield_nw",
+        "vp_windshield_horizontal_rear"
+      ],
+      "face_sources": [
+        {
+          "face": "glass",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_windshield",
+          "crop": [ 0.03125, 0.5625, 0.96875, 0.958333 ]
+        },
+        { "face": "glass", "tileset": "hoder", "sprite": "vp_door", "crop": [ 0.25, 0.1875, 0.4375, 0.75 ] },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_windshield",
+          "crop": [ 0.03125, 0.375, 0.96875, 0.520833 ]
+        },
+        { "face": "side", "tileset": "hoder", "sprite": "vp_door", "crop": [ 0.625, 0.1875, 0.8125, 0.8125 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": [ "vp_windshield_vertical_left", "vp_door_front_left", "vp_door_rear_left", "vp_door_left" ],
+      "face_sources": [
+        { "face": "glass", "tileset": "UltimateCataclysm", "sprite": "vp_door_left", "crop": [ 0.65625, 0.208333, 0.75, 0.5 ] },
+        { "face": "glass", "tileset": "hoder", "sprite": "vp_door", "crop": [ 0.25, 0.1875, 0.4375, 0.75 ] },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_door_left",
+          "crop": [ 0.8125, 0.395833, 0.96875, 0.916667 ]
+        },
+        { "face": "side", "tileset": "hoder", "sprite": "vp_door", "crop": [ 0.625, 0.1875, 0.8125, 0.8125 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": [ "vp_windshield_vertical_right", "vp_door_front_right", "vp_door_rear_right", "vp_door_right" ],
+      "face_sources": [
+        { "face": "glass", "tileset": "UltimateCataclysm", "sprite": "vp_door_right", "crop": [ 0.25, 0.208333, 0.34375, 0.5 ] },
+        { "face": "glass", "tileset": "hoder", "sprite": "vp_door", "crop": [ 0.25, 0.1875, 0.4375, 0.75 ] },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_door_right",
+          "crop": [ 0.03125, 0.395833, 0.1875, 0.916667 ]
+        },
+        { "face": "side", "tileset": "hoder", "sprite": "vp_door", "crop": [ 0.625, 0.1875, 0.8125, 0.8125 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": "vp_hatch",
+      "face_sources": [
+        { "face": "glass", "tileset": "UltimateCataclysm", "sprite": "vp_hatch", "crop": [ 0.28125, 0.5625, 0.71875, 0.84375 ] },
+        { "face": "glass", "tileset": "hoder", "sprite": "vp_door", "crop": [ 0.25, 0.1875, 0.4375, 0.75 ] },
+        {
+          "face": "side",
+          "tileset": "UltimateCataclysm",
+          "sprite": "vp_hatch",
+          "crop": [ 0.28125, 0.421875, 0.71875, 0.46875 ]
+        },
+        { "face": "side", "tileset": "hoder", "sprite": "vp_door", "crop": [ 0.625, 0.1875, 0.8125, 0.8125 ] }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": "vp_small_civilian_rotors",
+      "face_sources": [
+        {
+          "face": "side",
+          "tileset": "UNDEAD_PEOPLE_BASE",
+          "sprite": "vp_small_civilian_rotors",
+          "crop": [ 0.125, 0.125, 0.3125, 0.25 ]
+        }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": "vp_heavy_duty_military_rotor",
+      "face_sources": [
+        {
+          "face": "side",
+          "tileset": "UNDEAD_PEOPLE_BASE",
+          "sprite": "vp_heavy_duty_military_rotor",
+          "crop": [ 0.125, 0.125, 0.3125, 0.25 ]
+        }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": "vp_heavy_duty_military_blackhawk_rotors",
+      "face_sources": [
+        {
+          "face": "side",
+          "tileset": "UNDEAD_PEOPLE_BASE",
+          "sprite": "vp_heavy_duty_military_blackhawk_rotors",
+          "crop": [ 0.125, 0.125, 0.3125, 0.25 ]
+        }
+      ]
+    },
+    {
+      "category": "vehicle_part",
+      "id": "vp_heavy_duty_military_osprey_rotors",
+      "face_sources": [
+        {
+          "face": "side",
+          "tileset": "UNDEAD_PEOPLE_BASE",
+          "sprite": "vp_heavy_duty_military_osprey_rotors",
+          "crop": [ 0.125, 0.125, 0.3125, 0.25 ]
+        }
+      ]
     }
   ]
 }

@@ -2672,13 +2672,14 @@ void options_manager::add_options_graphics()
     get_option( "R3D_WASD" ).setPrerequisite( "RENDERER_3D" );
 
     add( "R3D_THIN_WALLS", graphics, translate_marker( "3D thin walls" ),
-         translate_marker( "Draw walls with the same thin profile as doors and windows.  "
-                           "Disable to draw walls as full tile blocks." ),
+         translate_marker( "Draw quarter-tile walls at tile edges with floor beneath them.  "
+                           "In 3D, movement and physical attacks collide with those edges.  "
+                           "Disable to restore full-tile walls and collision." ),
          true, COPT_CURSES_HIDE );
     get_option( "R3D_THIN_WALLS" ).setPrerequisite( "RENDERER_3D" );
 
     add( "R3D_WALL_TEXTURES", graphics, translate_marker( "3D plaster texture on painted walls" ),
-         translate_marker( "In the 3D view, give painted and plain walls a drawn plaster texture instead of reading the tileset's own wall sprite as coving, paint and skirting board.  Brick, wood and stone walls always use the tileset's sprite." ),
+         translate_marker( "In the 3D view, give painted and plain walls a drawn plaster texture instead of reading the tileset's own wall sprite as coving, paint and skirting board.  Brick, wood and stone walls use material textures tinted from the tileset." ),
          false, COPT_CURSES_HIDE
        );
 

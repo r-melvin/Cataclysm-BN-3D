@@ -62,6 +62,7 @@
 #include "map_iterator.h"
 #include "map_memory.h"
 #include "map_selector.h"
+#include "map_shoot_options.h"
 #include "mapbuffer.h"
 #include "mapdata.h"
 #include "mapgen/mapgen_async.h"
@@ -105,6 +106,7 @@
 #include "vehicle/vpart_position.h"
 #include "vehicle/vpart_range.h"
 #include "visitable.h"
+#include "wall_edges.h"
 #include "weather/weather.h"
 #include "weighted_list.h"
 
@@ -2589,7 +2591,8 @@ auto map::features(const tripoint_bub_ms& p) -> std::string {
 auto map::move_cost_internal(
     const furn_t& furniture, const ter_t& terrain, const vehicle* veh, const int vpart) const
     -> int {
-    if (terrain.movecost == 0 || (furniture.id && furniture.movecost < 0)) { return 0; }
+    const auto terrain_cost = wall_edges::terrain_move_cost(terrain);
+    if (terrain_cost == 0 || (furniture.id && furniture.movecost < 0)) { return 0; }
 
     if (veh != nullptr) {
         const vpart_position vp(const_cast<vehicle&>(*veh), vpart);
@@ -2602,9 +2605,9 @@ auto map::move_cost_internal(
         }
     }
 
-    if (furniture.id) { return std::max(terrain.movecost + furniture.movecost, 0); }
+    if (furniture.id) { return std::max(terrain_cost + furniture.movecost, 0); }
 
-    return std::max(terrain.movecost, 0);
+    return std::max(terrain_cost, 0);
 }
 
 auto map::is_wall_adjacent(const tripoint_bub_ms& center) const -> bool {
@@ -2645,7 +2648,7 @@ auto map::move_cost_ter_furn(const tripoint_bub_ms& p) const -> int {
     submap* const current_submap = get_submap_at(tripoint_bub_ms(p), l);
     if (current_submap == nullptr) { return 0; }
 
-    const int tercost = current_submap->get_ter(l).obj().movecost;
+    const auto tercost = wall_edges::terrain_move_cost(current_submap->get_ter(l).obj());
     if (tercost == 0) { return 0; }
 
     const int furncost = current_submap->get_furn(l).obj().movecost;
@@ -4373,6 +4376,14 @@ void map::crush(const tripoint_bub_ms& p) {
 void map::shoot(
     const tripoint_bub_ms& origin, const tripoint_bub_ms& p, projectile& proj,
     const bool hit_items) {
+    shoot({.origin = origin, .pos = p, .shot = proj, .hit_items = hit_items});
+}
+
+auto map::shoot(const map_shoot_options& options) -> void {
+    const auto& origin = options.origin;
+    const auto& p = options.pos;
+    auto& proj = options.shot;
+    const auto hit_items = options.hit_items;
     float initial_damage = 0.0;
     float initial_arpen = 0.0;
     float initial_armor_mult = 1.0;
@@ -4386,7 +4397,8 @@ void map::shoot(
     float dam = initial_damage;
     float pen = initial_arpen;
 
-    if (has_flag("ALARMED", p) && !g->timed_events.queued(TIMED_EVENT_WANTED)) {
+    if (options.hit_terrain && has_flag("ALARMED", p)
+        && !g->timed_events.queued(TIMED_EVENT_WANTED)) {
         sound_event se;
         se.origin = p;
         se.volume = 90;
@@ -4472,7 +4484,7 @@ void map::shoot(
         // Check furniture and terrain separately, if this was an if/else then getting partial cover
         // embedded in a wall would let you fire through it.
     }
-    if (ter.bash.ranged) {
+    if (options.hit_terrain && ter.bash.ranged) {
         // New values are used for debug message in case furniture did something.
         float modified_dam = dam;
         float modified_pen = pen;
@@ -4520,7 +4532,9 @@ void map::shoot(
             }
             if (ri.flammable && inc) { add_field(p, fd_fire, 1); }
         }
-    } else if (impassable(p) && !is_transparent(p)) {
+    } else if ((impassable(p) && !is_transparent(p))
+               || (options.hit_terrain && wall_edges::enabled() && wall_edges::is_edge_terrain(ter)
+                   && ter.movecost == 0 && !ter.transparent)) {
         bash(p, dam, false);
         // TODO: Preserve some residual damage when it makes sense.
         dam = 0;

@@ -74,3 +74,68 @@ exercise that lifecycle. When diagnosing a regression, count native
 injected SDL motion batch. There must be no camera drawing between its events;
 the final state must be drawn and presented afterwards. Check repeated batches
 for unbounded process mappings/memory growth and inspect the game/crash logs.
+
+## Buildings, appliances and vehicle materials
+
+Paste `readability.lua` into a private scene with a vehicle beside the avatar.
+It builds brick and timber walls, a door and window, and two rows of appliances:
+sink, oven, fridge, dishwasher and washer, west to east. The 19 × 15 footprint is
+checked before any tile is changed. Existing vehicles remain in place.
+
+Inspect from both sides and above, with cutaways disabled for material checks.
+Wall elevations must form continuous solid surfaces. Appliance heights must not
+shrink with sprite margins; oven hobs belong on top, and doors on the front.
+Compare vehicle materials at adjoining mounts; body colour must not be multiplied
+by a second paint tint. Repeat with cutaways enabled and while driving in the
+private world. Switch to 2D for the same native placements.
+
+## Exterior wall edges and floor continuity
+
+Paste `wall_edges.lua` into a private world. It checks its 19 × 17 footprint,
+then creates an enclosed wooden-floor room with grass outside, all four exterior
+wall orientations, a shared partition, intact and empty windows, open/closed doors,
+a locker and an oven. It keeps existing vehicles. Use an empty area for an
+unobstructed view. The fixture preserves native terrain flags; the thin-wall
+option enables the edge collision rules.
+
+With thin walls enabled and cutaways disabled, exterior faces should touch the
+far edge of their native wall tiles. Inspect each corner from both sides; floor
+art must continue underneath from the room, without grass strips or missing
+patches. Frames and leaves follow the wall line; the shared partition uses its
+north/west tile edge. Cabinet backs should meet their walls. Walk onto the free
+floor of wall tiles and check that the next step across the strip is blocked.
+Closed doors should open at their edge, rather than on entering that extra floor.
+Toggle full-tile walls to compare the same saved scene and native whole-cell
+collision.
+
+## Detailed appliances, radio towers and helicopter rotors
+
+Paste `appliances_radio.lua` into the inspected Lua console of a private world.
+It preflights the footprint and six vertical levels, then creates two appliance
+rows and a six-storey radio tower while preserving vehicles. Exit the console
+and wait a normal turn to refresh visibility. Inspect the original sink and hob
+art on top, cabinet/oven-door art on the front, and open tower bracing with aerial
+panels at the crown. Zoom out to see the entire tower.
+
+While standing on a disposable private test vehicle, paste
+`helicopter_preview.lua`. It replaces that vehicle with the native `2seater2`
+helicopter and clears its landing pad after checking map bounds. Refresh with a
+normal turn and inspect the full eight-metre main rotor from several headings.
+Rotors are static geometry; broken parts retain a hub and short blade stubs.
+These fixtures change private saves and must not run in a normal play world.
+
+## Vehicle silhouette comparisons
+
+`vehicle_silhouettes.lua` clears a disposable 31 × 31 display pad and replaces
+the vehicle at the avatar's origin. Its bounds are checked first. Edit
+`vehicle_id` to compare the listed native prototypes, then paste into the
+inspected Lua console. It enables debug night vision only in that private save.
+Exit and wait a normal turn; allow visibility to refresh before capturing.
+
+Compare the centred main mast and upright tail rotor on `2seater2` from both
+sides (the fin can hide its far-side rotor). Check `SmallFlier1`, then compare
+`car_sports`, `car`, `suv`, `pickup`, `cube_van`, `bus` and `semi_truck`. Look for
+faceted corner curves, arched roofs, shorter/taller cabins and native tire sizes.
+Cargo areas should retain their usable footprint. Solar panels must clear the
+roof crown. The two rotors on `helicopter_osprey_2a` retain their separate mounts;
+it must not acquire a conventional tail rotor.

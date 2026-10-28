@@ -35,6 +35,7 @@
 #include "mtype.h"
 #include "npc.h"
 #include "options.h"
+#include "wall_edges.h"
 #include "pathfinding.h"
 #include "pimpl.h"
 #include "player.h"
@@ -326,6 +327,11 @@ bool monster::can_reach_to( const tripoint_bub_ms &p ) const
     //                                                                   - DeltaEpsilon7787
     // TODO: FIX THIS DUMB ASS SHIT
     const bool is_moving_out_of_reality = !here.inbounds_z( bub_pos().z() );
+
+    if( !is_moving_out_of_reality && wall_edges::trace( { .here = here,
+            .from = bub_pos(), .to = p } ) ) {
+        return false;
+    }
 
     const bool is_z_move = p.z() != bub_pos().z();
     if( !is_z_move || is_moving_out_of_reality ) {
@@ -1347,7 +1353,9 @@ monster_action_t monster::decide_action() const
 
             auto bad_choice = false;
 
-            const auto *critter_here = g->critter_at( candidate, hallucination );
+            const auto edge = wall_edges::trace( { .here = here, .from = pos, .to = candidate } );
+            const auto obstacle = edge.value_or( candidate );
+            const auto *critter_here = edge ? nullptr : g->critter_at( candidate, hallucination );
             if( critter_here != nullptr ) {
                 const auto att = attitude_to( *critter_here );
                 if( att == Attitude::A_HOSTILE ) {
@@ -1367,7 +1375,9 @@ monster_action_t monster::decide_action() const
 
             // Openable door?
             if( can_open_doors &&
-                here.can_open_door( this, candidate, !here.is_outside( pos ) ) ) {
+                here.can_open_door( this, obstacle, !here.is_outside( pos ) ) &&
+                ( edge || !wall_edges::enabled() ||
+                  !wall_edges::is_edge_terrain( here.ter( candidate ).obj() ) ) ) {
                 next_step     = candidate;
                 has_next_step = true;
                 continue;
@@ -1382,7 +1392,7 @@ monster_action_t monster::decide_action() const
                 if( wandering && destination == wander_pos ) {
                     continue;
                 }
-                const auto estimate = here.bash_rating( bash_estimate( candidate ), candidate );
+                const auto estimate = here.bash_rating( bash_estimate( obstacle ), obstacle );
                 bool enemy_above = false;
                 const auto *critter_above = g->critter_at( candidate + tripoint_above, hallucination );
                 if( here.inbounds_z( candidate.z() + 1 ) && critter_above != nullptr ) {
@@ -1433,7 +1443,9 @@ monster_action_t monster::decide_action() const
                 action.kind   = monster_action_kind::attack;
                 action.target = const_cast<Creature *>( critter_here );
             } else if( !pacified && can_open_doors &&
-                       here.can_open_door( this, next_step, !here.is_outside( pos ) ) ) {
+                       here.can_open_door( this, next_step, !here.is_outside( pos ) ) &&
+                       !( wall_edges::enabled() && wall_edges::is_edge_terrain( here.ter( next_step ).obj() ) &&
+                          !wall_edges::trace( { .here = here, .from = pos, .to = next_step } ) ) ) {
                 action.kind = monster_action_kind::open_door;
             } else if( !pacified && can_bash && !can_move_to( next_step ) ) {
                 action.kind = monster_action_kind::bash;
@@ -1630,7 +1642,9 @@ void monster::execute_action( const monster_action_t &action )
             resolved_action.kind = monster_action_kind::attack;
             resolved_action.target = const_cast<Creature *>( critter_here );
         } else if( !pacified && has_flag( MF_CAN_OPEN_DOORS ) &&
-                   here.can_open_door( this, dest, !here.is_outside( bub_pos() ) ) ) {
+                   here.can_open_door( this, dest, !here.is_outside( bub_pos() ) ) &&
+                   !( wall_edges::enabled() && wall_edges::is_edge_terrain( here.ter( dest ).obj() ) &&
+                      !wall_edges::trace( { .here = here, .from = bub_pos(), .to = dest } ) ) ) {
             resolved_action.kind = monster_action_kind::open_door;
         } else if( !pacified && bash_skill() > 0 && !can_move_to( dest ) ) {
             resolved_action.kind = monster_action_kind::bash;
@@ -1787,6 +1801,18 @@ void monster::execute_action( const monster_action_t &action )
     if( resolved_action.kind == monster_action_kind::move ) {
         ZoneScopedN( "mon_execute_shove_vehicle" );
         shove_vehicle( goal, dest );
+    }
+
+    // The barrier may belong to the cell we already occupy, rather than dest.
+    if( const auto hit = wall_edges::trace( { .here = here, .from = bub_pos(), .to = dest } ) ) {
+        if( !pacified && !is_hallucination() && has_flag( MF_CAN_OPEN_DOORS ) &&
+            here.open_door( this, *hit, !here.is_outside( bub_pos() ) ) ) {
+            moves -= 100;
+        } else if( pacified || !bash_at( dest ) ) {
+            moves -= 100;
+        }
+        this->repath_requested = true;
+        return;
     }
 
     // Execute the chosen action.
@@ -2243,8 +2269,10 @@ static std::vector<tripoint_bub_ms> get_bashing_zone( const tripoint_bub_ms &bas
     return zone;
 }
 
-bool monster::bash_at( const tripoint_bub_ms &p )
+auto monster::bash_at( const tripoint_bub_ms &target_pos ) -> bool
 {
+    const auto edge = wall_edges::trace( { .here = get_map(), .from = bub_pos(), .to = target_pos } );
+    const auto p = edge.value_or( target_pos );
     if( p.z() != bub_pos().z() ) {
         // TODO: Remove this
         return false;
@@ -2257,11 +2285,11 @@ bool monster::bash_at( const tripoint_bub_ms &p )
 
     // Don't bash if a friendly monster is standing there
     monster *target = g->critter_at<monster>( p );
-    if( target != nullptr && attitude_to( *target ) == Attitude::A_FRIENDLY ) {
+    if( target != nullptr && target != this && attitude_to( *target ) == Attitude::A_FRIENDLY ) {
         return false;
     }
 
-    bool try_bash = !can_move_to( p ) || one_in( 3 );
+    const auto try_bash = edge || !can_move_to( p ) || one_in( 3 );
     if( !try_bash ) {
         return false;
     }
@@ -2274,7 +2302,7 @@ bool monster::bash_at( const tripoint_bub_ms &p )
 
     map &here = get_map();
 
-    bool is_obstructed_by_ter_furn = here.impassable_ter_furn( p );
+    const auto is_obstructed_by_ter_furn = edge || here.impassable_ter_furn( p );
     bool is_obstructed_by_veh = here.veh_at( p ).obstacle_at_part().has_value();
     bool is_obstructed = is_obstructed_by_ter_furn || is_obstructed_by_veh;
     bool is_flat_ground = here.has_flag( "ROAD", p ) || here.has_flag( "FLAT", p );
@@ -2287,7 +2315,7 @@ bool monster::bash_at( const tripoint_bub_ms &p )
         }
     }
 
-    int bashskill = group_bash_skill( p );
+    auto bashskill = p == bub_pos() ? bash_skill() : group_bash_skill( p );
     // Non-aquatic enemies currently in deep water bash less effectively.
     if( here.is_divable( bub_pos() ) && !has_flag( MF_AQUATIC ) ) {
         bashskill *= 0.5;
@@ -2351,6 +2379,9 @@ int monster::group_bash_skill( const tripoint_bub_ms &target ) const
 
 bool monster::attack_at( const tripoint_bub_ms &p )
 {
+    if( wall_edges::trace( { .here = get_map(), .from = bub_pos(), .to = p } ) ) {
+        return false;
+    }
     if( has_flag( MF_PACIFIST ) ) {
         return false;
     }
@@ -2435,6 +2466,10 @@ bool monster::move_to( const tripoint_bub_ms &p, bool force, bool step_on_critte
     } );
     const auto can_move = hook_results.get_or( "allowed", true );
     if( !can_move ) {
+        return false;
+    }
+
+    if( wall_edges::trace( { .here = get_map(), .from = bub_pos(), .to = p } ) ) {
         return false;
     }
 

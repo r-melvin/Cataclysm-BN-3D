@@ -42,10 +42,14 @@ auto read_face_sources( const JsonObject &entry,
     for( const auto source : entry.get_array( "face_sources" ) ) {
         const auto object = source.get_object();
         const auto face = object.get_string( "face" );
-        if( face != "side" && face != "top" && !( face == "front" && category == "furniture" ) ) {
-            object.throw_error( "face must be side or top; furniture also supports front", "face" );
+        const auto vehicle = category == "vehicle_part";
+        if( face != "side" && face != "top" &&
+            !( face == "front" && ( category == "furniture" || vehicle ) ) &&
+            !( vehicle && ( face == "rear" || face == "glass" ) ) ) {
+            object.throw_error( "unsupported face for this profile category", "face" );
         }
-        const auto selected_face = face == "front" ? profile_face::front :
+        const auto selected_face = face == "glass" ? profile_face::glass :
+                                   face == "rear" ? profile_face::rear : face == "front" ? profile_face::front :
                                    face == "side" ? profile_face::side : profile_face::top;
         auto donor = profile_face_source{
             .face = selected_face,
@@ -88,8 +92,9 @@ auto load_presentation_profiles( std::istream &input ) -> presentation_profile_m
     auto profiles = presentation_profile_map {};
     for( const JsonObject &entry : root.get_array( "profiles" ) ) {
         const auto category = entry.get_string( "category" );
-        const auto id = entry.get_string( "id" );
-        if( category.empty() || id.empty() ) {
+        const auto ids = entry.has_array( "id" ) ? entry.get_string_array( "id" ) :
+                         std::vector<std::string> { entry.get_string( "id" ) };
+        if( category.empty() || ids.empty() || std::ranges::any_of( ids, &std::string::empty ) ) {
             entry.throw_error( "category and id must not be empty" );
         }
         auto profile = presentation_profile {
@@ -109,7 +114,9 @@ auto load_presentation_profiles( std::istream &input ) -> presentation_profile_m
         if( entry.has_member( "material_regions" ) ) {
             static_cast<void>( entry.get_member( "material_regions" ) );
         }
-        profiles.insert_or_assign( presentation_profile_key( category, id ), std::move( profile ) );
+        for( const auto &id : ids ) {
+            profiles.insert_or_assign( presentation_profile_key( category, id ), profile );
+        }
     }
     return profiles;
 }

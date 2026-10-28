@@ -1,4 +1,6 @@
 #include "ballistics.h"
+#include "map_shoot_options.h"
+#include "wall_edges.h"
 
 #include <algorithm>
 #include <cmath>
@@ -484,6 +486,17 @@ auto projectile_attack( const projectile &proj_arg, const tripoint_bub_ms &sourc
     int projectile_skip_calculation = range * projectile_skip_multiplier;
     int projectile_skip_current_frame = rng( 0, projectile_skip_calculation );
     bool has_momentum = true;
+    // Penalize damage and/or range on overpenetration.
+    auto apply_overpenetration_penalty = [&]( bool modify_damage ) {
+        traj_len *= overpenetration_modifier;
+        if( modify_damage ) {
+            proj.impact.mult_damage( overpenetration_modifier );
+            add_msg( m_debug, "Projectile damage and range *= %.1f", overpenetration_modifier );
+        } else {
+            add_msg( m_debug, "Projectile range *= %.1f", overpenetration_modifier );
+        }
+    };
+
     auto *last_hit_critter = static_cast<Creature *>( nullptr );
     for( size_t i = 1; i < traj_len && ( has_momentum || stream ); ++i ) {
         prev_point = tp;
@@ -535,6 +548,21 @@ auto projectile_attack( const projectile &proj_arg, const tripoint_bub_ms &sourc
             if( in_veh == veh_pointer_or_null( other ) && other->is_inside() ) {
                 // Turret is on the roof and can't hit anything inside
                 continue;
+            }
+        }
+
+        if( const auto edge = wall_edges::trace( { .here = here, .from = prev_point, .to = tp,
+                              .kind = wall_edges::trace_kind::projectile } ) ) {
+            const auto before = proj.impact.total_damage();
+            here.shoot( { .origin = source, .pos = *edge, .shot = proj, .hit_items = false } );
+            has_momentum = proj.impact.total_damage() > 0;
+            if( before > proj.impact.total_damage() ) {
+                apply_overpenetration_penalty( is_projectile_modify_overpenetration );
+            }
+            if( !has_momentum ) {
+                tp = prev_point;
+                traj_len = i;
+                break;
             }
         }
 
@@ -600,17 +628,6 @@ auto projectile_attack( const projectile &proj_arg, const tripoint_bub_ms &sourc
         const bool z_level_vehicle = here.veh_at( tp ) && ( source.z() < tp.z() || ( source.z() > tp.z() &&
                                      here.veh_at( tp )->part_with_feature( "ROOF", true ) ) );
 
-        // Penalize damage and/or range on overpenetration.
-        auto apply_overpenetration_penalty = [&]( bool modify_damage ) {
-            traj_len *= overpenetration_modifier;
-            if( modify_damage ) {
-                proj.impact.mult_damage( overpenetration_modifier );
-                add_msg( m_debug, "Projectile damage and range *= %.1f", overpenetration_modifier );
-            } else {
-                add_msg( m_debug, "Projectile range *= %.1f", overpenetration_modifier );
-            }
-        };
-
         if( critter != nullptr && cur_missed_by < 1.0 && !z_level_vehicle ) {
             if( in_veh != nullptr && veh_pointer_or_null( here.veh_at( tp ) ) == in_veh &&
                 critter->is_player() ) {
@@ -654,7 +671,10 @@ auto projectile_attack( const projectile &proj_arg, const tripoint_bub_ms &sourc
         } else {
             // Track damage before processing so we'll know if we actually hit any cover.
             const float dmg_before_penetration = proj.impact.total_damage();
-            here.shoot( source, tp, proj, !no_item_damage && tp == target );
+            here.shoot( { .origin = source, .pos = tp, .shot = proj,
+                          .hit_items = !no_item_damage && tp == target,
+                          .hit_terrain = !wall_edges::enabled() ||
+                                         !wall_edges::is_edge_terrain( here.ter( tp ).obj() ) } );
             const float dmg_after_penetration = proj.impact.total_damage();
             has_momentum = dmg_after_penetration > 0 || ( no_damage && here.passable( tp ) );
             // We lost momentum from hitting something, penalize range.

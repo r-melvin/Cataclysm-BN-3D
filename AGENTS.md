@@ -186,3 +186,37 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Vehicle sprite footprint checks must include oversized/tall art (for example the 64-pixel hatch). Convert opacity fractions with the sprite size and anchor offsets before treating them as native tile-space geometry.
 
 - Camera mouse events must not render within `SDL_PollEvent` draining. Apply all deltas, redraw once per batch, and finish through `refresh_display()` before another camera redraw. Validate captured motion and released middle-button/Shift dragging in a private virtual game; geometry fingerprints cannot detect GPU command accumulation.
+
+- Building-floor detection must not rely on `INDOORS` alone: stock `t_floor` and linoleum floors identify building structure through native `roof` metadata without that flag. Verify actual terrain definitions, distinguish pavement, and cover these floors in renderer placement tests.
+
+- Projectile regression fixtures must supply a real loaded gun when calling the native attack pipeline; creature hit handling inspects the gun item.
+
+- Automated replacements of repeated expressions must be bounded to the intended function and assert the expected match count before writing.
+
+- Renderer code must use `vehicle_part::get_base()` for item material inspection; the backing `base` field is private outside the vehicle implementation.
+
+- Furniture `looks_like` identifies an art donor, not appliance semantics: `f_dishwasher` borrows `f_oven` art but must not acquire hob/oven geometry. Pin native appliance identities and test donor-only neighbours.
+
+- Renderer-owned procedural palettes must upload through `gpu::create_sheet` before the first 3D frame; SDL_Renderer texture uploads wait until present. Release those palette owners before device shutdown.
+
+- Native test invocations share `test_user_dir`; run them serially even on separate virtual displays to avoid save/fixture interference.
+
+- Preserve existing sprite-derived models when repairing presentation: correct source regions, orientation and existing geometry; do not replace their artwork with generic procedural appliances unless explicitly requested.
+
+- `vehicle_part::wheel_diameter()` and `wheel_width()` return millimetres, even when source item JSON uses inches. Verify runtime units before sizing renderer geometry; fixture part IDs must pass `is_valid()` before installation.
+
+- Extracted renderer emitters must be placed after the UV/light helpers they call (or have explicit declarations); a refactor must not depend on a helper defined later in the translation unit.
+
+- Vehicle rendering must preserve the selected tileset's visual language. Correct native art ownership, source regions and UV placement before adding generic replacement geometry or textures. Runtime-generated replacement assets are a last resort when usable native artwork is genuinely absent; check other tilesets and broken/open states before treating art as missing.
+
+- Authored material crops must keep secondary solid-colour sample UVs inside the cropped region, not only the face UV rectangle. Verify native source sheet and open/broken state as well as UV bounds.
+
+- Live vehicle exterior lighting must not inherit terrain-memory tint from ground or cargo hidden beneath its roof. Keep perception/activation checks separate from surface illumination, and validate the actual runtime lighting producer.
+
+- A boardable supporting frame must not override an installed panel's authored top material with interior-floor shading. Vehicle surface tests must include full panels without roof parts as well as explicit and inferred roof caps.
+
+- Curved vehicle roofs need closure where a taller roofed cell meets a lower occupied neighbour, as well as an empty exterior. Roof accessories must clear the cap's interior crown maximum, not just its corner heights.
+
+- Chunk meshes group draw batches by source-sheet address. Material-profile geometry tests must compare canonical complete quads rather than vertex-array order, while checking each face's bound sheet separately.
+
+- Geometry snapshot fixtures must pin the camera pose: camera-dependent item offsets must not inherit changing gameplay camera defaults.

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <limits>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -18,6 +19,7 @@
 #include "coordinates.h"
 #include "r3d_furniture_profiles.h"
 #include "r3d_prop_geometry.h"
+#include "r3d_fixture_geometry.h"
 #include "r3d_gpu.h"
 #include "r3d_presentation_profiles.h"
 #include "r3d_sprite_voxels.h"
@@ -59,7 +61,6 @@ struct sprite_ref {
     int alpha_width = 0;
     int alpha_height = 0;
     std::shared_ptr<const sprite_voxel_surface> voxel_surface{};
-    std::shared_ptr<const orthogonal_voxel_mesh> ortho_voxel_mesh{};
     // opaque part of the sprite as fractions of it (whole sprite when unknown)
     float opaque_x0 = 0.0f;
     float opaque_y0 = 0.0f;
@@ -71,6 +72,7 @@ struct sprite_ref {
 struct tile_info {
     shape sh;
     solid_prop prop = solid_prop::none;
+    bool radio_tower = false;
     bool stair_flight = false;
     bool stairs_down = false;
     sprite_ref backdrop; // opaque background layer, drawn first when the tileset has one
@@ -83,6 +85,8 @@ struct tile_info {
     sprite_ref side;     // texture for the sides of a wall (see wall_sides), else invalid
     sprite_ref cap;      // the top of such a wall: a plain patch of the same texture
     sprite_ref front;    // optional authored furniture front; preserves native art when absent
+    sprite_ref rear;     // optional vehicle rear-face detail from the active tileset
+    sprite_ref glass;    // vehicle glazing, separate from painted body material
     // >= 0: the wall's sprite is a front elevation (tilesets draw painted walls as a band of
     // framing over coving, paint and skirting); rows below this fraction of the sprite are the
     // side, from coving to skirting, and the rows above it top the wall
@@ -133,8 +137,10 @@ struct wall_sides {
 class tile_info_cache
 {
     public:
-        /// Forgets every lookup; the wall side textures stay.
+        /// Forgets every lookup; wall sides and the renderer-owned model palette stay.
         auto clear() -> void;
+        auto fixture_palette() -> const sprite_ref &; // *NOPAD*
+        auto set_fixture_palette( sprite_ref palette ) -> void;
         /// Side textures for walls from now on (nullptr for the tileset sprite); clears.
         auto set_wall_sides( std::shared_ptr<const wall_sides> sides ) -> void;
         /// Whether painted and plain walls take the atlas's plaster texture (true) or their own
@@ -192,6 +198,7 @@ class tile_info_cache
         std::unordered_map<int, tile_info> furniture_;
         std::unordered_map<std::string, tile_info> named_;
         tile_info ground_;
+        sprite_ref fixture_palette_;
         bool ground_loaded_ = false;
         std::shared_ptr<const wall_sides> wall_sides_;
         bool plaster_atlas_ = false;
@@ -302,6 +309,8 @@ struct mesh_options {
     bool first_person = false;
     /// Ceilings under storeys above, which are only seen from below (so only first person).
     bool ceilings = false;
+    /// The first visible storey owns the remaining tower column above it.
+    int lowest_visible_z = std::numeric_limits<int>::lowest();
 };
 
 /// Meshes the terrain and furniture of one submap. Returns an empty mesh if it is not loaded.

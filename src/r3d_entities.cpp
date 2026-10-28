@@ -37,6 +37,9 @@
 #include "r3d_sprite_voxels.h"
 #include "r3d_shapes.h"
 #include "r3d_vehicle_rules.h"
+#include "r3d_vehicle_details.h"
+#include "r3d_vehicle_silhouette.h"
+#include "r3d_vehicle_sections.h"
 #include "enums.h"
 #include "units_utility.h"
 #include "vehicle/vehicle.h"
@@ -416,6 +419,50 @@ auto make_solid_uvs( const sprite_ref &s ) -> uvs_t
 
 auto map_sprite_uv( const sprite_ref &s, float gx, float gy ) -> std::array<float, 2>;
 
+struct emit_vehicle_rotor_options {
+    quad_sink &sink;
+    const sprite_ref &palette;
+    const std::vector<fixture_piece> &pieces;
+    const to_scene_transform &transform;
+    float forward;
+    float right;
+    float base;
+    uint32_t light;
+    bool vertical = false;
+    const sprite_ref *native_material = nullptr;
+};
+
+auto emit_vehicle_rotor( const emit_vehicle_rotor_options &options ) -> void
+{
+    for( const auto &piece : options.pieces ) {
+        auto material = options.native_material ? *options.native_material : options.palette;
+        if( !options.native_material ) {
+            material.solid_uv = std::array<float, 2> { ( static_cast<float>( piece.finish ) + 0.5f ) / 7.0f, 0.5f };
+        }
+        auto vertices = std::array<std::array<float, 3>, 8> {};
+        for( auto v = size_t{0}; v < vertices.size(); ++v ) {
+            const auto x = ( v & 1 ? 0.5f : -0.5f ) * piece.box.size[0];
+            const auto y = ( v & 2 ? 0.5f : -0.5f ) * piece.box.size[1];
+            const auto z = ( v & 4 ? 0.5f : -0.5f ) * piece.box.size[2];
+            const auto forward = piece.box.center[0] - 0.5f + x * std::cos( piece.box.yaw ) - y * std::sin(
+                                     piece.box.yaw );
+            const auto across = piece.box.center[1] - 0.5f + x * std::sin( piece.box.yaw ) + y * std::cos(
+                                    piece.box.yaw );
+            const auto up = piece.box.center[2] + z;
+            const auto p = options.transform.apply( options.forward + forward,
+                                                    options.right + ( options.vertical ? up : across ) );
+            vertices[v] = { p.x, p.y, options.base + ( options.vertical ? across / 1.8f : up ) };
+        }
+        constexpr auto faces = std::array<std::array<int, 4>, 6> {{ {4, 5, 7, 6}, {6, 7, 3, 2}, {5, 4, 0, 1}, {4, 6, 2, 0}, {7, 5, 1, 3}, {2, 3, 1, 0} }};
+        for( const auto &face : faces ) {
+            auto corners = corners_t{{ vertices[face[0]], vertices[face[1]], vertices[face[2]], vertices[face[3]] }};
+            // Rotating the rotor into a vertical plane swaps axes, reversing winding.
+            if( options.vertical ) { std::ranges::reverse( corners ); }
+            options.sink.add_colored( { .sprite = material, .corners = corners, .uvs = make_solid_uvs( material ), .ref = light_ref{}, .color = no_pull( options.light ) } );
+        }
+    }
+}
+
 struct emit_vehicle_wheel_options {
     quad_sink &sink;
     const sprite_ref &sprite;
@@ -758,6 +805,86 @@ auto map_sprite_uv( const sprite_ref &s, float gx, float gy ) -> std::array<floa
     return std::array<float, 2> { ul + ( ur - ul ) *sx, s.v0 + ( s.v1 - s.v0 ) *sy };
 }
 
+/// A native panel face, optionally opened around the wheel on its own mount.
+struct vehicle_skin_face_options {
+    quad_sink &sink;
+    const sprite_ref &sprite;
+    const to_scene_transform &transform;
+    std::array<float, 2> a;
+    std::array<float, 2> b;
+    float top_a;
+    float top_b;
+    float bottom;
+    uint32_t light;
+    bool textured = false;
+    std::optional<vehicle_wheel_opening_options> opening{};
+    float inward = 0.0f;
+};
+
+auto emit_vehicle_skin_face( const vehicle_skin_face_options &options ) -> void
+{
+    const auto &a = options.a;
+    const auto &b = options.b;
+    const auto delta = b[0] - a[0];
+    auto strips = std::vector<vehicle_wall_strip> {};
+    if( options.opening && std::abs( delta ) > 0.001f ) {
+        auto opening = *options.opening;
+        opening.from = std::min( a[0], b[0] );
+        opening.to = std::max( a[0], b[0] );
+        opening.bottom = options.bottom;
+        strips = vehicle_wheel_opening( opening );
+    } else {
+        strips.push_back( { .from = 0.0f, .to = 1.0f,
+                            .bottom_from = options.bottom, .bottom_to = options.bottom } );
+    }
+    const auto cut = options.opening && std::abs( delta ) > 0.001f;
+    for( const auto &strip : strips ) {
+        auto t0 = cut ? ( strip.from - a[0] ) / delta : 0.0f;
+        auto t1 = cut ? ( strip.to - a[0] ) / delta : 1.0f;
+        auto z0 = strip.bottom_from;
+        auto z1 = strip.bottom_to;
+        if( t0 > t1 ) { std::swap( t0, t1 ); std::swap( z0, z1 ); }
+        const auto f0 = std::lerp( a[0], b[0], t0 );
+        const auto f1 = std::lerp( a[0], b[0], t1 );
+        const auto r0 = std::lerp( a[1], b[1], t0 );
+        const auto r1 = std::lerp( a[1], b[1], t1 );
+        const auto top0 = std::lerp( options.top_a, options.top_b, t0 );
+        const auto top1 = std::lerp( options.top_a, options.top_b, t1 );
+        z0 = std::min( z0, top0 );
+        z1 = std::min( z1, top1 );
+        if( z0 >= top0 && z1 >= top1 ) { continue; }
+        const auto p0 = options.transform.apply( f0, r0 );
+        const auto p1 = options.transform.apply( f1, r1 );
+        const auto corners = corners_t{{ { p0.x, p0.y, top0 }, { p1.x, p1.y, top1 },
+                { p1.x, p1.y, z1 }, { p0.x, p0.y, z0 }
+            }};
+        auto uvs = make_solid_uvs( options.sprite );
+        if( options.textured ) {
+            const auto v0 = ( top0 - z0 ) / std::max( top0 - options.bottom, 0.001f );
+            const auto v1 = ( top1 - z1 ) / std::max( top1 - options.bottom, 0.001f );
+            uvs = {{
+                    map_sprite_uv( options.sprite, t0, 0.0f ), map_sprite_uv( options.sprite, t1, 0.0f ),
+                    map_sprite_uv( options.sprite, t1, v1 ), map_sprite_uv( options.sprite, t0, v0 )
+                }
+            };
+        }
+        const auto contact = no_pull( modulate_light( options.light, 0.96f ) );
+        options.sink.add_colored( { .sprite = options.sprite, .corners = corners, .uvs = uvs, .ref = light_ref{},
+                                    .colors = { no_pull( options.light ), no_pull( options.light ), contact, contact } } );
+        if( cut && options.inward != 0.0f &&
+            ( z0 > options.bottom + 0.001f || z1 > options.bottom + 0.001f ) ) {
+            const auto inside0 = options.transform.apply( f0, r0 + options.inward );
+            const auto inside1 = options.transform.apply( f1, r1 + options.inward );
+            const auto reveal = corners_t{{ { p0.x, p0.y, z0 }, { p1.x, p1.y, z1 },
+                    { inside1.x, inside1.y, z1 }, { inside0.x, inside0.y, z0 }
+                }};
+            options.sink.add_colored( { .sprite = options.sprite, .corners = reveal,
+                                        .uvs = make_solid_uvs( options.sprite ), .ref = light_ref{},
+                                        .color = no_pull( modulate_light( options.light, 0.80f ) ) } );
+        }
+    }
+}
+
 auto emit_vehicle_tile_quads( const emit_vehicle_tile_quads_options &options ) -> void
 {
     auto &sink = options.sink;
@@ -898,6 +1025,71 @@ auto neighbour_trim( const neighbour_trim_options &options ) -> std::optional<fl
     return std::nullopt;
 }
 
+struct vehicle_paint_sample {
+    const sprite_ref *sprite = nullptr;
+    const tile_info *art = nullptr;
+    int part_idx = -1;
+    int priority = -1;
+};
+
+/// A joined roof has one interpretation of its native finish and its own bounds.
+/// Side projections may bake different shading into otherwise identical metal.
+struct vehicle_roof_surface {
+    const vehicle_paint_sample *material = nullptr;
+    point minimum;
+    point maximum;
+};
+
+struct vehicle_roof_surfaces_options {
+    const vehicle &veh;
+    const std::map<point, vehicle_render_profile> &cells;
+    const std::map<tripoint_mnt_veh, vehicle_paint_sample> &materials;
+};
+
+auto vehicle_roof_surfaces( const vehicle_roof_surfaces_options &options ) ->
+std::map<point, vehicle_roof_surface>
+{
+    auto result = std::map<point, vehicle_roof_surface> {};
+    for( const auto &[start, cell] : options.cells ) {
+        if( !cell.has_roof || result.contains( start ) ) { continue; }
+        auto surface = vehicle_roof_surface{ .minimum = start, .maximum = start };
+        auto component = std::vector<point> { start };
+        auto visited = std::set<point> { start };
+        auto best_priority = -1;
+        for( auto index = size_t{0}; index < component.size(); ++index ) {
+            const auto position = component[index];
+            surface.minimum.x = std::min( surface.minimum.x, position.x );
+            surface.minimum.y = std::min( surface.minimum.y, position.y );
+            surface.maximum.x = std::max( surface.maximum.x, position.x );
+            surface.maximum.y = std::max( surface.maximum.y, position.y );
+            // Include perimeter panels as finish donors, without joining roofs
+            // through an unroofed cargo bed, a broken roof or an empty mount.
+            for( const auto offset : { point( 0, 0 ), point( -1, 0 ), point( 0, -1 ), point( 0, 1 ), point( 1, 0 ) } ) {
+                const auto neighbor = position + offset;
+                const auto found = options.cells.find( neighbor );
+                if( found == options.cells.end() ) { continue; }
+                const auto sample = options.materials.find( found->second.mount );
+                if( sample != options.materials.end() ) {
+                    const auto &candidate = sample->second;
+                    const auto full_panel = options.veh.part_flag( candidate.part_idx, "FULL_BOARD" );
+                    const auto priority = candidate.priority * 2 + ( full_panel ? 1 : 0 );
+                    if( candidate.priority >= 20 && priority > best_priority &&
+                        ( candidate.priority >= 40 || candidate.art->side.valid ) &&
+                        !options.veh.cpart( candidate.part_idx ).get_base().made_of( material_id( "wood" ) ) ) {
+                        surface.material = &candidate;
+                        best_priority = priority;
+                    }
+                }
+                if( found->second.has_roof && visited.insert( neighbor ).second ) {
+                    component.push_back( neighbor );
+                }
+            }
+        }
+        for( const auto position : component ) { result.emplace( position, surface ); }
+    }
+    return result;
+}
+
 struct add_vehicles_options {
     quad_sink &sink;
     const entity_view &view;
@@ -926,6 +1118,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                              veh.player_in_control( you );
         const auto clear_windshield = is_driving_this_vehicle && view.cam.first_person();
 
+        const auto silhouette = describe_vehicle( veh );
+        const auto sections = describe_vehicle_sections( veh );
+        const auto cabin_height = silhouette.cabin_height;
         const auto pivot_mnt = veh.pivot_anchor[0];
         const auto pivot_sx = static_cast<float>( veh_bub.x() - view.center.x() ) + 0.5f;
         const auto pivot_sy = static_cast<float>( veh_bub.y() - view.center.y() ) + 0.5f;
@@ -965,8 +1160,12 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
         for( const auto &mount : occupied_mounts ) {
             const auto p = veh.mount_to_bubble( mount );
             if( p.z() < view.z_lo || p.z() > view.z_hi ) { continue; }
-            auto data = vehicle_profile( veh, mount );
-            const auto light = here.inbounds( p ) ? view.light( p ) : pack_light( 0, 0, 0 );
+            const auto &section_cell = sections.cells.at( mount );
+            auto data = section_cell.profile;
+            const auto light = here.inbounds( p ) ?
+                               ( view.vehicle_surface_light ? view.vehicle_surface_light( p ) : view.light( p ) ) :
+                               pack_light( 0, 0, 0 );
+            if( data.is_tall_cabin || data.has_roof ) { data.height = section_cell.height; }
             data.light = light == pack_light( 0, 0, 0 ) ? seen_in_dark_light : light;
             cells[point( mount.x(), mount.y() )] = data;
         }
@@ -995,7 +1194,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 if( beside_roof ) {
                     cell.has_roof = true;
                     cell.show_roof = true;
-                    cell.height = vehicle_cabin_h;
+                    cell.height = sections.cells.at( cell.mount ).height;
                     cell.is_tall_cabin = true;
                 }
             }
@@ -1038,38 +1237,21 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 cell.is_tall_cabin = false;
             }
         }
-        const auto has_rear_hatch_row = [&]() -> bool {
-            if( max_mount_x - min_mount_x < 2 ) {
-                return false;
-            }
-            auto found_hatch = false;
-            auto found_roof_fwd = false;
-            for( const auto &[pt, c] : cells )
-            {
-                if( c.mount.x() == min_mount_x && is_hatch_cell( c ) ) {
-                    found_hatch = true;
-                    const auto nit = cells.find( point( c.mount.x() + 1, c.mount.y() ) );
-                    if( nit != cells.end() && ( nit->second.has_roof || nit->second.height >= 0.70f ) ) {
-                        found_roof_fwd = true;
-                    }
-                }
-            }
-            return found_hatch && found_roof_fwd;
-        }();
 
         const sprite_ref *best_body_spr = nullptr;
         auto best_score = -1;
-        auto paint_r_sum = 0.0f;
-        auto paint_g_sum = 0.0f;
-        auto paint_b_sum = 0.0f;
-        auto paint_count = 0;
+        auto mount_materials = std::map<tripoint_mnt_veh, vehicle_paint_sample> {};
+        auto mount_glass = std::map<tripoint_mnt_veh, const sprite_ref *> {};
 
         for( auto i = 0; i < veh.part_count(); ++i ) {
             if( veh.cpart( i ).removed || veh.cpart( i ).is_broken() ) {
                 continue;
             }
-            auto modifier = char{ 0 };
-            const auto &id = veh.part_id_string( i, false, modifier );
+            // part_id_string flattens this mount to its visible 2D part, hiding roof
+            // and panel layers. Resolve the installed layer itself for its material.
+            const auto &part = veh.cpart( i );
+            const auto &id = part.proxy_part_id.is_null() ? veh.part_info( i ).id : part.proxy_part_id;
+            const auto modifier = veh.part_flag( i, "OPENABLE" ) && part.open ? 1 : 0;
             if( id.is_null() ) {
                 continue;
             }
@@ -1083,6 +1265,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 score = 30;
             } else if( id_str.find( "door" ) != std::string::npos ) {
                 score = 20;
+            } else if( veh.part_flag( i, "ROOF" ) ) {
+                score = 15;
             } else if( veh.part_flag( i, "OBSTACLE" ) || veh.part_flag( i, "OPAQUE" ) ) {
                 score = 10;
             } else {
@@ -1092,53 +1276,46 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             const auto subtile = modifier == 1 ? open_ : modifier == 2 ? broken : 0;
             const auto &info = vehicle_part_sprite( { .view = view, .veh = veh, .part_idx = i, .id = id, .subtile = subtile } );
 
-            const auto *spr = info.sprite.valid ? &info.sprite : ( info.backdrop.valid ? &info.backdrop :
-                              nullptr );
+            if( info.glass.valid ) { mount_glass[part.mount] = &info.glass; }
+            const auto *spr = info.side.valid ? &info.side : info.sprite.valid ? &info.sprite :
+                              ( info.backdrop.valid ? &info.backdrop :
+                                nullptr );
             if( spr && spr->valid ) {
                 if( score > best_score ) {
                     best_score = score;
                     best_body_spr = spr;
                 }
 
-                const auto is_excluded = veh.part_flag( i, "DOOR" ) || veh.part_flag( i, "WINDSHIELD" ) ||
-                                         veh.part_flag( i, "WHEEL" ) || id_str.find( "door" ) != std::string::npos ||
-                                         id_str.find( "windshield" ) != std::string::npos ||
-                                         id_str.find( "wheel" ) != std::string::npos;
-                const auto is_panel_or_frame = id_str.find( "halfboard" ) != std::string::npos ||
-                                               id_str.find( "quarterpanel" ) != std::string::npos ||
-                                               id_str.find( "frame" ) != std::string::npos ||
-                                               veh.part_flag( i, "HALF_BOARD" ) ||
-                                               veh.part_info( i ).location == "structure";
-                if( !is_excluded && is_panel_or_frame && spr->body_color != 0 &&
-                    ( ( spr->body_color >> 24 ) != 0 ) ) {
-                    paint_r_sum += static_cast<float>( ( spr->body_color >> 16 ) & 0xff );
-                    paint_g_sum += static_cast<float>( ( spr->body_color >> 8 ) & 0xff );
-                    paint_b_sum += static_cast<float>( spr->body_color & 0xff );
-                    ++paint_count;
+                // Keep each mount's exterior material instead of averaging a whole vehicle.
+                auto &material = mount_materials[veh.cpart( i ).mount];
+                if( score > material.priority ) {
+                    material = { .sprite = spr, .art = &info, .part_idx = i, .priority = score };
                 }
             }
         }
 
-        auto vehicle_paint_color = pack_light( 180, 180, 180 );
-        if( paint_count > 0 ) {
-            const auto avg_r = static_cast<uint8_t>( std::clamp( static_cast<int>( paint_r_sum / paint_count ),
-                               0, 255 ) );
-            const auto avg_g = static_cast<uint8_t>( std::clamp( static_cast<int>( paint_g_sum / paint_count ),
-                               0, 255 ) );
-            const auto avg_b = static_cast<uint8_t>( std::clamp( static_cast<int>( paint_b_sum / paint_count ),
-                               0, 255 ) );
-            vehicle_paint_color = pack_light( avg_r, avg_g, avg_b );
-        } else if( best_body_spr && best_body_spr->body_color != 0 &&
-                   ( ( best_body_spr->body_color >> 24 ) != 0 ) ) {
-            const auto avg_r = static_cast<uint8_t>( ( best_body_spr->body_color >> 16 ) & 0xff );
-            const auto avg_g = static_cast<uint8_t>( ( best_body_spr->body_color >> 8 ) & 0xff );
-            const auto avg_b = static_cast<uint8_t>( best_body_spr->body_color & 0xff );
-            vehicle_paint_color = pack_light( avg_r, avg_g, avg_b );
-        }
+        const auto roof_surfaces = vehicle_roof_surfaces( { .veh = veh, .cells = cells, .materials = mount_materials } );
 
+        for( auto &[pt, cell] : cells ) {
+            const auto section = describe_airframe_section( { .veh = veh, .silhouette = silhouette, .mount = cell.mount } );
+            if( section != airframe_section::cabin ) {
+                cell.height = section == airframe_section::fin ? 0.85f : 0.34f;
+                cell.is_opaque_wall = true;
+            }
+        }
         for( const auto &[pt, cell] : cells ) {
+            const auto section = describe_airframe_section( { .veh = veh, .silhouette = silhouette, .mount = cell.mount } );
+            const auto aft_panel = section != airframe_section::cabin;
+            const auto cell_base = z_base + ( aft_panel ? 0.42f : 0.0f );
             const auto rel_forward = static_cast<float>( cell.mount.x() - pivot_mnt.x() );
             const auto rel_right = static_cast<float>( cell.mount.y() - pivot_mnt.y() );
+            const auto &section_cell = sections.cells.at( cell.mount );
+            const auto body_bounds = section_cell.body >= 0 ? sections.bodies[section_cell.body].bounds :
+                                     vehicle_section_bounds{ .front = max_mount_x, .rear = min_mount_x,
+                                             .left = min_mount_y, .right = max_mount_y };
+            const auto row_bounds = section_cell.body >= 0 ? section_cell.row : body_bounds;
+            const auto cabin_height = section_cell.canopy >= 0 ? sections.canopies[section_cell.canopy].height :
+                                      silhouette.cabin_height;
 
             auto main_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
             const vox_asset *main_vox = nullptr;
@@ -1162,7 +1339,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             }
 
             auto roof_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
-            if( cell.accessory_part_idx >= 0 ) {
+            if( cell.accessory_part_idx >= 0 && !veh.part_flag( cell.accessory_part_idx, "ROTOR" ) ) {
                 const auto &id = veh.cpart( cell.accessory_part_idx ).proxy_part_id.is_null() ? veh.part_info(
                                      cell.accessory_part_idx ).id : veh.cpart( cell.accessory_part_idx ).proxy_part_id;
                 if( !id.is_null() ) {
@@ -1180,7 +1357,14 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             const auto *side_spr = ( cell_spr && !cell.is_interior )
                                    ? cell_spr
                                    : ( best_body_spr ? best_body_spr : cell_spr );
-            const auto *paint_spr = best_body_spr ? best_body_spr : ( side_spr ? side_spr : cell_spr );
+            // The sampled texel already carries paint: vertex colours supply lighting only.
+            const auto material = mount_materials.find( cell.mount );
+            const auto *paint_spr = material != mount_materials.end() ? material->second.sprite :
+                                    ( best_body_spr ? best_body_spr : side_spr );
+            const auto *body_art = material != mount_materials.end() ? material->second.art : nullptr;
+            const auto *top_spr = body_art && body_art->cap.valid ? &body_art->cap : nullptr;
+            const auto glass_material = mount_glass.find( cell.mount );
+            const auto *glass_spr = glass_material != mount_glass.end() ? glass_material->second : nullptr;
             auto wheel_sprite_opt = std::optional<std::reference_wrapper<const tile_info>> {};
             const vox_asset *wheel_vox = nullptr;
             const auto wheel_layer = preferred_wheel_layer( cell.layers );
@@ -1235,10 +1419,19 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 h_left = nit_left->second.height;
             }
 
-            const auto has_fwd = nit_fwd != cells.end();
-            const auto has_rear = nit_rear != cells.end();
-            const auto has_right = nit_right != cells.end();
-            const auto has_left = nit_left != cells.end();
+            const auto body_neighbor = [&]( const auto & neighbor ) {
+                if( neighbor == cells.end() ) { return false; }
+                return section_cell.body < 0 ||
+                       sections.cells.at( neighbor->second.mount ).body == section_cell.body;
+            };
+            const auto has_fwd = body_neighbor( nit_fwd );
+            const auto has_rear = body_neighbor( nit_rear );
+            const auto has_right = body_neighbor( nit_right );
+            const auto has_left = body_neighbor( nit_left );
+            if( !has_fwd ) { h_fwd = 0.0f; }
+            if( !has_rear ) { h_rear = 0.0f; }
+            if( !has_left ) { h_left = 0.0f; }
+            if( !has_right ) { h_right = 0.0f; }
 
             // Compute trimmed cell footprint bounds
             auto f_bot_rel = -0.5f;
@@ -1246,14 +1439,14 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             auto r_l_rel = -0.5f;
             auto r_r_rel = 0.5f;
 
-            const auto is_border_y_min = ( max_mount_y - min_mount_y >= 2 ) &&
-                                         ( cell.mount.y() == min_mount_y );
-            const auto is_border_y_max = ( max_mount_y - min_mount_y >= 2 ) &&
-                                         ( cell.mount.y() == max_mount_y );
-            const auto is_border_x_min = ( max_mount_x - min_mount_x >= 2 ) &&
-                                         ( cell.mount.x() == min_mount_x );
-            const auto is_border_x_max = ( max_mount_x - min_mount_x >= 2 ) &&
-                                         ( cell.mount.x() == max_mount_x );
+            const auto is_border_y_min = ( row_bounds.right - row_bounds.left >= 2 ) &&
+                                         ( cell.mount.y() == row_bounds.left );
+            const auto is_border_y_max = ( row_bounds.right - row_bounds.left >= 2 ) &&
+                                         ( cell.mount.y() == row_bounds.right );
+            const auto is_border_x_min = ( body_bounds.front - body_bounds.rear >= 2 ) &&
+                                         ( cell.mount.x() == body_bounds.rear );
+            const auto is_border_x_max = ( body_bounds.front - body_bounds.rear >= 2 ) &&
+                                         ( cell.mount.x() == body_bounds.front );
 
             const auto my_bounds = cell_spr ? get_sprite_opaque_bounds( *cell_spr ) : sprite_opaque_bounds{};
 
@@ -1297,8 +1490,19 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
 
             const auto f_top = static_cast<float>( rel_forward + f_top_rel );
             const auto f_bot = static_cast<float>( rel_forward + f_bot_rel );
-            const auto r_l = static_cast<float>( rel_right + r_l_rel );
-            const auto r_r = static_cast<float>( rel_right + r_r_rel );
+            const auto tail_center = silhouette.tail_center - pivot_mnt.y();
+            const auto tail_width = section == airframe_section::fin ? 0.12f : section == airframe_section::boom
+                                    ? 0.45f : 1.0f;
+            if( tail_width != 1.0f ) {
+                r_l_rel = tail_center + ( rel_right + r_l_rel - tail_center ) * tail_width - rel_right;
+                r_r_rel = tail_center + ( rel_right + r_r_rel - tail_center ) * tail_width - rel_right;
+            }
+            if( section == airframe_section::stabilizer ) {
+                if( rel_right < tail_center ) { r_r_rel = tail_center - rel_right; }
+                else { r_l_rel = tail_center - rel_right; }
+            }
+            const auto r_l = rel_right + r_l_rel;
+            const auto r_r = rel_right + r_r_rel;
 
             const auto forward_roof = nit_fwd != cells.end() && nit_fwd->second.has_roof;
             const auto rear_roof = nit_rear != cells.end() && nit_rear->second.has_roof;
@@ -1308,10 +1512,17 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 if( cit == cells.end() ) {
                     return false;
                 }
-                if( cit->second.mount.x() != min_mount_x || !has_rear_hatch_row )
+                if( cit->second.mount.x() != body_bounds.rear || body_bounds.front - body_bounds.rear < 2 )
                 {
                     return false;
                 }
+                const auto hatch_row = std::ranges::any_of( cells, [&]( const auto & entry )
+                {
+                    const auto &candidate = entry.second;
+                    return candidate.mount.x() == body_bounds.rear &&
+                                    sections.cells.at( candidate.mount ).body == section_cell.body && is_hatch_cell( candidate );
+                } );
+                if( !hatch_row ) { return false; }
                 const auto n_fwd = cells.find( point( cit->second.mount.x() + 1, cit->second.mount.y() ) );
                 return n_fwd != cells.end() && ( n_fwd->second.has_roof || n_fwd->second.height >= 0.70f );
             };
@@ -1319,53 +1530,99 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             const auto rear_is_sloped_hatch = ( nit_rear != cells.end() &&
                                                 ( is_hatch_cell( nit_rear->second ) ||
                                                   is_cell_sloped_rear( nit_rear->second.mount.x(), nit_rear->second.mount.y() ) ) );
-            // Greenhouse tumblehome (sloping inward up to roof)
-            const auto max_tumble_r = ( r_r - r_l ) * 0.25f;
-            const auto tumble_l = !has_left ? std::min( 0.10f, max_tumble_r ) : 0.0f;
-            const auto tumble_r = !has_right ? std::min( 0.10f, max_tumble_r ) : 0.0f;
-
+            // Cross-section shoulder: every cell in a station uses the same
+            // centre and radius. A narrow edge tile cannot flatten the whole cabin.
+            const auto box_section = section_cell.canopy >= 0 && sections.canopies[section_cell.canopy].box &&
+                                     !sections.canopies[section_cell.canopy].glazed;
+            const auto shoulder = box_section ? 0.09f : 0.24f;
+            const auto left_edge = static_cast<float>( row_bounds.left - pivot_mnt.y() ) +
+                                   ( row_bounds.right - row_bounds.left >= 2 ? 0.10f : -0.5f );
+            const auto right_edge = static_cast<float>( row_bounds.right - pivot_mnt.y() ) +
+                                    ( row_bounds.right - row_bounds.left >= 2 ? -0.10f : 0.5f );
+            const auto fit_roof = [&]( const float right ) {
+                return vehicle_section_inset( { .position = right, .left = left_edge, .right = right_edge,
+                                                .amount = shoulder } );
+            };
+            const auto r_l_roof = cell.has_roof || section_cell.glazing || cell.is_door ? fit_roof( r_l ) : r_l;
+            const auto r_r_roof = cell.has_roof || section_cell.glazing || cell.is_door ? fit_roof( r_r ) : r_r;
+            const auto tumble_l = r_l_roof - r_l;
+            const auto tumble_r = r_r - r_r_roof;
             const auto max_tumble_f = ( f_top - f_bot ) * 0.25f;
             const auto tumble_f = ( !forward_roof &&
-                                    h_fwd <= vehicle_body_h ) ? std::min( 0.12f, max_tumble_f ) : 0.0f;
+                                    h_fwd <= vehicle_body_h ) ? std::min( 0.18f, max_tumble_f ) : 0.0f;
             const auto tumble_b = ( !rear_roof && !rear_is_sloped_hatch &&
-                                    h_rear <= vehicle_body_h ) ? std::min( 0.12f, max_tumble_f ) : 0.0f;
-
-            const auto r_l_roof = r_l + tumble_l;
-            const auto r_r_roof = r_r - tumble_r;
+                                    h_rear <= vehicle_body_h ) ? std::min( 0.18f, max_tumble_f ) : 0.0f;
             const auto f_top_roof = f_top - tumble_f;
             const auto f_bot_roof = f_bot + tumble_b;
+            const auto surface = roof_surfaces.find( pt );
+            const auto roof_min = surface != roof_surfaces.end() ? surface->second.minimum : pt;
+            const auto roof_max = surface != roof_surfaces.end() ? surface->second.maximum : pt;
+            const auto crown_center = ( roof_min.y + roof_max.y ) * 0.5f - pivot_mnt.y();
+            const auto crown_radius = ( roof_max.y - roof_min.y + 1 ) * 0.5f;
+            const auto roof_center = ( roof_min.x + roof_max.x ) * 0.5f - pivot_mnt.x();
+            const auto roof_radius = ( roof_max.x - roof_min.x + 1 ) * 0.5f;
+            const auto roof_lift = [&]( const float forward, const float right ) {
+                return roof_crown( ( right - crown_center ) / crown_radius ) +
+                       ( silhouette.enclosed ? 0.7f * roof_crown( ( forward - roof_center ) / roof_radius ) : 0.0f );
+            };
 
-            const auto windshield_front_height = forward_roof ? vehicle_cabin_h : h_fwd;
-            const auto windshield_rear_height = rear_roof ? vehicle_cabin_h : h_rear;
+            const auto windshield_front_height = forward_roof ? cabin_height : h_fwd;
+            const auto windshield_rear_height = rear_roof ? cabin_height : h_rear;
             const auto is_windshield = is_windshield_cell( cell ) && !cell.is_opaque_wall;
             const auto is_fwd_windshield = is_windshield &&
                                            windshield_rear_height >= 0.70f && windshield_front_height <= 0.55f;
             const auto is_rear_windshield = is_windshield &&
                                             windshield_front_height >= 0.70f && windshield_rear_height <= 0.55f;
 
-            const auto shaped_panel = cell.corner != panel_corner::none && !cell.show_roof &&
+            const auto sloped_hood = !cell.show_roof && cell.height <= vehicle_body_h &&
+                                     h_fwd == 0.0f && nit_rear != cells.end() && is_windshield_cell( nit_rear->second );
+            const auto panel_top = [&]( const float forward, const float right ) {
+                const auto drop = sloped_hood ? 0.10f * std::clamp( ( forward - f_bot ) / ( f_top - f_bot ), 0.0f,
+                                  1.0f ) : 0.0f;
+                const auto radius = std::max( ( right_edge - left_edge ) * 0.5f, 0.1f );
+                const auto across = ( right - ( left_edge + right_edge ) * 0.5f ) / radius;
+                const auto crown = sloped_hood ? 0.045f * std::max( 0.0f, 1.0f - across * across ) : 0.0f;
+                return cell_base + cell.height - drop + crown;
+            };
+            const auto shaped_panel = ( cell.corner != panel_corner::none || sloped_hood ) && !cell.show_roof &&
                                       !cell.is_windshield && !is_sloped_rear;
+            auto wheel_opening = std::optional<vehicle_wheel_opening_options> {};
+            if( wheel_layer && section_cell.body >= 0 && !aft_panel ) {
+                const auto wheel = native_wheel_dimensions( veh.cpart( wheel_layer->part_idx ) );
+                wheel_opening = vehicle_wheel_opening_options{ .from = f_bot, .to = f_top,
+                                                               .bottom = cell_base + vehicle_clearance_h, .center = rel_forward,
+                                                               .center_z = cell_base + wheel.radius_up,
+                                                               .radius_forward = wheel.radius_forward + 0.045f, .radius_up = wheel.radius_up + 0.035f };
+            }
             if( !main_vox && shaped_panel && side_spr && side_spr->valid ) {
                 const auto outline = panel_outline( { .corner = cell.corner, .front = f_top,
                                                       .rear = f_bot, .left = r_l, .right = r_r } );
-                const auto &spr = *side_spr;
-                const auto z_top = z_base + cell.height;
+                const auto &spr = top_spr ? *top_spr : *side_spr;
                 const auto &wall_spr = paint_spr ? *paint_spr : spr;
-                for( auto index = size_t{1}; index + 1 < outline.size(); ++index ) {
-                    const auto a = transform.apply( outline[0][0], outline[0][1] );
-                    const auto b = transform.apply( outline[index][0], outline[index][1] );
-                    const auto c = transform.apply( outline[index + 1][0], outline[index + 1][1] );
-                    const auto corners = corners_t{{ {a.x, a.y, z_top}, {b.x, b.y, z_top}, {c.x, c.y, z_top}, {c.x, c.y, z_top} }};
-                    sink.add_colored( { .sprite = wall_spr, .corners = corners, .uvs = make_solid_uvs( wall_spr ), .ref = light_ref{}, .color = no_pull( modulate_paint( vehicle_paint_color, cell.light, 1.0f ) ) } );
-
-                    const auto z_decal = static_cast<float>( z_top + 0.004f );
-                    const auto corners_decal = corners_t{{ {a.x, a.y, z_decal}, {b.x, b.y, z_decal}, {c.x, c.y, z_decal}, {c.x, c.y, z_decal} }};
+                const auto middle = std::array<float, 2> { ( f_top + f_bot ) * 0.5f, ( r_l + r_r ) * 0.5f };
+                for( auto index = size_t{0}; index < outline.size(); ++index ) {
+                    const auto &start = outline[index];
+                    const auto &end = outline[( index + 1 ) % outline.size()];
+                    const auto a = transform.apply( middle[0], middle[1] );
+                    const auto b = transform.apply( start[0], start[1] );
+                    const auto c = transform.apply( end[0], end[1] );
+                    const auto corners = corners_t{{
+                            { a.x, a.y, panel_top( middle[0], middle[1] ) },
+                            { b.x, b.y, panel_top( start[0], start[1] ) },
+                            { c.x, c.y, panel_top( end[0], end[1] ) },
+                            { c.x, c.y, panel_top( end[0], end[1] ) }
+                        }};
+                    sink.add_colored( { .sprite = wall_spr, .corners = corners, .uvs = make_solid_uvs( wall_spr ),
+                                        .ref = light_ref{}, .color = no_pull( cell.light ) } );
+                    auto raised = corners;
+                    for( auto &vertex : raised ) { vertex[2] += 0.004f; }
                     const auto uv_at = [&]( const auto & point ) {
                         return map_sprite_uv( spr, ( point[1] - r_l ) / ( r_r - r_l ),
                                               ( f_top - point[0] ) / ( f_top - f_bot ) );
                     };
-                    const auto uv = uvs_t{{ uv_at( outline[0] ), uv_at( outline[index] ), uv_at( outline[index + 1] ), uv_at( outline[index + 1] ) }};
-                    sink.add_colored( { .sprite = spr, .corners = corners_decal, .uvs = uv, .ref = light_ref{}, .color = no_pull( cell.light ) } );
+                    sink.add_colored( { .sprite = spr, .corners = raised,
+                    .uvs = {{ uv_at( middle ), uv_at( start ), uv_at( end ), uv_at( end ) }},
+                    .ref = light_ref{}, .color = no_pull( cell.light ) } );
                 }
                 for( auto index = size_t{0}; index < outline.size(); ++index ) {
                     const auto &a = outline[index];
@@ -1380,15 +1637,16 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     if( cell.height <= neighbor_height ) {
                         continue;
                     }
-                    const auto pa = transform.apply( a[0], a[1] );
-                    const auto pb = transform.apply( b[0], b[1] );
-                    const auto corners = corners_t{{ {pa.x, pa.y, z_top}, {pb.x, pb.y, z_top},
-                            {pb.x, pb.y, z_base + vehicle_clearance_h}, {pa.x, pa.y, z_base + vehicle_clearance_h}
-                        }};
                     const auto length = std::hypot( b[0] - a[0], b[1] - a[1] );
                     const auto shade = compute_side_shade( ( b[1] - a[1] ) / length, ( a[0] - b[0] ) / length, cos_th,
                                                            sin_th );
-                    sink.add_colored( { .sprite = wall_spr, .corners = corners, .uvs = make_solid_uvs( wall_spr ), .ref = light_ref{}, .color = no_pull( modulate_paint( vehicle_paint_color, cell.light, shade ) ) } );
+                    const auto lateral = std::abs( a[0] - b[0] ) > 0.001f;
+                    const auto inward = ( a[1] + b[1] ) * 0.5f < ( left_edge + right_edge ) * 0.5f ? 0.055f : -0.055f;
+                    emit_vehicle_skin_face( { .sink = sink, .sprite = wall_spr, .transform = transform,
+                                              .a = a, .b = b, .top_a = panel_top( a[0], a[1] ), .top_b = panel_top( b[0], b[1] ),
+                                              .bottom = cell_base + vehicle_clearance_h, .light = modulate_light( cell.light, shade ),
+                                              .textured = body_art && body_art->side.valid, .opening = lateral ? wheel_opening : std::nullopt,
+                                              .inward = inward } );
                 }
             }
 
@@ -1396,7 +1654,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             if( main_vox ) {
                 emit_vox_model( { .sink = sink, .asset = *main_vox, .transform = transform,
                                   .f_min = f_bot, .f_max = f_top, .r_min = r_l, .r_max = r_r,
-                                  .z_min = z_base, .z_max = z_base + cell.height,
+                                  .z_min = cell_base, .z_max = cell_base + cell.height,
                                   .color = cell.light } );
             } else if( shaped_panel ) {
                 // 1. Top Surface Geometry
@@ -1404,8 +1662,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             } else if( is_fwd_windshield || is_rear_windshield ) {
                 const auto &spr = paint_spr ? *paint_spr : ( side_spr ? *side_spr : main_sprite_opt->get().main() );
                 const auto solid_uv = make_solid_uvs( spr );
-                const auto z_low = static_cast<float>( z_base + vehicle_body_h );
-                const auto z_high = static_cast<float>( z_base + vehicle_cabin_h );
+                const auto z_low = static_cast<float>( cell_base + vehicle_body_h );
+                const auto z_high = static_cast<float>( cell_base + cabin_height );
                 const auto f_low = is_fwd_windshield ? f_top : f_bot;
                 const auto f_high = is_fwd_windshield ? f_bot : f_top;
 
@@ -1430,7 +1688,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     }};
                 const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
                 if( !clear_windshield ) {
-                    sink.add_colored( { .sprite = spr, .corners = c_glass, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                    sink.add_colored( { .sprite = glass_spr ? *glass_spr : spr, .corners = c_glass,
+                                        .uvs = glass_spr ? make_sprite_uvs( *glass_spr ) : solid_uv,
+                                        .ref = light_ref{}, .color = glass_spr ? no_pull( cell.light ) : glass_col } );
                 }
 
                 // Solid cowl deck under the windshield at z = body_h (0.55f)
@@ -1443,7 +1703,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         { p2_cowl.x, p2_cowl.y, z_low }, { p3_cowl.x, p3_cowl.y, z_low }
                     }};
                 sink.add_colored( { .sprite = spr, .corners = c_cowl, .uvs = solid_uv, .ref = light_ref{},
-                                    .color = no_pull( modulate_paint( vehicle_paint_color, cell.light, 0.70f ) ) } );
+                                    .color = no_pull( modulate_light( cell.light, 0.70f ) ) } );
 
                 if( !has_left ) {
                     const auto pil_low_l = transform.apply( f_low, r_l );
@@ -1459,7 +1719,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             { pil_low_r.x, pil_low_r.y, z_low }, { pil_low_l.x, pil_low_l.y, z_low }
                         }};
                     const auto pil_shade = compute_side_shade( 0.0f, -1.0f, cos_th, sin_th );
-                    const auto pil_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, pil_shade ) );
+                    const auto pil_col = no_pull( modulate_light( cell.light, pil_shade ) );
                     sink.add_colored( { .sprite = spr, .corners = c_pil_l, .uvs = solid_uv, .ref = light_ref{}, .color = pil_col } );
                 }
                 if( !has_right ) {
@@ -1476,14 +1736,14 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             { pil_low_r.x, pil_low_r.y, z_low }, { pil_low_l.x, pil_low_l.y, z_low }
                         }};
                     const auto pil_shade = compute_side_shade( 0.0f, 1.0f, cos_th, sin_th );
-                    const auto pil_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, pil_shade ) );
+                    const auto pil_col = no_pull( modulate_light( cell.light, pil_shade ) );
                     sink.add_colored( { .sprite = spr, .corners = c_pil_r, .uvs = solid_uv, .ref = light_ref{}, .color = pil_col } );
                 }
 
                 // Triangular side cheeks connecting the sloped glass to the waistline
                 if( h_left <= vehicle_body_h ) {
                     const auto shade = compute_side_shade( 0.0f, -1.0f, cos_th, sin_th );
-                    const auto cheek_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, shade ) );
+                    const auto cheek_col = no_pull( modulate_light( cell.light, shade ) );
                     const auto low_l = transform.apply( f_low, r_l );
                     const auto high_l = transform.apply( f_high, r_l_roof );
                     const auto waist_l = transform.apply( f_high, r_l );
@@ -1495,7 +1755,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 }
                 if( h_right <= vehicle_body_h ) {
                     const auto shade = compute_side_shade( 0.0f, 1.0f, cos_th, sin_th );
-                    const auto cheek_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, shade ) );
+                    const auto cheek_col = no_pull( modulate_light( cell.light, shade ) );
                     const auto low_r = transform.apply( f_low, r_r );
                     const auto high_r = transform.apply( f_high, r_r_roof );
                     const auto waist_r = transform.apply( f_high, r_r );
@@ -1508,8 +1768,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             } else if( is_sloped_rear ) {
                 const auto &s = paint_spr ? *paint_spr : *side_spr;
                 const auto solid_uv = make_solid_uvs( s );
-                const auto z_high = static_cast<float>( z_base + vehicle_cabin_h );
-                const auto z_low = static_cast<float>( z_base + vehicle_body_h );
+                const auto z_high = static_cast<float>( cell_base + cabin_height );
+                const auto z_low = static_cast<float>( cell_base + vehicle_body_h );
 
                 // 1. Solid painted base deck at z = body_h (0.55f)
                 const auto p0_deck = transform.apply( f_top, r_l );
@@ -1521,13 +1781,13 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         { p2_deck.x, p2_deck.y, z_low }, { p3_deck.x, p3_deck.y, z_low }
                     }};
                 sink.add_colored( { .sprite = s, .corners = c_deck, .uvs = solid_uv, .ref = light_ref{},
-                                    .color = no_pull( modulate_paint( vehicle_paint_color, cell.light, 1.0f ) ) } );
+                                    .color = no_pull( modulate_light( cell.light, 1.0f ) ) } );
 
                 // Optional sprite decal layer on corner panels (e.g. taillights on halfboard_sw/se)
                 if( cell.corner != panel_corner::none && side_spr && side_spr->valid ) {
                     const auto outline = panel_outline( { .corner = cell.corner, .front = f_top,
                                                           .rear = f_bot, .left = r_l, .right = r_r } );
-                    const auto &spr = *side_spr;
+                    const auto &spr = top_spr ? *top_spr : *side_spr;
                     const auto z_decal = static_cast<float>( z_low + 0.004f );
                     for( auto index = size_t{1}; index + 1 < outline.size(); ++index ) {
                         const auto a = transform.apply( outline[0][0], outline[0][1] );
@@ -1541,7 +1801,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         const auto uv = uvs_t{{ uv_at( outline[0] ), uv_at( outline[index] ), uv_at( outline[index + 1] ), uv_at( outline[index + 1] ) }};
                         sink.add_colored( { .sprite = spr, .corners = corners, .uvs = uv, .ref = light_ref{}, .color = no_pull( cell.light ) } );
                     }
-                } else if( main_sprite_opt.has_value() && main_sprite_opt->get().main().valid ) {
+                } else if( !top_spr && main_sprite_opt.has_value() && main_sprite_opt->get().main().valid ) {
                     emit_vehicle_tile_quads( { .sink = sink, .info = main_sprite_opt->get(), .rel_forward = rel_forward,
                                                .rel_right = rel_right, .z = z_low + 0.004f, .color = cell.light,
                                                .transform = transform, .f_min = f_bot_rel, .f_max = f_top_rel,
@@ -1583,7 +1843,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         }};
                     const auto glass_col = no_pull( modulate_paint( pack_light( 45, 55, 65 ), cell.light, 0.95f ) );
                     if( !clear_windshield ) {
-                        sink.add_colored( { .sprite = s, .corners = c_window, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                        sink.add_colored( { .sprite = glass_spr ? *glass_spr : s, .corners = c_window,
+                                            .uvs = glass_spr ? make_sprite_uvs( *glass_spr ) : solid_uv,
+                                            .ref = light_ref{}, .color = glass_spr ? no_pull( cell.light ) : glass_col } );
                     }
 
                     // Lower hatch lid (painted metal)
@@ -1593,7 +1855,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             { p_mid_l.x, p_mid_l.y, z_mid }, { p_mid_r.x, p_mid_r.y, z_mid },
                             { p_low_r.x, p_low_r.y, z_low }, { p_low_l.x, p_low_l.y, z_low }
                         }};
-                    const auto lid_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, 0.90f ) );
+                    const auto lid_col = no_pull( modulate_light( cell.light, 0.90f ) );
                     sink.add_colored( { .sprite = s, .corners = c_lid, .uvs = solid_uv, .ref = light_ref{}, .color = lid_col } );
 
                     // C-pillar outer frames if exterior left/right
@@ -1607,7 +1869,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                 { pil_mid_r.x, pil_mid_r.y, z_mid }, { pil_mid_l.x, pil_mid_l.y, z_mid }
                             }};
                         const auto pil_shade = compute_side_shade( 0.0f, -1.0f, cos_th, sin_th );
-                        const auto pil_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, pil_shade ) );
+                        const auto pil_col = no_pull( modulate_light( cell.light, pil_shade ) );
                         sink.add_colored( { .sprite = s, .corners = c_pil_l, .uvs = solid_uv, .ref = light_ref{}, .color = pil_col } );
                     }
                     if( !right_is_sloped ) {
@@ -1620,7 +1882,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                 { pil_mid_r.x, pil_mid_r.y, z_mid }, { pil_mid_l.x, pil_mid_l.y, z_mid }
                             }};
                         const auto pil_shade = compute_side_shade( 0.0f, 1.0f, cos_th, sin_th );
-                        const auto pil_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, pil_shade ) );
+                        const auto pil_col = no_pull( modulate_light( cell.light, pil_shade ) );
                         sink.add_colored( { .sprite = s, .corners = c_pil_r, .uvs = solid_uv, .ref = light_ref{}, .color = pil_col } );
                     }
                 } else {
@@ -1629,14 +1891,14 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             { p_high_l.x, p_high_l.y, z_high }, { p_high_r.x, p_high_r.y, z_high },
                             { p_low_r.x, p_low_r.y, z_low }, { p_low_l.x, p_low_l.y, z_low }
                         }};
-                    const auto pil_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, 0.90f ) );
+                    const auto pil_col = no_pull( modulate_light( cell.light, 0.90f ) );
                     sink.add_colored( { .sprite = s, .corners = c_pillar, .uvs = solid_uv, .ref = light_ref{}, .color = pil_col } );
                 }
 
                 // Triangular painted C-pillar side cheeks closing the exterior sides
                 if( !left_is_sloped ) {
                     const auto shade = compute_side_shade( 0.0f, -1.0f, cos_th, sin_th );
-                    const auto cheek_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, shade ) );
+                    const auto cheek_col = no_pull( modulate_light( cell.light, shade ) );
                     const auto waist_l = transform.apply( f_top, r_l );
                     const auto cheek_c = corners_t{{
                             { p_high_l.x, p_high_l.y, z_high }, { waist_l.x, waist_l.y, z_low },
@@ -1646,7 +1908,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 }
                 if( !right_is_sloped ) {
                     const auto shade = compute_side_shade( 0.0f, 1.0f, cos_th, sin_th );
-                    const auto cheek_col = no_pull( modulate_paint( vehicle_paint_color, cell.light, shade ) );
+                    const auto cheek_col = no_pull( modulate_light( cell.light, shade ) );
                     const auto waist_r = transform.apply( f_top, r_r );
                     const auto cheek_c = corners_t{{
                             { p_high_r.x, p_high_r.y, z_high }, { p_low_r.x, p_low_r.y, z_low },
@@ -1662,7 +1924,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         const auto p1 = transform.apply( f_top, r_r );
                         const auto p2 = transform.apply( f_bot, r_r );
                         const auto p3 = transform.apply( f_bot, r_l );
-                        const auto z_floor = static_cast<float>( z_base + chassis_floor_h );
+                        const auto z_floor = static_cast<float>( cell_base + chassis_floor_h );
                         const auto c_floor = corners_t{{
                                 { p0.x, p0.y, z_floor }, { p1.x, p1.y, z_floor },
                                 { p2.x, p2.y, z_floor }, { p3.x, p3.y, z_floor }
@@ -1671,7 +1933,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                             .ref = light_ref{}, .color = no_pull( modulate_light( cell.light, 0.70f ) ) } );
                     }
                     emit_vehicle_tile_quads( { .sink = sink, .info = main_sprite_opt->get(), .rel_forward = rel_forward,
-                                               .rel_right = rel_right, .z = z_base + chassis_floor_h + 0.002f, .color = cell.light,
+                                               .rel_right = rel_right, .z = cell_base + chassis_floor_h + 0.002f, .color = cell.light,
                                                .transform = transform, .f_min = f_bot_rel, .f_max = f_top_rel,
                                                .r_min = r_l_rel, .r_max = r_r_rel } );
                 }
@@ -1681,21 +1943,96 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 const auto p1 = transform.apply( f_top_roof, r_r_roof );
                 const auto p2 = transform.apply( f_bot_roof, r_r_roof );
                 const auto p3 = transform.apply( f_bot_roof, r_l_roof );
-                const auto z_roof = static_cast<float>( z_base + roof_cap_height( cell.height ) );
+                const auto z_roof = static_cast<float>( cell_base + roof_cap_height( cell.height ) );
                 const auto c_roof = corners_t{{
                         { p0.x, p0.y, z_roof }, { p1.x, p1.y, z_roof },
                         { p2.x, p2.y, z_roof }, { p3.x, p3.y, z_roof }
                     }};
 
                 if( ( paint_spr && paint_spr->valid ) || ( side_spr && side_spr->valid ) ) {
-                    const auto &rspr = paint_spr ? *paint_spr : *side_spr;
-                    sink.add_colored( { .sprite = rspr, .corners = c_roof, .uvs = make_solid_uvs( rspr ),
-                                        .ref = light_ref{}, .color = no_pull( modulate_paint( vehicle_paint_color, cell.light, 1.0f ) ) } );
+                    auto roof_material = *( top_spr ? top_spr : paint_spr ? paint_spr : side_spr );
+                    auto roof_light = cell.light;
+                    if( cell.roof_part_idx < 0 || veh.part_info( cell.roof_part_idx ).id.str() == "roof" ) {
+                        const auto empty_art = tile_info{};
+                        const auto &roof_art = cell.roof_part_idx >= 0 ? vehicle_part_sprite( { .view = view, .veh = veh,
+                                               .part_idx = cell.roof_part_idx, .id = veh.part_info( cell.roof_part_idx ).id } ) : empty_art;
+                        if( roof_art.cap.valid ) { roof_material = roof_art.cap; }
+                        const auto surface = roof_surfaces.find( pt );
+                        const auto *donor = surface != roof_surfaces.end() ? surface->second.material : nullptr;
+                        // An inferred continuation belongs to the roof, not the door
+                        // beneath it (which may carry a different paint finish).
+                        const auto paint_part = cell.roof_part_idx >= 0 ? cell.roof_part_idx : donor ? donor->part_idx : -1;
+                        const auto own_paint = paint_part >= 0 ? veh.cpart( paint_part ).get_color( true ) : RGBColorPair{};
+                        const auto donor_paint = donor ? veh.cpart( donor->part_idx ).get_color( true ) : RGBColorPair{};
+                        const auto distinct_paint = ( own_paint.bg.a || own_paint.fg.a ) &&
+                                                    ( own_paint.bg != donor_paint.bg || own_paint.fg != donor_paint.fg );
+                        if( donor ) { roof_material = donor->art->cap.valid ? donor->art->cap : *donor->sprite; }
+                        if( distinct_paint && roof_art.cap.valid ) {
+                            roof_material = roof_art.cap;
+                            const auto color = own_paint.fg.a ? own_paint.fg : own_paint.bg;
+                            roof_light = modulate_paint( pack_light( color.r, color.g, color.b ), cell.light, 1.0f );
+                        } else if( distinct_paint && view.cache.fixture_palette().valid ) {
+                            roof_material = view.cache.fixture_palette();
+                            roof_material.solid_uv = std::array<float, 2> { 6.5f / 7.0f, 0.5f };
+                            const auto color = own_paint.fg.a ? own_paint.fg : own_paint.bg;
+                            roof_light = modulate_paint( pack_light( color.r, color.g, color.b ), cell.light, 1.0f );
+                        } else if( !donor && cell.roof_part_idx >= 0 && !roof_art.cap.valid &&
+                                   view.cache.fixture_palette().valid ) {
+                            roof_material = view.cache.fixture_palette();
+                            roof_material.solid_uv = std::array<float, 2> { 1.5f / 7.0f, 0.5f };
+                        }
+                    }
+                    const auto forwards = std::array<float, 4> { f_top_roof, f_top_roof, f_bot_roof, f_bot_roof };
+                    const auto rights = std::array<float, 4> { r_l_roof, r_r_roof, r_r_roof, r_l_roof };
+                    const auto roof_point = [&]( const float forward, const float right ) {
+                        const auto p = transform.apply( forward, right );
+                        return std::array<float, 3> { p.x, p.y, z_roof + roof_lift( forward, right ) };
+                    };
+                    constexpr auto roof_strips = 4;
+                    for( auto fore = 0; fore < 2; ++fore ) {
+                        const auto f0 = std::lerp( f_top_roof, f_bot_roof, fore * 0.5f );
+                        const auto f1 = std::lerp( f_top_roof, f_bot_roof, ( fore + 1 ) * 0.5f );
+                        for( auto across = 0; across < roof_strips; ++across ) {
+                            const auto r0 = std::lerp( r_l_roof, r_r_roof, static_cast<float>( across ) / roof_strips );
+                            const auto r1 = std::lerp( r_l_roof, r_r_roof, static_cast<float>( across + 1 ) / roof_strips );
+                            const auto slope = ( roof_lift( f0, r1 ) - roof_lift( f0, r0 ) ) / std::max( r1 - r0, 0.001f );
+                            const auto shade = std::clamp( 0.98f - slope * 0.10f, 0.93f, 1.0f );
+                            sink.add_colored( { .sprite = roof_material,
+                            .corners = {{ roof_point( f0, r0 ), roof_point( f0, r1 ), roof_point( f1, r1 ), roof_point( f1, r0 ) }},
+                            .uvs = make_solid_uvs( roof_material ), .ref = light_ref{},
+                            .color = no_pull( modulate_light( roof_light, shade ) ) } );
+                        }
+                    }
+                    for( auto edge = size_t{0}; edge < c_roof.size(); ++edge ) {
+                        const auto next = ( edge + 1 ) % c_roof.size();
+                        const auto neighbor = edge == 0 ? nit_fwd : edge == 1 ? nit_right : edge == 2 ? nit_rear : nit_left;
+                        if( neighbor != cells.end() && neighbor->second.show_roof &&
+                            std::abs( neighbor->second.height - cell.height ) < 0.001f ) { continue; }
+                        const auto steps = edge % 2 == 0 ? roof_strips : 2;
+                        for( auto strip = 0; strip < steps; ++strip ) {
+                            const auto t0 = static_cast<float>( strip ) / steps;
+                            const auto t1 = static_cast<float>( strip + 1 ) / steps;
+                            const auto f0 = std::lerp( forwards[edge], forwards[next], t0 );
+                            const auto f1 = std::lerp( forwards[edge], forwards[next], t1 );
+                            const auto r0 = std::lerp( rights[edge], rights[next], t0 );
+                            const auto r1 = std::lerp( rights[edge], rights[next], t1 );
+                            const auto top0 = roof_point( f0, r0 );
+                            const auto top1 = roof_point( f1, r1 );
+                            const auto skirt = corners_t{{
+                                    top0, top1,
+                                    { top1[0], top1[1], z_roof }, { top0[0], top0[1], z_roof }
+                                }};
+                            sink.add_colored( { .sprite = roof_material, .corners = skirt,
+                                                .uvs = make_solid_uvs( roof_material ), .ref = light_ref{},
+                                                .color = no_pull( modulate_light( roof_light, 0.92f ) ) } );
+                        }
+                    }
+
                 }
 
             } else {
                 // Solid base deck at cell.height <= vehicle_body_h
-                const auto z_deck = static_cast<float>( z_base + cell.height );
+                const auto z_deck = static_cast<float>( cell_base + cell.height );
                 const auto p0 = transform.apply( f_top, r_l );
                 const auto p1 = transform.apply( f_top, r_r );
                 const auto p2 = transform.apply( f_bot, r_r );
@@ -1705,21 +2042,23 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         { p2.x, p2.y, z_deck }, { p3.x, p3.y, z_deck }
                     }};
 
-                if( cell.is_interior ) {
+                // A boardable frame beneath a panel does not make the panel's
+                // horizontal metal surface an exposed, dark interior floor.
+                if( cell.is_interior && !top_spr ) {
                     if( side_spr && side_spr->valid ) {
                         sink.add_colored( { .sprite = *side_spr, .corners = c_deck, .uvs = make_solid_uvs( *side_spr ),
                                             .ref = light_ref{}, .color = no_pull( modulate_light( cell.light, 0.70f ) ) } );
                     }
                 } else {
-                    const auto *deck_spr = paint_spr ? paint_spr : ( side_spr ? side_spr :
+                    const auto *deck_spr = top_spr ? top_spr : paint_spr ? paint_spr : ( side_spr ? side_spr :
                                            ( cell_spr ? cell_spr : best_body_spr ) );
                     if( deck_spr && deck_spr->valid ) {
                         sink.add_colored( { .sprite = *deck_spr, .corners = c_deck, .uvs = make_solid_uvs( *deck_spr ),
-                                            .ref = light_ref{}, .color = no_pull( modulate_paint( vehicle_paint_color, cell.light, 1.0f ) ) } );
+                                            .ref = light_ref{}, .color = no_pull( modulate_light( cell.light, 1.0f ) ) } );
                     }
                 }
 
-                if( main_sprite_opt.has_value() && main_sprite_opt->get().main().valid ) {
+                if( !top_spr && main_sprite_opt.has_value() && main_sprite_opt->get().main().valid ) {
                     emit_vehicle_tile_quads( { .sink = sink, .info = main_sprite_opt->get(), .rel_forward = rel_forward,
                                                .rel_right = rel_right, .z = z_deck + 0.004f, .color = cell.light,
                                                .transform = transform, .f_min = f_bot_rel, .f_max = f_top_rel,
@@ -1734,7 +2073,12 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 const auto p1 = transform.apply( f_top_roof, r_r_roof );
                 const auto p2 = transform.apply( f_bot_roof, r_r_roof );
                 const auto p3 = transform.apply( f_bot_roof, r_l_roof );
-                const auto z = z_base + ( cell.has_roof ? roof_cap_height( cell.height ) : cell.height ) + 0.003f;
+                // The crown peaks inside the cap, not necessarily at its corners.
+                const auto lift = cell.has_roof ? roof_lift(
+                                      std::clamp( roof_center, f_bot_roof, f_top_roof ),
+                                      std::clamp( crown_center, r_l_roof, r_r_roof ) ) : 0.0f;
+                const auto z = cell_base + ( cell.has_roof ? roof_cap_height( cell.height ) : cell.height ) + lift +
+                               0.003f;
                 const auto corners = corners_t{{ {p0.x, p0.y, z}, {p1.x, p1.y, z}, {p2.x, p2.y, z}, {p3.x, p3.y, z} }};
                 sink.add_colored( { .sprite = rs, .corners = corners, .uvs = make_sprite_uvs( rs ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
             }
@@ -1744,51 +2088,61 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 const auto &s = paint_spr ? *paint_spr : *side_spr;
                 const auto solid_uv = make_solid_uvs( s );
 
-                auto emit_side_wall = [ & ]( float local_f, float local_r, float h_neighbor,
-                                             float f_center, float r_center, bool is_lateral,
-                                             const point_f & p_top_l, const point_f & p_top_r,
-                float tumble_val ) {
+                struct side_wall_options {
+                    float local_f;
+                    float local_r;
+                    float h_neighbor;
+                    float f_center;
+                    float r_center;
+                    bool is_lateral;
+                    point_f p_top_l;
+                    point_f p_top_r;
+                    float tumble_val;
+                };
+                const auto emit_side_wall = [&]( const side_wall_options & edge ) {
+                    const auto &[local_f, local_r, h_neighbor, f_center, r_center,
+                                 is_lateral, p_top_l, p_top_r, tumble_val] = edge;
                     if( cell.height <= h_neighbor ) {
                         return;
                     }
                     const auto side_shade = compute_side_shade( local_f, local_r, cos_th, sin_th );
-                    const auto side_color = no_pull( modulate_paint( vehicle_paint_color, cell.light, side_shade ) );
+                    const auto side_color = no_pull( modulate_light( cell.light, side_shade ) );
                     const auto is_exterior = ( h_neighbor == 0.0f );
+                    const auto face_a = is_lateral ? std::array<float, 2> { local_r > 0.0f ? f_bot : f_top, r_center } :
+                                        std::array<float, 2> { f_center, local_f > 0.0f ? r_r : r_l };
+                    const auto face_b = is_lateral ? std::array<float, 2> { local_r > 0.0f ? f_top : f_bot, r_center } :
+                                        std::array<float, 2> { f_center, local_f > 0.0f ? r_l : r_r };
+                    const auto skin_band = [&]( const float top, const float bottom ) {
+                        emit_vehicle_skin_face( { .sink = sink, .sprite = s, .transform = transform,
+                                                  .a = face_a, .b = face_b, .top_a = top, .top_b = top, .bottom = bottom,
+                                                  .light = modulate_light( cell.light, side_shade ),
+                                                  .textured = body_art && body_art->side.valid,
+                                                  .opening = is_exterior && is_lateral ? wheel_opening : std::nullopt,
+                                                  .inward = -local_r * 0.055f } );
+                    };
 
                     // Recessed dark undercarriage skirt on exterior edges
-                    if( is_exterior ) {
+                    if( is_exterior && !aft_panel ) {
                         const auto skirt_shade_col = no_pull( modulate_light( pack_light( 35, 38, 42 ), side_shade ) );
-                        const auto z_skirt_bot = static_cast<float>( z_base + 0.06f );
-                        const auto z_skirt_top = static_cast<float>( z_base + vehicle_clearance_h );
-                        point_f sp0;
-                        point_f sp1;
-                        if( is_lateral ) {
-                            const auto r_in = r_center - local_r * 0.08f;
-                            sp0 = transform.apply( f_bot, r_in );
-                            sp1 = transform.apply( f_top, r_in );
-                            if( local_r < 0.0f ) {
-                                std::swap( sp0, sp1 );
-                            }
-                        } else {
-                            const auto f_in = f_center - local_f * 0.08f;
-                            sp0 = transform.apply( f_in, r_r );
-                            sp1 = transform.apply( f_in, r_l );
-                            if( local_f < 0.0f ) {
-                                std::swap( sp0, sp1 );
-                            }
-                        }
-                        const auto skirt_c = corners_t{{
-                                { sp0.x, sp0.y, z_skirt_top }, { sp1.x, sp1.y, z_skirt_top },
-                                { sp1.x, sp1.y, z_skirt_bot }, { sp0.x, sp0.y, z_skirt_bot }
-                            }};
-                        sink.add_colored( { .sprite = s, .corners = skirt_c, .uvs = solid_uv, .ref = light_ref{}, .color = skirt_shade_col } );
+                        const auto z_skirt_bot = static_cast<float>( cell_base + 0.06f );
+                        const auto z_skirt_top = static_cast<float>( cell_base + vehicle_clearance_h );
+                        auto a = face_a;
+                        auto b = face_b;
+                        a[0] -= local_f * 0.08f;
+                        b[0] -= local_f * 0.08f;
+                        a[1] -= local_r * 0.08f;
+                        b[1] -= local_r * 0.08f;
+                        emit_vehicle_skin_face( { .sink = sink, .sprite = s, .transform = transform,
+                                                  .a = a, .b = b, .top_a = z_skirt_top, .top_b = z_skirt_top,
+                                                  .bottom = z_skirt_bot, .light = skirt_shade_col,
+                                                  .opening = is_lateral ? wheel_opening : std::nullopt } );
                     }
 
-                    auto z_bot = static_cast<float>( z_base + ( is_exterior ? vehicle_clearance_h : h_neighbor ) );
-                    auto z_top = static_cast<float>( z_base + cell.height );
+                    auto z_bot = static_cast<float>( cell_base + ( is_exterior ? vehicle_clearance_h : h_neighbor ) );
+                    auto z_top = static_cast<float>( cell_base + cell.height );
 
                     if( is_fwd_windshield || is_rear_windshield || ( local_f < 0.0f && rear_is_sloped_hatch ) ) {
-                        z_top = std::min( z_top, static_cast<float>( z_base + vehicle_body_h ) );
+                        z_top = std::min( z_top, static_cast<float>( cell_base + vehicle_body_h ) );
                     }
 
                     if( z_top <= z_bot ) {
@@ -1796,16 +2150,12 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     }
 
                     // Check if upper cabin side should split into pillars + recessed glass
-                    if( cell.height > vehicle_body_h && !cell.is_opaque_wall && z_top > z_base + vehicle_body_h ) {
-                        const auto z_mid = static_cast<float>( z_base + vehicle_body_h );
+                    if( cell.height > vehicle_body_h && !cell.is_opaque_wall && z_top > cell_base + vehicle_body_h ) {
+                        const auto z_mid = static_cast<float>( cell_base + vehicle_body_h );
 
                         // Lower Band (body waistline)
                         if( z_mid > z_bot ) {
-                            const auto c_lower = corners_t{{
-                                    { p_top_l.x, p_top_l.y, z_mid }, { p_top_r.x, p_top_r.y, z_mid },
-                                    { p_top_r.x, p_top_r.y, z_bot }, { p_top_l.x, p_top_l.y, z_bot }
-                                }};
-                            sink.add_colored( { .sprite = s, .corners = c_lower, .uvs = solid_uv, .ref = light_ref{}, .color = side_color } );
+                            skin_band( z_mid, z_bot );
                         }
 
                         // Upper Band: two pillars + window pane recessed 0.03f with tumblehome
@@ -1877,7 +2227,9 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                     { pane_p1_mid.x, pane_p1_mid.y, z_mid }, { pane_p0_mid.x, pane_p0_mid.y, z_mid }
                                 }};
                             if( !clear_windshield ) {
-                                sink.add_colored( { .sprite = s, .corners = c_pane, .uvs = solid_uv, .ref = light_ref{}, .color = glass_col } );
+                                sink.add_colored( { .sprite = glass_spr ? *glass_spr : s, .corners = c_pane,
+                                                    .uvs = glass_spr ? make_sprite_uvs( *glass_spr ) : solid_uv,
+                                                    .ref = light_ref{}, .color = glass_spr ? no_pull( modulate_light( cell.light, side_shade ) ) : glass_col } );
                             }
                         } else {
                             // Front/rear upper wall
@@ -1898,12 +2250,30 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             sink.add_colored( { .sprite = s, .corners = c_upper, .uvs = solid_uv, .ref = light_ref{}, .color = side_color } );
                         }
                     } else {
-                        // Standard solid wall
-                        const auto c = corners_t{{
-                                { p_top_l.x, p_top_l.y, z_top }, { p_top_r.x, p_top_r.y, z_top },
-                                { p_top_r.x, p_top_r.y, z_bot }, { p_top_l.x, p_top_l.y, z_bot }
-                            }};
-                        sink.add_colored( { .sprite = s, .corners = c, .uvs = solid_uv, .ref = light_ref{}, .color = side_color } );
+                        // Fold the upper band onto the inset roof instead of leaving
+                        // a vertical box underneath a smaller, disconnected cap.
+                        auto shoulder_l = p_top_l;
+                        auto shoulder_r = p_top_r;
+                        if( cell.show_roof && cell.has_roof && !aft_panel ) {
+                            if( is_lateral ) {
+                                const auto right = local_r > 0.0f ? r_r_roof : r_l_roof;
+                                shoulder_l = transform.apply( local_r > 0.0f ? f_bot_roof : f_top_roof, right );
+                                shoulder_r = transform.apply( local_r > 0.0f ? f_top_roof : f_bot_roof, right );
+                            } else {
+                                const auto forward = local_f > 0.0f ? f_top_roof : f_bot_roof;
+                                shoulder_l = transform.apply( forward, local_f > 0.0f ? r_r_roof : r_l_roof );
+                                shoulder_r = transform.apply( forward, local_f > 0.0f ? r_l_roof : r_r_roof );
+                            }
+                            const auto shoulder_height = std::max( z_bot, z_top - 0.14f );
+                            const auto band = corners_t{{
+                                    { shoulder_l.x, shoulder_l.y, z_top }, { shoulder_r.x, shoulder_r.y, z_top },
+                                    { p_top_r.x, p_top_r.y, shoulder_height }, { p_top_l.x, p_top_l.y, shoulder_height }
+                                }};
+                            sink.add_colored( { .sprite = s, .corners = band, .uvs = solid_uv,
+                                                .ref = light_ref{}, .color = side_color } );
+                            z_top = shoulder_height;
+                        }
+                        skin_band( z_top, z_bot );
                     }
                 };
 
@@ -1911,43 +2281,67 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 {
                     const auto p0 = transform.apply( f_top, r_r );
                     const auto p1 = transform.apply( f_top, r_l );
-                    emit_side_wall( 1.0f, 0.0f, h_fwd, f_top, rel_right, false, p0, p1, tumble_f );
+                    emit_side_wall( { .local_f = 1.0f, .local_r = 0.0f, .h_neighbor = h_fwd, .f_center = f_top, .r_center = rel_right, .is_lateral = false, .p_top_l = p0, .p_top_r = p1, .tumble_val = tumble_f } );
                 }
                 // 2. Back: (-1, 0)
                 {
                     const auto p0 = transform.apply( f_bot, r_l );
                     const auto p1 = transform.apply( f_bot, r_r );
-                    emit_side_wall( -1.0f, 0.0f, h_rear, f_bot, rel_right, false, p0, p1, tumble_b );
+                    emit_side_wall( { .local_f = -1.0f, .local_r = 0.0f, .h_neighbor = h_rear, .f_center = f_bot, .r_center = rel_right, .is_lateral = false, .p_top_l = p0, .p_top_r = p1, .tumble_val = tumble_b } );
                 }
                 // 3. Right: (0, +1)
                 {
                     const auto p0 = transform.apply( f_bot, r_r );
                     const auto p1 = transform.apply( f_top, r_r );
-                    emit_side_wall( 0.0f, 1.0f, h_right, rel_forward, r_r, true, p0, p1, tumble_r );
+                    emit_side_wall( { .local_f = 0.0f, .local_r = 1.0f, .h_neighbor = h_right, .f_center = rel_forward, .r_center = r_r, .is_lateral = true, .p_top_l = p0, .p_top_r = p1, .tumble_val = tumble_r } );
                 }
                 // 4. Left: (0, -1)
                 {
                     const auto p0 = transform.apply( f_top, r_l );
                     const auto p1 = transform.apply( f_bot, r_l );
-                    emit_side_wall( 0.0f, -1.0f, h_left, rel_forward, r_l, true, p0, p1, tumble_l );
+                    emit_side_wall( { .local_f = 0.0f, .local_r = -1.0f, .h_neighbor = h_left, .f_center = rel_forward, .r_center = r_l, .is_lateral = true, .p_top_l = p0, .p_top_r = p1, .tumble_val = tumble_l } );
                 }
+            }
+
+            // Native corner sprites include lamps drawn on projected vertical faces. Keep
+            // their source pixels on the exterior instead of stamping the whole projection
+            // (including its glass and shadow) across the bonnet or boot.
+            if( body_art ) {
+                const auto emit_end_detail = [&]( const sprite_ref & detail, const bool front ) {
+                    if( !detail.valid || ( front ? has_fwd : has_rear ) ) { return; }
+                    const auto forward = front ? f_top + 0.004f : f_bot - 0.004f;
+                    const auto inset = ( r_r - r_l ) * 0.32f;
+                    const auto p0 = transform.apply( forward, front ? r_l + inset : r_r - inset );
+                    const auto p1 = transform.apply( forward, front ? r_r - inset : r_l + inset );
+                    const auto z_top = cell_base + std::min( vehicle_body_h - 0.04f, cell.height );
+                    const auto z_bottom = std::max( cell_base + vehicle_clearance_h, z_top - 0.18f );
+                    const auto corners = corners_t{{ { p0.x, p0.y, z_top }, { p1.x, p1.y, z_top },
+                            { p1.x, p1.y, z_bottom }, { p0.x, p0.y, z_bottom }
+                        }};
+                    sink.add_colored( { .sprite = detail, .corners = corners, .uvs = make_sprite_uvs( detail ),
+                                        .ref = light_ref{}, .color = no_pull( cell.light ) } );
+                };
+                emit_end_detail( body_art->front, true );
+                emit_end_detail( body_art->rear, false );
             }
 
             // 3. Distinct 3D Wheels
             if( cell.has_wheel && ( wheel_vox || ( wheel_spr && wheel_spr->valid ) ) ) {
-                const auto f_center = ( f_top + f_bot ) * 0.5f;
-                constexpr auto wheel_w = 0.26f;
-                constexpr auto wheel_radius_f = 0.29f;
-                constexpr auto wheel_radius_z = vehicle_wheel_h * 0.5f;
+                const auto f_center = rel_forward;
+                const auto dimensions = native_wheel_dimensions( veh.cpart( wheel_layer->part_idx ) );
+                const auto wheel_w = dimensions.width;
+                const auto wheel_radius_f = dimensions.radius_forward;
+                const auto wheel_radius_z = dimensions.radius_up;
 
                 auto r_min = 0.0f;
                 auto r_max = 0.0f;
                 auto outer_side = 0; // +1 for right, -1 for left, 0 for centerline
-                if( cell.mount.y() > 0 ) {
+                const auto axle_center = ( row_bounds.left + row_bounds.right ) * 0.5f;
+                if( cell.mount.y() > axle_center ) {
                     r_max = r_r;
                     r_min = r_max - wheel_w;
                     outer_side = 1;
-                } else if( cell.mount.y() < 0 ) {
+                } else if( cell.mount.y() < axle_center ) {
                     r_min = r_l;
                     r_max = r_min + wheel_w;
                     outer_side = -1;
@@ -1963,13 +2357,13 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         r_min = r_max - wheel_w;
                         outer_side = 1;
                     } else {
-                        r_min = rel_right - 0.13f;
-                        r_max = rel_right + 0.13f;
+                        r_min = rel_right - wheel_w * 0.5f;
+                        r_max = rel_right + wheel_w * 0.5f;
                         outer_side = 0;
                     }
                 }
                 if( wheel_vox ) {
-                    const auto wheel_z_min = z_base + vehicle_wheel_h * 0.5f - wheel_radius_z;
+                    const auto wheel_z_min = cell_base;
                     emit_vox_model( { .sink = sink, .asset = *wheel_vox, .transform = transform,
                                       .f_min = f_center - wheel_radius_f, .f_max = f_center + wheel_radius_f,
                                       .r_min = r_min, .r_max = r_max, .z_min = wheel_z_min,
@@ -1979,12 +2373,66 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     const auto &s = *wheel_spr;
                     emit_vehicle_wheel( { .sink = sink, .sprite = s, .transform = transform,
                                           .center_forward = f_center, .r_min = r_min, .r_max = r_max,
-                                          .z_base = z_base, .radius_forward = wheel_radius_f,
+                                          .z_base = cell_base + wheel_radius_z - vehicle_wheel_h * 0.5f, .radius_forward = wheel_radius_f,
                                           .radius_z = wheel_radius_z, .outer_side = outer_side,
                                           .cos_th = cos_th, .sin_th = sin_th } );
                 }
             }
         }
+        for( auto part = 0; part < veh.part_count(); ++part ) {
+            const auto &native = veh.cpart( part );
+            if( native.removed || !veh.part_flag( part, "ROTOR" ) ||
+                veh.part_info( part ).location != "on_roof" ) { continue; }
+            const auto found = cells.find( point( native.mount.x(), native.mount.y() ) );
+            if( found == cells.end() || !view.cache.fixture_palette().valid ) { continue; }
+            const auto &info = veh.part_info( part );
+            const auto blades = info.id.str() == "heavy_duty_military_osprey_rotors" ? 3 :
+                                info.id.str() == "gyrocopter_rotors" ? 2 : 4;
+            const auto pieces = rotor_pieces( { .diameter = static_cast<float>( info.rotor_diameter() ),
+                                                .blades = blades, .broken = native.is_broken() } );
+            const auto centered = silhouette.enclosed && silhouette.main_rotors == 1 &&
+                                  info.location == "on_roof";
+            const auto &rotor_id = native.proxy_part_id.is_null() ? info.id : native.proxy_part_id;
+            const auto &rotor_art = vehicle_part_sprite( { .view = view, .veh = veh, .part_idx = part,
+                                    .id = rotor_id, .subtile = native.is_broken() ? broken : 0 } );
+            const auto *rotor_material = rotor_art.side.valid ? &rotor_art.side :
+                                         rotor_art.main().valid && !rotor_art.main().placeholder ? &rotor_art.main() : nullptr;
+            const auto rotor_forward = ( centered ? silhouette.rotor_forward : native.mount.x() ) -
+                                       pivot_mnt.x();
+            const auto rotor_right = ( centered ? silhouette.rotor_right : native.mount.y() ) - pivot_mnt.y();
+            emit_vehicle_rotor( { .sink = sink, .palette = view.cache.fixture_palette(), .pieces = pieces, .transform = transform,
+                                  .forward = rotor_forward, .right = rotor_right,
+                                  .base = z_base + cabin_height + 0.04f, .light = found->second.light,
+                                  .native_material = rotor_material } );
+            if( rotor_material ) {
+                // This native sprite depicts the mounting mechanism, not the full rotor
+                // diameter. Keep its scale while its metal supplies the existing blades.
+                emit_vehicle_tile_quads( { .sink = sink, .info = rotor_art, .rel_forward = rotor_forward,
+                                           .rel_right = rotor_right, .z = z_base + cabin_height + 0.32f,
+                                           .color = found->second.light, .transform = transform } );
+            }
+            if( centered && info.id.str() != "gyrocopter_rotors" ) {
+                auto fin_present = false;
+                auto fin_intact = false;
+                for( const auto &[mount, cell] : cells ) {
+                    if( describe_airframe_section( { .veh = veh, .silhouette = silhouette, .mount = cell.mount } ) !=
+                        airframe_section::fin ) { continue; }
+                    fin_present = true;
+                    for( const auto &layer : cell.layers ) {
+                        if( veh.part_flag( layer.part_idx, "HALF_BOARD" ) && !layer.broken ) { fin_intact = true; }
+                    }
+                }
+                if( fin_present ) {
+                    const auto tail = rotor_pieces( { .diameter = std::clamp( info.rotor_diameter() * 0.16f, 0.8f, 2.8f ), .blades = 2, .broken = !fin_intact } );
+                    emit_vehicle_rotor( { .sink = sink, .palette = view.cache.fixture_palette(), .pieces = tail, .transform = transform,
+                                          .forward = static_cast<float>( silhouette.tail_rear - pivot_mnt.x() ),
+                                          .right = silhouette.tail_center - pivot_mnt.y(),
+                                          .base = z_base + 1.0f, .light = found->second.light, .vertical = true,
+                                          .native_material = rotor_material } );
+                }
+            }
+        }
+
     }
 }
 

@@ -42,6 +42,19 @@ TEST_CASE("r3d_presentation_profiles_reject_invalid_anchors", "[r3d][profiles]")
     CHECK_THROWS(r3d::load_presentation_profiles(anchor_input));
 }
 
+TEST_CASE("r3d_vehicle_profile_aliases_share_explicit_material_roles", "[r3d][profiles][vehicle]") {
+    auto input = std::istringstream(R"({"version":1,"profiles":[{
+        "category":"vehicle_part","id":["vp_door_left","vp_door_right"],
+        "face_sources":[{"face":"glass","tileset":"test","sprite":"vp_door"},
+                        {"face":"rear","tileset":"test","sprite":"vp_lamp"}]}]})");
+    const auto profiles = r3d::load_presentation_profiles(input);
+    for (const auto id : {"vehicle_part:vp_door_left", "vehicle_part:vp_door_right"}) {
+        REQUIRE(profiles.at(id).face_sources.size() == 2);
+        CHECK(profiles.at(id).face_sources[0].face == r3d::profile_face::glass);
+        CHECK(profiles.at(id).face_sources[1].face == r3d::profile_face::rear);
+    }
+}
+
 TEST_CASE("r3d_profile_face_sources_validate_identity_crop_and_ambiguity", "[r3d][profiles]") {
     const auto bad_source = GENERATE(
         R"({"face":"side","tileset":"","sprite":"t_wall"})",
@@ -81,16 +94,16 @@ TEST_CASE("r3d_furniture_authored_bounds_rotate_contacts_without_stretching", "[
     if (contact) {
         switch (facing) {
             case 0:
-                CHECK(bounds.y0 == Approx(-0.42f));
+                CHECK(bounds.y0 == Approx(-0.375f));
                 break;
             case 1:
-                CHECK(bounds.x1 == Approx(1.42f));
+                CHECK(bounds.x1 == Approx(1.375f));
                 break;
             case 2:
-                CHECK(bounds.y1 == Approx(1.42f));
+                CHECK(bounds.y1 == Approx(1.375f));
                 break;
             case 3:
-                CHECK(bounds.x0 == Approx(-0.42f));
+                CHECK(bounds.x0 == Approx(-0.375f));
                 break;
         }
     } else {
@@ -121,12 +134,14 @@ TEST_CASE("r3d_furniture_omitted_axes_preserve_native_fitting", "[r3d][profiles]
 
 #if defined(TILES)
 #    include "cata_tiles.h"
+#    include "cata_utility.h"
 #    include "map/map.h"
 #    include "map/mapdata.h"
 #    include "map/submap.h"
 #    include "r3d_mesh.h"
 #    include "r3d_profile_materials.h"
 #    include "sdltiles.h"
+#    include "state_helpers.h"
 #    include "tile_helpers.h"
 
 TEST_CASE(
@@ -270,7 +285,7 @@ TEST_CASE("r3d_opening_profiles_preserve_native_geometry_and_leaf_art", "[r3d][p
          {art.cap.u1, art.cap.v1},
          {art.cap.u0, art.cap.v1}}};
     const auto expected = r3d::orient_material_uvs(art.cap, raw_uvs)[0];
-    const auto inset = thin ? 0.5f - r3d::wall_half_thickness : 0.0f;
+    const auto inset = 0.0f; // Shared walls use the north/west tile edge.
     const auto cap_x = 5.0f + (along_y ? inset : 0.0f);
     const auto cap_y = -(5.0f + (along_y ? 0.0f : inset));
     auto found_cap = false;
@@ -305,7 +320,8 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
     const auto contexts = tile_context_fixture(true);
     REQUIRE(contexts.valid());
     tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
-    const auto id = std::string(GENERATE("f_locker", "f_chair", "f_trashcan", "f_table"));
+    const auto id = std::string(GENERATE(
+        "f_locker", "f_chair", "f_trashcan", "f_table", "f_sink", "f_oven", "f_dishwasher"));
     const auto face =
         GENERATE(r3d::profile_face::top, r3d::profile_face::side, r3d::profile_face::front);
     CAPTURE(id, static_cast<int>(face));
@@ -405,6 +421,88 @@ TEST_CASE("r3d_furniture_face_profiles_preserve_fronts_and_geometry", "[r3d][pro
     }
     CHECK(changed > 0);
     if (face != r3d::profile_face::front) { CHECK(preserved_front > 0); }
+}
+
+TEST_CASE("r3d_appliances_keep_native_art_on_the_existing_box", "[r3d][profiles][tiles]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    const auto tileset = std::string(GENERATE("UltimateCataclysm", "hoder"));
+    tilecontext->load_tileset(tileset, {}, false, true, false);
+    auto input = std::ifstream(PATH_INFO::datadir() + "raw/r3d/presentation_profiles.json");
+    REQUIRE(input.good());
+    const auto profiles = r3d::load_presentation_profiles(input);
+    const auto id = std::string(GENERATE("f_sink", "f_oven", "f_rvoven"));
+    const auto facing = GENERATE(0, 1, 2, 3);
+    CAPTURE(tileset, id, facing);
+    const auto origin = tripoint_abs_sm(get_map().get_abs_sub(), 0);
+    auto sm = submap(origin, {});
+    sm.set_all_ter(t_floor);
+    sm.set_furn(point_sm_ms(5, 5), furn_str_id(id).id());
+    const auto backs = std::array<point, 4>{point_north, point_east, point_south, point_west};
+    sm.set_ter(point_sm_ms(5 + backs[facing].x, 5 + backs[facing].y), ter_str_id("t_wall").id());
+    const auto lookup = [&](const tripoint_abs_sm& p) -> const submap* {
+        return p == origin ? &sm : nullptr;
+    };
+    auto cache = r3d::tile_info_cache{};
+    const auto baseline_info = cache.furniture({.id = furn_str_id(id).id(), .tiles = *tilecontext});
+    const auto baseline = r3d::build_chunk_mesh(
+        {.pos = origin, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    cache.set_presentation_profiles(profiles);
+    const auto art = cache.furniture({.id = furn_str_id(id).id(), .tiles = *tilecontext});
+    const auto mesh = r3d::build_chunk_mesh(
+        {.pos = origin, .lookup = lookup, .cache = cache, .tiles = *tilecontext});
+    REQUIRE_FALSE(art.main().placeholder);
+    CHECK(art.main().sheet == baseline_info.main().sheet);
+    CHECK(art.sh == baseline_info.sh);
+    REQUIRE(mesh.vertices.size() == baseline.vertices.size());
+    CHECK(mesh.indices == baseline.indices);
+    const auto geometry = [](const auto& source) {
+        auto quads = std::vector<std::array<std::array<float, 3>, 4>>{};
+        for (auto i = size_t{0}; i < source.vertices.size(); i += 4) {
+            auto quad = std::array<std::array<float, 3>, 4>{};
+            for (auto corner = size_t{0}; corner < 4; ++corner) {
+                const auto& vertex = source.vertices[i + corner];
+                quad[corner] = {vertex.x, vertex.y, vertex.z};
+            }
+            quads.push_back(quad);
+        }
+        std::ranges::sort(quads);
+        return quads;
+    };
+    // Face-source changes can reorder batches grouped by native sheet address.
+    // Compare complete, ordered quads without depending on atlas allocation order.
+    CHECK(geometry(mesh) == geometry(baseline));
+    // Each authored region must come from this appliance's own art, never a palette model.
+    for (const auto& source : profiles.at("furniture:" + id).face_sources) {
+        if (source.tileset != tileset) { continue; }
+        const auto& donor =
+            cache.named({.category = C_NONE, .id = source.sprite, .tiles = *tilecontext}).main();
+        const auto& material =
+            source.face == r3d::profile_face::top ? art.cap
+            : source.face == r3d::profile_face::front
+                ? art.front
+                : art.side;
+        REQUIRE(material.valid);
+        CHECK(material.sheet == donor.sheet);
+        CHECK(material.u0 == Approx(donor.u0 + (donor.u1 - donor.u0) * source.crop[0]));
+        CHECK(material.v0 == Approx(donor.v0 + (donor.v1 - donor.v0) * source.crop[1]));
+        CHECK(material.u1 == Approx(donor.u0 + (donor.u1 - donor.u0) * source.crop[2]));
+        CHECK(material.v1 == Approx(donor.v0 + (donor.v1 - donor.v0) * source.crop[3]));
+        auto bound = false;
+        for (const auto& batch : mesh.batches) {
+            if (batch.sheet != donor.sheet) { continue; }
+            for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+                const auto& v = mesh.vertices[mesh.indices[i]];
+                if (v.z > r3d::floor_height && v.u >= material.u0 && v.u <= material.u1
+                    && v.v >= material.v0 && v.v <= material.v1) {
+                    bound = true;
+                }
+            }
+        }
+        CHECK(bound);
+    }
 }
 
 TEST_CASE("r3d_furniture_profiles_parse_explicit_front_sources", "[r3d][profiles]") {
@@ -574,5 +672,46 @@ TEST_CASE("r3d_bundled_trashcan_materials_are_opaque_and_attached", "[r3d][profi
     CHECK(art.front.sheet == art.main().sheet);
     CHECK(art.side.sheet == art.main().sheet);
     CHECK(art.cap.sheet == art.main().sheet);
+}
+#endif
+
+#if defined(TILES)
+TEST_CASE(
+    "r3d_patterned_walls_use_elevations_instead_of_top_down_studs", "[r3d][profiles][tiles]") {
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    auto cache = r3d::tile_info_cache{};
+    const auto donor =
+        cache.named({.category = C_TERRAIN, .id = "t_grass", .tiles = *tilecontext}).main();
+    REQUIRE(donor.valid);
+    auto sides = std::make_shared<r3d::wall_sides>();
+    sides->atlas = donor.owner;
+    auto width = 0.0f;
+    auto height = 0.0f;
+    REQUIRE(SDL_GetTextureSize(sides->atlas.get(), &width, &height));
+    sides->width = static_cast<int>(width);
+    sides->height = static_cast<int>(height);
+    sides->cell = std::max(1, std::min(sides->width, sides->height) / 2);
+    sides->names = {"brick", "wood"};
+    sides->rules.by_id = {{"t_brick_wall", "brick"}, {"t_wall_wood", "wood"}};
+    cache.set_wall_sides(sides);
+    cache.set_plaster_atlas(false);
+    const auto id = std::string(GENERATE("t_brick_wall", "t_wall_wood"));
+    CAPTURE(id, sides->width, sides->height);
+    const auto wall = cache.terrain({.id = ter_str_id(id).id(), .tiles = *tilecontext});
+    REQUIRE(wall.side.valid);
+    CHECK_FALSE(wall.elevation.valid);
+    CHECK(wall.side.sheet == sides->atlas.get());
+    const auto expected = r3d::atlas_cell(
+        {.index = id == "t_brick_wall" ? 0 : 1,
+         .cell = sides->cell,
+         .atlas_w = sides->width,
+         .atlas_h = sides->height});
+    REQUIRE(expected.valid);
+    CHECK(wall.side.u0 == Approx(expected.u0));
+    CHECK(wall.side.v0 == Approx(expected.v0));
+    CHECK(wall.side.u1 == Approx(expected.u1));
+    CHECK(wall.side.v1 == Approx(expected.v1));
 }
 #endif

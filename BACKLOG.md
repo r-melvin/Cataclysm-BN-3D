@@ -153,6 +153,48 @@ matching saved scene; broader vehicle layer/state presentation and cross-tileset
 material acceptance remain in R3D-04/07. These shelter regressions are fixed;
 that does not mark the broader presentation-profile contract complete.
 
+Readability follow-up (2026-10-28): patterned wall elevations now use the
+material atlas rather than repeating top-down caps/studs. Appliances use the
+closed box face mapper, preserving their full classified height and authored
+front/side/top donors instead of extruding a top-down silhouette. Real-art
+profile regressions reproduced 13 failures before the fix. Both game and test
+targets build; all 167 renderer cases pass (55,337 assertions). A reusable
+`fixtures/readability.lua` scene covers brick/timber walls, door/window and sink,
+oven, fridge, dishwasher and washer. Private Xvfb/software-Vulkan comparisons
+cover oblique, reverse and native 2D views; evidence is in
+`out/validation/readability/`. That initial presentation change retained full-tile
+collision; the wall-edge follow-up below supersedes that movement limitation.
+
+Wall-edge follow-up (2026-10-28, complete): all thin walls are
+¼ tile thick and occupy tile edges, including interior partitions (north/west
+for shared/ambiguous room sides). Floors cover the wall tiles, including diagonal
+submap corners. Openings and fitted cabinetry follow the shifted line. Stock
+floors identify interiors through roof metadata, without altering gameplay flags.
+A shared native boundary query now drives whole-tile player/AI movement, routing,
+melee/reach and projectile cover; vehicle parts sweep their tile footprint.
+Native terrain states/materials remain intact. Furniture on the newly usable
+wall-cell floor remains visible. Full-block/2D modes retain whole-cell collision.
+Both binaries build. The combined renderer, explicit edge-collision and native
+2D projectile/pathfinding/vehicle suite passes 196 cases (56,134 assertions),
+including the cost of bashing a crossed wall and flat-backend fallback. The
+17 vehicle/item fingerprints are unchanged. A private Xvfb game confirmed floor
+entry, the solid-wall edge barrier, orbit views, driving and braking. Evidence
+and the exact command are in `out/validation/wall-edges/`; the checked-in
+`fixtures/wall_edges.lua` reproduces the scene. Mouse picking and lighting still
+use native tile columns.
+
+Appliance/tower follow-up completed (2026-10-28): radio towers have open diagonal
+bracing spanning contiguous native levels, including upper-storey views and tall
+column culling/invalidation. Appliances retain the existing sprite-derived boxes:
+Ultica's original basin/hob crops map to the top and cabinet/oven-window crops to
+the front, with plain material from the same sprite on other faces. Hoder keeps
+its top-down artwork on top with plain edges. Procedural appliance replacements
+and their unused face-donor code are removed. Native regressions verify unchanged
+positions/indices and original source sheets for both tilesets and four facings.
+Both game/test targets build; CPU `[r3d],[wall_edges]` passes 184 cases / 101,622
+assertions. Vehicle/item snapshots are unchanged. Private Xvfb inspection shows
+the corrected original artwork; evidence: `out/validation/sprite-repairs/`.
+
 ## R3D-04: Finish vehicle layer, material and state presentation
 
 **Status: implementation/visual validation; depends on R3D-03/07.** Role lists,
@@ -190,6 +232,105 @@ vehicle appearance/state acceptance matrix. A private software-Vulkan virtual-wi
 with adjoining body/window panels (`out/validation/dan-recovery/rebased-screen.png`).
 The automatic one-shot did not reach its frame threshold while idle; the virtual
 window was captured directly. This is one fixture, not the original outdoor save.
+
+Material follow-up (2026-10-28): resolve each installed layer directly;
+`part_id_string` selects the flattened 2D part at that mount and was allowing
+frames/seats to stand in for roof and panel skins. Keep mount-local materials
+and apply their colour once, without multiplying a second vehicle-wide paint
+average. A native mixed metal/wood/roof mesh test verifies UVs, bound sheets and
+lighting; it caught the flattened roof lookup before correction. The complete
+renderer suite passes as recorded above. The car, pickup, SUV, bus and semi-truck
+snapshots at 0/90/225 degrees retain their quad counts and update their intended
+lighting fingerprints; both item snapshots are unchanged. Private virtual-window
+checks include engine start, taking control, low-speed acceleration and braking.
+These fixes do not complete every vehicle state/material or platform gate.
+
+Screenshot follow-up completed (2026-10-28): generic metal roofs follow adjacent
+exterior materials while preserving distinct native paint. Crowned roofs and
+sloped bonnets soften the silhouette without changing vehicle footprints. Native
+helicopter rotors now have masts, hubs and diameter-scaled blades; broken rotors
+retain short stubs. Rotors are posed, not animated. Private Xvfb inspection covers
+the native `2seater2` helicopter. Intentional geometry snapshots update car,
+pickup, SUV, bus and semi-truck and add `2seater2`, each at 0/90/225 degrees;
+both item fingerprints remain unchanged. These changes do not close the broader
+vehicle-state acceptance matrix.
+
+Vehicle recognition follow-up (2026-10-28, visual acceptance reopened): preserve installed part art
+and assembly while shaping existing helicopter aft half-panels into raised booms,
+tailplanes and fins. Four-facet curved native corners, arched roofs and more
+inward canopy taper soften the low-poly bodies. Cabin proportions use roof extent
+and native wheel dimensions; tires use runtime millimetres. Single enclosed main
+rotors centre over the cabin, civilian rotors have four blades, and supported
+single-rotor helicopter fins carry vertical visual tail rotors with broken stubs.
+Twin main rotors keep separate native mounts; gyrocopters get no anti-torque rotor.
+Cargo/floors/full walls are excluded from tail shaping; solar panels clear the roof.
+Snapshots cover ten native prototypes at 0/90/225 degrees, with item scenes intact.
+Both game/test targets build. The final CPU `[r3d],[wall_edges]` suite passes
+189 cases / 101,749 assertions. Private Xvfb comparisons show helicopter rotor
+centres/tails and the rounded road bodies; evidence: `out/validation/vehicle-silhouettes/`.
+The automated gate passes, but these captures do not meet visual acceptance.
+Astra review identifies single-texel material loss, body-colour multiplication
+of glass, projected sprite details on tops, patchy roof donor selection and
+generic rotor geometry bypassing available tileset art. Correction implemented (2026-10-28): tileset-bound top/body/glass/end-face
+regions keep projected detail on the appropriate surface. Glass receives native
+art and lighting once, crops retain their own solid sample, and available rotor
+mechanism art supplies the existing blade geometry. Live vehicle illumination
+no longer inherits hidden-ground memory sepia. Connected roof components choose
+a consistent native metal finish, with separate native paint retained; gaps and
+broken roofs separate components. Component bounds control the roof crown rather
+than vehicle-wide protrusions. Solid wall shoulders now meet the inset roof.
+Full-board walls retain their own side artwork instead of borrowing pale
+half-panel sides; only the horizontal finish has an explicit source region.
+Closed-door roof continuations share the adjoining finish independently of
+door paint, and Hoder full-panel tops use its native blue metal region.
+A boardable frame beneath a panel no longer turns that panel top into a dark
+interior floor; authored surface roles take precedence over the supporting frame.
+
+These are independently implemented surface-interpretation and connected-group
+concepts informed by [DramaticShape's methodology](https://github.com/absol89/DramaticShapeVoxelMod/blob/99815c14742b95bf50c7b574edd25f57ab547f00/assets/docs/buidling_to_voxel/sprite_to_voxel_methodology.md)
+and [Risaro's renderer](https://github.com/Risaro/cataclysm-3d/tree/875ae1f396afc9db1f8238d570b1a06d10ba96d7),
+without copying their implementation or importing replacement models.
+The first van candidate failed visual acceptance; corrected private Xvfb
+captures are under `out/validation/surface-interpretation/`. They establish
+Ultica/Hoder material separation, not approval of every vehicle's appearance.
+Both binary targets build; CPU `[r3d],[wall_edges]` passes 196 cases / 102,338
+assertions; gallery checks pass nine tests. Thirty intended snapshots update
+car, hatchback, sports car, pickup, SUV, cube van, bus, semi-truck, 2seater2 and
+SmallFlier1 at 0/90/225 degrees; both item scenes are unchanged. The snapshot
+fixture now actually installs the runtime presentation profiles into its cache.
+Connected-section follow-up (2026-10-28): independently apply the reviewed
+semantic-grouping, negative-space and source-face concepts to existing vehicle
+meshes. Native body components and contiguous transverse skin runs exclude
+mirrors and frame-only attachments from body bounds. Glazed cabs and enclosed
+cargo roofs keep separate proportions; wheel placement uses the local axle
+centreline rather than mount-coordinate sign. Native wheel dimensions cut
+faceted openings through the body skin and recessed skirt, with a shallow
+material-lined reveal. Authored side crops retain continuous UVs across cuts;
+unprofiled art keeps its conservative sample fallback. Bonnet crowns and
+subdivided roof caps give the existing shapes more curvature. Roof accessories
+clear the interior crown maximum, and roof shoulders close against lower
+occupied neighbours as well as empty space. Hatch shaping uses its own body
+component. No replacement assets or external implementation code were imported.
+The public [3DNes section builder](https://github.com/play3577/3DNes_Engine/blob/75b75e8934df829d505db036ef14a5181f360b1e/Drawing.cs#L185)
+informs the section concept; it is not the current commercial 3dSen source.
+
+Vehicle-state and visual acceptance remain open: local proportions still have
+bounded heuristics, transverse widths are station-based rather than a complete
+continuous loft, and aircraft-tail inference needs conservative custom/VTOL
+gates. These changes do not implement a universal sprite-to-volume converter,
+full occupancy AO, animation, or the remaining building/prop profile work.
+Both game/test targets build without compiler warnings. The final CPU
+`[r3d],[wall_edges]` run passes 202 cases / 59,053 assertions with seed 424242.
+The appliance geometry test now compares canonical complete faces, avoiding
+native-sheet batch-order dependence while retaining sheet/UV checks; its
+assertion count is therefore not comparable with older per-vertex counts.
+Native section, open-door topology, disconnected/multilevel body, arch/skirt,
+continuous face-UV and lower-neighbour shoulder regressions pass. Thirty vehicle
+snapshots update the ten prototypes above at 0/90/225 degrees; both item scenes
+remain unchanged. Actual private Xvfb/software-Vulkan Ultica and Hoder captures
+are in `out/validation/vehicle-sections/index.html`, with hatchback, cube-van and
+helicopter views. The game and private display exited normally after capture.
+No claim of complete appearance acceptance or a full platform matrix is implied.
 
 Source and acceptance matrix:
 [vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).

@@ -34,6 +34,7 @@
 #include "flag.h"
 #include "fstream_utils.h"
 #include "game.h"
+#include "wall_edges.h"
 #include "r3d.h" // IWYU pragma: associated
 #include "sdltiles.h"
 #include "game_constants.h"
@@ -889,7 +890,9 @@ static void smash()
     if( !smashp_ ) {
         return;
     }
-    auto smashp = *smashp_;
+    // The physical wall can belong to the free-floor cell we already occupy.
+    auto smashp = wall_edges::trace( { .here = here, .from = u.bub_pos(),
+                                       .to = *smashp_ } ).value_or( *smashp_ );
 
     bool smash_floor = false;
     if( smashp.z() != u.bub_pos().z() ) {

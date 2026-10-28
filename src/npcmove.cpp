@@ -47,6 +47,7 @@
 #include "npc_class.h"
 #include "npctalk.h"
 #include "options.h"
+#include "wall_edges.h"
 #include "overmap/overmap.h"
 #include "overmap/overmap_location.h"
 #include "overmap/overmapbuffer.h"
@@ -2664,6 +2665,11 @@ bool npc::can_open_door( const tripoint_bub_ms &p, const bool inside ) const
 bool npc::can_move_to( const tripoint_bub_ms &p, bool no_bashing ) const
 {
     map &here = get_map();
+    if( const auto hit = wall_edges::trace( { .here = here, .from = bub_pos(), .to = p } ) ) {
+        return rl_dist( bub_pos(), p ) <= 1 &&
+               ( ( !is_hallucination() && can_open_door( *hit, !here.is_outside( bub_pos() ) ) ) ||
+                 ( !no_bashing && here.bash_rating( smash_ability(), *hit ) > 0 ) );
+    }
     // Allow moving into any bashable spots, but penalize them during pathing
     // Doors are not passable for hallucinations
     return( rl_dist( bub_pos(), p ) <= 1 && here.has_floor( p ) && !g->is_dangerous_tile( p ) &&
@@ -2752,6 +2758,18 @@ void npc::move_to( const tripoint_bub_ms &pt, bool no_bashing, std::set<tripoint
         // On the same level? Not so much. Something weird happened
         path.clear();
         move_pause();
+    }
+
+    if( const auto hit = wall_edges::trace( { .here = here, .from = bub_pos(), .to = p } ) ) {
+        if( !is_hallucination() && here.open_door( this, *hit, !here.is_outside( bub_pos() ) ) ) {
+            moves -= 100;
+        } else if( !no_bashing && here.bash_rating( smash_ability(), *hit ) > 0 ) {
+            here.bash( *hit, smash_ability() );
+            moves -= 100;
+        } else {
+            move_pause();
+        }
+        return;
     }
 
     if( here.obstructed_by_vehicle_rotation( bub_pos(), p ) ) {
@@ -2854,7 +2872,8 @@ void npc::move_to( const tripoint_bub_ms &pt, bool no_bashing, std::set<tripoint
         }
         moves -= 100;
         moved = true;
-    } else if( here.passable( p ) && !here.has_flag( "DOOR", p ) ) {
+    } else if( here.passable( p ) && ( !here.has_flag( "DOOR", p ) ||
+                                       ( wall_edges::enabled() && wall_edges::is_edge_terrain( here.ter( p ).obj() ) ) ) ) {
         bool diag = trigdist && bub_pos().x() != p.x() && bub_pos().y() != p.y();
         if( is_mounted() ) {
             const double base_moves = run_cost( here.combined_movecost( bub_pos(), p ),

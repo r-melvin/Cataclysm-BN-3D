@@ -115,6 +115,8 @@ struct entity_view {
         const sprite_ref *sprite = nullptr;
     };
     std::vector<beam_segment> beams{};
+    /// Physical light of an already-visible vehicle, without terrain-memory tint.
+    std::function < auto( const tripoint_bub_ms & ) -> uint32_t > vehicle_surface_light = {};
 };
 
 /// Vehicles in the scene frame, rebuilt each frame for rigid-body rotation and animation.

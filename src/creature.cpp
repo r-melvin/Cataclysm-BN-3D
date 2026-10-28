@@ -1,4 +1,5 @@
 #include "creature.h"
+#include "wall_edges.h"
 
 #include "action_time_scale.h"
 #include "anatomy.h"
@@ -397,6 +398,10 @@ bool Creature::sees( const Creature &critter ) const
     };
 
     map &here = get_map();
+    if( wall_edges::trace( { .here = here, .from = bub_pos(), .to = critter.bub_pos(),
+                             .kind = wall_edges::trace_kind::vision } ) ) {
+        return false;
+    }
     const Character *ch = critter.as_character();
     const int wanted_range = rl_dist( bub_pos(), critter.bub_pos() );
     // Can always see adjacent monsters on the same level, unless they're through a vehicle wall.
