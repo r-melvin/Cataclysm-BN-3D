@@ -123,3 +123,19 @@ helicopter and clears its landing pad after checking map bounds. Refresh with a
 normal turn and inspect the full eight-metre main rotor from several headings.
 Rotors are static geometry; broken parts retain a hub and short blade stubs.
 These fixtures change private saves and must not run in a normal play world.
+
+## Vehicle silhouette comparisons
+
+`vehicle_silhouettes.lua` clears a disposable 31 × 31 display pad and replaces
+the vehicle at the avatar's origin. Its bounds are checked first. Edit
+`vehicle_id` to compare the listed native prototypes, then paste into the
+inspected Lua console. It enables debug night vision only in that private save.
+Exit and wait a normal turn; allow visibility to refresh before capturing.
+
+Compare the centred main mast and upright tail rotor on `2seater2` from both
+sides (the fin can hide its far-side rotor). Check `SmallFlier1`, then compare
+`car_sports`, `car`, `suv`, `pickup`, `cube_van`, `bus` and `semi_truck`. Look for
+faceted corner curves, arched roofs, shorter/taller cabins and native tire sizes.
+Cargo areas should retain their usable footprint. Solar panels must clear the
+roof crown. The two rotors on `helicopter_osprey_2a` retain their separate mounts;
+it must not acquire a conventional tail rotor.

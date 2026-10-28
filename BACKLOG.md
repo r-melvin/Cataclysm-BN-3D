@@ -255,6 +255,21 @@ pickup, SUV, bus and semi-truck and add `2seater2`, each at 0/90/225 degrees;
 both item fingerprints remain unchanged. These changes do not close the broader
 vehicle-state acceptance matrix.
 
+Vehicle recognition follow-up completed (2026-10-28): preserve installed part art
+and assembly while shaping existing helicopter aft half-panels into raised booms,
+tailplanes and fins. Four-facet curved native corners, arched roofs and more
+inward canopy taper soften the low-poly bodies. Cabin proportions use roof extent
+and native wheel dimensions; tires use runtime millimetres. Single enclosed main
+rotors centre over the cabin, civilian rotors have four blades, and supported
+single-rotor helicopter fins carry vertical visual tail rotors with broken stubs.
+Twin main rotors keep separate native mounts; gyrocopters get no anti-torque rotor.
+Cargo/floors/full walls are excluded from tail shaping; solar panels clear the roof.
+Snapshots cover ten native prototypes at 0/90/225 degrees, with item scenes intact.
+Both game/test targets build. The final CPU `[r3d],[wall_edges]` suite passes
+189 cases / 101,749 assertions. Private Xvfb comparisons show helicopter rotor
+centres/tails and the rounded road bodies; evidence: `out/validation/vehicle-silhouettes/`.
+This closes the scoped recognition fixes, not the entire vehicle-state matrix.
+
 Source and acceptance matrix:
 [vehicle research](https://github.com/r-melvin/Cataclysm-BN-3D/blob/docs-archive/docs/en/dev/research/vehicle_rendering_research.md).
 

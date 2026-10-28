@@ -29,6 +29,6 @@ auto rotor_pieces( const rotor_geometry_options &options ) -> std::vector<fixtur
 auto roof_crown( const float normalized_right ) -> float
 {
     const auto across = std::clamp( normalized_right, -1.0f, 1.0f );
-    return 0.06f * ( 1.0f - across * across );
+    return 0.10f * ( 1.0f - across * across );
 }
 } // namespace r3d

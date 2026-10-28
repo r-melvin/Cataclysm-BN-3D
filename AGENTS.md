@@ -202,3 +202,7 @@ rg -C2 -i 'speedway' lang/po/ko.po | rg -v '^(#:|--)' | head -n 20
 - Native test invocations share `test_user_dir`; run them serially even on separate virtual displays to avoid save/fixture interference.
 
 - Preserve existing sprite-derived models when repairing presentation: correct source regions, orientation and existing geometry; do not replace their artwork with generic procedural appliances unless explicitly requested.
+
+- `vehicle_part::wheel_diameter()` and `wheel_width()` return millimetres, even when source item JSON uses inches. Verify runtime units before sizing renderer geometry; fixture part IDs must pass `is_valid()` before installation.
+
+- Extracted renderer emitters must be placed after the UV/light helpers they call (or have explicit declarations); a refactor must not depend on a helper defined later in the translation unit.

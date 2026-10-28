@@ -38,6 +38,7 @@
 #include "r3d_shapes.h"
 #include "r3d_vehicle_rules.h"
 #include "r3d_vehicle_details.h"
+#include "r3d_vehicle_silhouette.h"
 #include "enums.h"
 #include "units_utility.h"
 #include "vehicle/vehicle.h"
@@ -416,6 +417,47 @@ auto make_solid_uvs( const sprite_ref &s ) -> uvs_t
 }
 
 auto map_sprite_uv( const sprite_ref &s, float gx, float gy ) -> std::array<float, 2>;
+
+struct emit_vehicle_rotor_options {
+    quad_sink &sink;
+    const sprite_ref &palette;
+    const std::vector<fixture_piece> &pieces;
+    const to_scene_transform &transform;
+    float forward;
+    float right;
+    float base;
+    uint32_t light;
+    bool vertical = false;
+};
+
+auto emit_vehicle_rotor( const emit_vehicle_rotor_options &options ) -> void
+{
+    for( const auto &piece : options.pieces ) {
+        auto material = options.palette;
+        material.solid_uv = std::array<float, 2> { ( static_cast<float>( piece.finish ) + 0.5f ) / 7.0f, 0.5f };
+        auto vertices = std::array<std::array<float, 3>, 8> {};
+        for( auto v = size_t{0}; v < vertices.size(); ++v ) {
+            const auto x = ( v & 1 ? 0.5f : -0.5f ) * piece.box.size[0];
+            const auto y = ( v & 2 ? 0.5f : -0.5f ) * piece.box.size[1];
+            const auto z = ( v & 4 ? 0.5f : -0.5f ) * piece.box.size[2];
+            const auto forward = piece.box.center[0] - 0.5f + x * std::cos( piece.box.yaw ) - y * std::sin(
+                                     piece.box.yaw );
+            const auto across = piece.box.center[1] - 0.5f + x * std::sin( piece.box.yaw ) + y * std::cos(
+                                    piece.box.yaw );
+            const auto up = piece.box.center[2] + z;
+            const auto p = options.transform.apply( options.forward + forward,
+                                                    options.right + ( options.vertical ? up : across ) );
+            vertices[v] = { p.x, p.y, options.base + ( options.vertical ? across / 1.8f : up ) };
+        }
+        constexpr auto faces = std::array<std::array<int, 4>, 6> {{ {4, 5, 7, 6}, {6, 7, 3, 2}, {5, 4, 0, 1}, {4, 6, 2, 0}, {7, 5, 1, 3}, {2, 3, 1, 0} }};
+        for( const auto &face : faces ) {
+            auto corners = corners_t{{ vertices[face[0]], vertices[face[1]], vertices[face[2]], vertices[face[3]] }};
+            // Rotating the rotor into a vertical plane swaps axes, reversing winding.
+            if( options.vertical ) { std::ranges::reverse( corners ); }
+            options.sink.add_colored( { .sprite = material, .corners = corners, .uvs = make_solid_uvs( material ), .ref = light_ref{}, .color = no_pull( options.light ) } );
+        }
+    }
+}
 
 struct emit_vehicle_wheel_options {
     quad_sink &sink;
@@ -933,6 +975,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                              veh.player_in_control( you );
         const auto clear_windshield = is_driving_this_vehicle && view.cam.first_person();
 
+        const auto silhouette = describe_vehicle( veh );
+        const auto cabin_height = silhouette.cabin_height;
         const auto pivot_mnt = veh.pivot_anchor[0];
         const auto pivot_sx = static_cast<float>( veh_bub.x() - view.center.x() ) + 0.5f;
         const auto pivot_sy = static_cast<float>( veh_bub.y() - view.center.y() ) + 0.5f;
@@ -974,6 +1018,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             if( p.z() < view.z_lo || p.z() > view.z_hi ) { continue; }
             auto data = vehicle_profile( veh, mount );
             const auto light = here.inbounds( p ) ? view.light( p ) : pack_light( 0, 0, 0 );
+            if( silhouette.enclosed && ( data.is_tall_cabin || data.has_roof ) ) { data.height = cabin_height; }
             data.light = light == pack_light( 0, 0, 0 ) ? seen_in_dark_light : light;
             cells[point( mount.x(), mount.y() )] = data;
         }
@@ -1002,7 +1047,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 if( beside_roof ) {
                     cell.has_roof = true;
                     cell.show_roof = true;
-                    cell.height = vehicle_cabin_h;
+                    cell.height = cabin_height;
                     cell.is_tall_cabin = true;
                 }
             }
@@ -1117,7 +1162,17 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             }
         }
 
+        for( auto &[pt, cell] : cells ) {
+            const auto section = describe_airframe_section( { .veh = veh, .silhouette = silhouette, .mount = cell.mount } );
+            if( section != airframe_section::cabin ) {
+                cell.height = section == airframe_section::fin ? 0.85f : 0.34f;
+                cell.is_opaque_wall = true;
+            }
+        }
         for( const auto &[pt, cell] : cells ) {
+            const auto section = describe_airframe_section( { .veh = veh, .silhouette = silhouette, .mount = cell.mount } );
+            const auto aft_panel = section != airframe_section::cabin;
+            const auto cell_base = z_base + ( aft_panel ? 0.42f : 0.0f );
             const auto rel_forward = static_cast<float>( cell.mount.x() - pivot_mnt.x() );
             const auto rel_right = static_cast<float>( cell.mount.y() - pivot_mnt.y() );
 
@@ -1281,8 +1336,19 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
 
             const auto f_top = static_cast<float>( rel_forward + f_top_rel );
             const auto f_bot = static_cast<float>( rel_forward + f_bot_rel );
-            const auto r_l = static_cast<float>( rel_right + r_l_rel );
-            const auto r_r = static_cast<float>( rel_right + r_r_rel );
+            const auto tail_center = silhouette.tail_center - pivot_mnt.y();
+            const auto tail_width = section == airframe_section::fin ? 0.12f : section == airframe_section::boom
+                                    ? 0.45f : 1.0f;
+            if( tail_width != 1.0f ) {
+                r_l_rel = tail_center + ( rel_right + r_l_rel - tail_center ) * tail_width - rel_right;
+                r_r_rel = tail_center + ( rel_right + r_r_rel - tail_center ) * tail_width - rel_right;
+            }
+            if( section == airframe_section::stabilizer ) {
+                if( rel_right < tail_center ) { r_r_rel = tail_center - rel_right; }
+                else { r_l_rel = tail_center - rel_right; }
+            }
+            const auto r_l = rel_right + r_l_rel;
+            const auto r_r = rel_right + r_r_rel;
 
             const auto forward_roof = nit_fwd != cells.end() && nit_fwd->second.has_roof;
             const auto rear_roof = nit_rear != cells.end() && nit_rear->second.has_roof;
@@ -1305,22 +1371,30 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                                   is_cell_sloped_rear( nit_rear->second.mount.x(), nit_rear->second.mount.y() ) ) );
             // Greenhouse tumblehome (sloping inward up to roof)
             const auto max_tumble_r = ( r_r - r_l ) * 0.25f;
-            const auto tumble_l = !has_left ? std::min( 0.10f, max_tumble_r ) : 0.0f;
-            const auto tumble_r = !has_right ? std::min( 0.10f, max_tumble_r ) : 0.0f;
+            const auto tumble_l = !has_left ? std::min( 0.18f, max_tumble_r ) : 0.0f;
+            const auto tumble_r = !has_right ? std::min( 0.18f, max_tumble_r ) : 0.0f;
 
             const auto max_tumble_f = ( f_top - f_bot ) * 0.25f;
             const auto tumble_f = ( !forward_roof &&
-                                    h_fwd <= vehicle_body_h ) ? std::min( 0.12f, max_tumble_f ) : 0.0f;
+                                    h_fwd <= vehicle_body_h ) ? std::min( 0.18f, max_tumble_f ) : 0.0f;
             const auto tumble_b = ( !rear_roof && !rear_is_sloped_hatch &&
-                                    h_rear <= vehicle_body_h ) ? std::min( 0.12f, max_tumble_f ) : 0.0f;
+                                    h_rear <= vehicle_body_h ) ? std::min( 0.18f, max_tumble_f ) : 0.0f;
 
             const auto r_l_roof = r_l + tumble_l;
             const auto r_r_roof = r_r - tumble_r;
             const auto f_top_roof = f_top - tumble_f;
             const auto f_bot_roof = f_bot + tumble_b;
+            const auto crown_center = ( min_mount_y + max_mount_y ) * 0.5f - pivot_mnt.y();
+            const auto crown_radius = ( max_mount_y - min_mount_y + 1 ) * 0.5f;
+            const auto roof_center = silhouette.rotor_forward - pivot_mnt.x();
+            const auto roof_radius = ( silhouette.roof_front - silhouette.roof_rear + 1 ) * 0.5f;
+            const auto roof_lift = [&]( const float forward, const float right ) {
+                return roof_crown( ( right - crown_center ) / crown_radius ) +
+                       ( silhouette.enclosed ? 0.7f * roof_crown( ( forward - roof_center ) / roof_radius ) : 0.0f );
+            };
 
-            const auto windshield_front_height = forward_roof ? vehicle_cabin_h : h_fwd;
-            const auto windshield_rear_height = rear_roof ? vehicle_cabin_h : h_rear;
+            const auto windshield_front_height = forward_roof ? cabin_height : h_fwd;
+            const auto windshield_rear_height = rear_roof ? cabin_height : h_rear;
             const auto is_windshield = is_windshield_cell( cell ) && !cell.is_opaque_wall;
             const auto is_fwd_windshield = is_windshield &&
                                            windshield_rear_height >= 0.70f && windshield_front_height <= 0.55f;
@@ -1332,7 +1406,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             const auto panel_top = [&]( const float forward ) {
                 const auto drop = sloped_hood ? 0.10f * std::clamp( ( forward - f_bot ) / ( f_top - f_bot ), 0.0f,
                                   1.0f ) : 0.0f;
-                return z_base + cell.height - drop;
+                return cell_base + cell.height - drop;
             };
             const auto shaped_panel = ( cell.corner != panel_corner::none || sloped_hood ) && !cell.show_roof &&
                                       !cell.is_windshield && !is_sloped_rear;
@@ -1373,7 +1447,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     const auto pa = transform.apply( a[0], a[1] );
                     const auto pb = transform.apply( b[0], b[1] );
                     const auto corners = corners_t{{ {pa.x, pa.y, panel_top( a[0] )}, {pb.x, pb.y, panel_top( b[0] )},
-                            {pb.x, pb.y, z_base + vehicle_clearance_h}, {pa.x, pa.y, z_base + vehicle_clearance_h}
+                            {pb.x, pb.y, cell_base + vehicle_clearance_h}, {pa.x, pa.y, cell_base + vehicle_clearance_h}
                         }};
                     const auto length = std::hypot( b[0] - a[0], b[1] - a[1] );
                     const auto shade = compute_side_shade( ( b[1] - a[1] ) / length, ( a[0] - b[0] ) / length, cos_th,
@@ -1386,7 +1460,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             if( main_vox ) {
                 emit_vox_model( { .sink = sink, .asset = *main_vox, .transform = transform,
                                   .f_min = f_bot, .f_max = f_top, .r_min = r_l, .r_max = r_r,
-                                  .z_min = z_base, .z_max = z_base + cell.height,
+                                  .z_min = cell_base, .z_max = cell_base + cell.height,
                                   .color = cell.light } );
             } else if( shaped_panel ) {
                 // 1. Top Surface Geometry
@@ -1394,8 +1468,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             } else if( is_fwd_windshield || is_rear_windshield ) {
                 const auto &spr = paint_spr ? *paint_spr : ( side_spr ? *side_spr : main_sprite_opt->get().main() );
                 const auto solid_uv = make_solid_uvs( spr );
-                const auto z_low = static_cast<float>( z_base + vehicle_body_h );
-                const auto z_high = static_cast<float>( z_base + vehicle_cabin_h );
+                const auto z_low = static_cast<float>( cell_base + vehicle_body_h );
+                const auto z_high = static_cast<float>( cell_base + cabin_height );
                 const auto f_low = is_fwd_windshield ? f_top : f_bot;
                 const auto f_high = is_fwd_windshield ? f_bot : f_top;
 
@@ -1498,8 +1572,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             } else if( is_sloped_rear ) {
                 const auto &s = paint_spr ? *paint_spr : *side_spr;
                 const auto solid_uv = make_solid_uvs( s );
-                const auto z_high = static_cast<float>( z_base + vehicle_cabin_h );
-                const auto z_low = static_cast<float>( z_base + vehicle_body_h );
+                const auto z_high = static_cast<float>( cell_base + cabin_height );
+                const auto z_low = static_cast<float>( cell_base + vehicle_body_h );
 
                 // 1. Solid painted base deck at z = body_h (0.55f)
                 const auto p0_deck = transform.apply( f_top, r_l );
@@ -1652,7 +1726,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         const auto p1 = transform.apply( f_top, r_r );
                         const auto p2 = transform.apply( f_bot, r_r );
                         const auto p3 = transform.apply( f_bot, r_l );
-                        const auto z_floor = static_cast<float>( z_base + chassis_floor_h );
+                        const auto z_floor = static_cast<float>( cell_base + chassis_floor_h );
                         const auto c_floor = corners_t{{
                                 { p0.x, p0.y, z_floor }, { p1.x, p1.y, z_floor },
                                 { p2.x, p2.y, z_floor }, { p3.x, p3.y, z_floor }
@@ -1661,7 +1735,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                                             .ref = light_ref{}, .color = no_pull( modulate_light( cell.light, 0.70f ) ) } );
                     }
                     emit_vehicle_tile_quads( { .sink = sink, .info = main_sprite_opt->get(), .rel_forward = rel_forward,
-                                               .rel_right = rel_right, .z = z_base + chassis_floor_h + 0.002f, .color = cell.light,
+                                               .rel_right = rel_right, .z = cell_base + chassis_floor_h + 0.002f, .color = cell.light,
                                                .transform = transform, .f_min = f_bot_rel, .f_max = f_top_rel,
                                                .r_min = r_l_rel, .r_max = r_r_rel } );
                 }
@@ -1671,7 +1745,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 const auto p1 = transform.apply( f_top_roof, r_r_roof );
                 const auto p2 = transform.apply( f_bot_roof, r_r_roof );
                 const auto p3 = transform.apply( f_bot_roof, r_l_roof );
-                const auto z_roof = static_cast<float>( z_base + roof_cap_height( cell.height ) );
+                const auto z_roof = static_cast<float>( cell_base + roof_cap_height( cell.height ) );
                 const auto c_roof = corners_t{{
                         { p0.x, p0.y, z_roof }, { p1.x, p1.y, z_roof },
                         { p2.x, p2.y, z_roof }, { p3.x, p3.y, z_roof }
@@ -1705,15 +1779,12 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                             roof_material.solid_uv = std::array<float, 2> { 1.5f / 7.0f, 0.5f };
                         }
                     }
-                    const auto crown_center = ( min_mount_y + max_mount_y ) * 0.5f - pivot_mnt.y();
-                    const auto crown_radius = ( max_mount_y - min_mount_y + 1 ) * 0.5f;
-                    const auto crown_l = roof_crown( ( r_l_roof - crown_center ) / crown_radius );
-                    const auto crown_r = roof_crown( ( r_r_roof - crown_center ) / crown_radius );
+                    const auto forwards = std::array<float, 4> { f_top_roof, f_top_roof, f_bot_roof, f_bot_roof };
+                    const auto rights = std::array<float, 4> { r_l_roof, r_r_roof, r_r_roof, r_l_roof };
                     auto crowned = c_roof;
-                    crowned[0][2] += crown_l;
-                    crowned[1][2] += crown_r;
-                    crowned[2][2] += crown_r;
-                    crowned[3][2] += crown_l;
+                    for( auto i = size_t{0}; i < crowned.size(); ++i ) {
+                        crowned[i][2] += roof_lift( forwards[i], rights[i] );
+                    }
                     sink.add_colored( { .sprite = roof_material, .corners = crowned, .uvs = make_solid_uvs( roof_material ),
                                         .ref = light_ref{}, .color = no_pull( roof_light ) } );
                     // Close the crown down to the cabin, including front and rear end caps.
@@ -1728,7 +1799,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
 
             } else {
                 // Solid base deck at cell.height <= vehicle_body_h
-                const auto z_deck = static_cast<float>( z_base + cell.height );
+                const auto z_deck = static_cast<float>( cell_base + cell.height );
                 const auto p0 = transform.apply( f_top, r_l );
                 const auto p1 = transform.apply( f_top, r_r );
                 const auto p2 = transform.apply( f_bot, r_r );
@@ -1767,7 +1838,10 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                 const auto p1 = transform.apply( f_top_roof, r_r_roof );
                 const auto p2 = transform.apply( f_bot_roof, r_r_roof );
                 const auto p3 = transform.apply( f_bot_roof, r_l_roof );
-                const auto z = z_base + ( cell.has_roof ? roof_cap_height( cell.height ) : cell.height ) + 0.003f;
+                const auto lift = cell.has_roof ? std::max( { roof_lift( f_top_roof, r_l_roof ), roof_lift( f_top_roof, r_r_roof ),
+                                  roof_lift( f_bot_roof, r_r_roof ), roof_lift( f_bot_roof, r_l_roof ) } ) : 0.0f;
+                const auto z = cell_base + ( cell.has_roof ? roof_cap_height( cell.height ) : cell.height ) + lift +
+                               0.003f;
                 const auto corners = corners_t{{ {p0.x, p0.y, z}, {p1.x, p1.y, z}, {p2.x, p2.y, z}, {p3.x, p3.y, z} }};
                 sink.add_colored( { .sprite = rs, .corners = corners, .uvs = make_sprite_uvs( rs ), .ref = light_ref{}, .color = no_pull( cell.light ) } );
             }
@@ -1789,10 +1863,10 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     const auto is_exterior = ( h_neighbor == 0.0f );
 
                     // Recessed dark undercarriage skirt on exterior edges
-                    if( is_exterior ) {
+                    if( is_exterior && !aft_panel ) {
                         const auto skirt_shade_col = no_pull( modulate_light( pack_light( 35, 38, 42 ), side_shade ) );
-                        const auto z_skirt_bot = static_cast<float>( z_base + 0.06f );
-                        const auto z_skirt_top = static_cast<float>( z_base + vehicle_clearance_h );
+                        const auto z_skirt_bot = static_cast<float>( cell_base + 0.06f );
+                        const auto z_skirt_top = static_cast<float>( cell_base + vehicle_clearance_h );
                         point_f sp0;
                         point_f sp1;
                         if( is_lateral ) {
@@ -1817,11 +1891,11 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         sink.add_colored( { .sprite = s, .corners = skirt_c, .uvs = solid_uv, .ref = light_ref{}, .color = skirt_shade_col } );
                     }
 
-                    auto z_bot = static_cast<float>( z_base + ( is_exterior ? vehicle_clearance_h : h_neighbor ) );
-                    auto z_top = static_cast<float>( z_base + cell.height );
+                    auto z_bot = static_cast<float>( cell_base + ( is_exterior ? vehicle_clearance_h : h_neighbor ) );
+                    auto z_top = static_cast<float>( cell_base + cell.height );
 
                     if( is_fwd_windshield || is_rear_windshield || ( local_f < 0.0f && rear_is_sloped_hatch ) ) {
-                        z_top = std::min( z_top, static_cast<float>( z_base + vehicle_body_h ) );
+                        z_top = std::min( z_top, static_cast<float>( cell_base + vehicle_body_h ) );
                     }
 
                     if( z_top <= z_bot ) {
@@ -1829,8 +1903,8 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     }
 
                     // Check if upper cabin side should split into pillars + recessed glass
-                    if( cell.height > vehicle_body_h && !cell.is_opaque_wall && z_top > z_base + vehicle_body_h ) {
-                        const auto z_mid = static_cast<float>( z_base + vehicle_body_h );
+                    if( cell.height > vehicle_body_h && !cell.is_opaque_wall && z_top > cell_base + vehicle_body_h ) {
+                        const auto z_mid = static_cast<float>( cell_base + vehicle_body_h );
 
                         // Lower Band (body waistline)
                         if( z_mid > z_bot ) {
@@ -1969,9 +2043,10 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             // 3. Distinct 3D Wheels
             if( cell.has_wheel && ( wheel_vox || ( wheel_spr && wheel_spr->valid ) ) ) {
                 const auto f_center = ( f_top + f_bot ) * 0.5f;
-                constexpr auto wheel_w = 0.26f;
-                constexpr auto wheel_radius_f = 0.29f;
-                constexpr auto wheel_radius_z = vehicle_wheel_h * 0.5f;
+                const auto dimensions = native_wheel_dimensions( veh.cpart( wheel_layer->part_idx ) );
+                const auto wheel_w = dimensions.width;
+                const auto wheel_radius_f = dimensions.radius_forward;
+                const auto wheel_radius_z = dimensions.radius_up;
 
                 auto r_min = 0.0f;
                 auto r_max = 0.0f;
@@ -1996,13 +2071,13 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                         r_min = r_max - wheel_w;
                         outer_side = 1;
                     } else {
-                        r_min = rel_right - 0.13f;
-                        r_max = rel_right + 0.13f;
+                        r_min = rel_right - wheel_w * 0.5f;
+                        r_max = rel_right + wheel_w * 0.5f;
                         outer_side = 0;
                     }
                 }
                 if( wheel_vox ) {
-                    const auto wheel_z_min = z_base + vehicle_wheel_h * 0.5f - wheel_radius_z;
+                    const auto wheel_z_min = cell_base;
                     emit_vox_model( { .sink = sink, .asset = *wheel_vox, .transform = transform,
                                       .f_min = f_center - wheel_radius_f, .f_max = f_center + wheel_radius_f,
                                       .r_min = r_min, .r_max = r_max, .z_min = wheel_z_min,
@@ -2012,7 +2087,7 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
                     const auto &s = *wheel_spr;
                     emit_vehicle_wheel( { .sink = sink, .sprite = s, .transform = transform,
                                           .center_forward = f_center, .r_min = r_min, .r_max = r_max,
-                                          .z_base = z_base, .radius_forward = wheel_radius_f,
+                                          .z_base = cell_base + wheel_radius_z - vehicle_wheel_h * 0.5f, .radius_forward = wheel_radius_f,
                                           .radius_z = wheel_radius_z, .outer_side = outer_side,
                                           .cos_th = cos_th, .sin_th = sin_th } );
                 }
@@ -2025,29 +2100,32 @@ auto add_vehicles( const add_vehicles_options &options ) -> void
             if( found == cells.end() || !view.cache.fixture_palette().valid ) { continue; }
             const auto &info = veh.part_info( part );
             const auto blades = info.id.str() == "heavy_duty_military_osprey_rotors" ? 3 :
-                                info.id.str().starts_with( "heavy_duty_military" ) ? 4 : 2;
+                                info.id.str() == "gyrocopter_rotors" ? 2 : 4;
             const auto pieces = rotor_pieces( { .diameter = static_cast<float>( info.rotor_diameter() ),
                                                 .blades = blades, .broken = native.is_broken() } );
-            for( const auto &piece : pieces ) {
-                auto material = view.cache.fixture_palette();
-                const auto u = ( static_cast<float>( piece.finish ) + 0.5f ) / 7.0f;
-                material.solid_uv = std::array<float, 2> { u, 0.5f };
-                auto vertices = std::array<std::array<float, 3>, 8> {};
-                for( auto v = size_t{ 0 }; v < vertices.size(); ++v ) {
-                    const auto x = ( v & 1 ? 0.5f : -0.5f ) * piece.box.size[0];
-                    const auto y = ( v & 2 ? 0.5f : -0.5f ) * piece.box.size[1];
-                    const auto z = ( v & 4 ? 0.5f : -0.5f ) * piece.box.size[2];
-                    const auto p = transform.apply( native.mount.x() - pivot_mnt.x() + piece.box.center[0] - 0.5f + x *
-                                                    std::cos( piece.box.yaw ) - y * std::sin( piece.box.yaw ),
-                                                    native.mount.y() - pivot_mnt.y() + piece.box.center[1] - 0.5f + x * std::sin(
-                                                        piece.box.yaw ) + y * std::cos( piece.box.yaw ) );
-                    vertices[v] = { p.x, p.y, z_base + vehicle_cabin_h + 0.04f + piece.box.center[2] + z };
+            const auto centered = silhouette.enclosed && silhouette.main_rotors == 1 &&
+                                  info.location == "on_roof";
+            emit_vehicle_rotor( { .sink = sink, .palette = view.cache.fixture_palette(), .pieces = pieces, .transform = transform,
+                                  .forward = ( centered ? silhouette.rotor_forward : native.mount.x() ) - pivot_mnt.x(),
+                                  .right = ( centered ? silhouette.rotor_right : native.mount.y() ) - pivot_mnt.y(),
+                                  .base = z_base + cabin_height + 0.04f, .light = found->second.light } );
+            if( centered && info.id.str() != "gyrocopter_rotors" ) {
+                auto fin_present = false;
+                auto fin_intact = false;
+                for( const auto &[mount, cell] : cells ) {
+                    if( describe_airframe_section( { .veh = veh, .silhouette = silhouette, .mount = cell.mount } ) !=
+                        airframe_section::fin ) { continue; }
+                    fin_present = true;
+                    for( const auto &layer : cell.layers ) {
+                        if( veh.part_flag( layer.part_idx, "HALF_BOARD" ) && !layer.broken ) { fin_intact = true; }
+                    }
                 }
-                constexpr auto faces = std::array<std::array<int, 4>, 6> {{ {4, 5, 7, 6}, {6, 7, 3, 2}, {5, 4, 0, 1}, {4, 6, 2, 0}, {7, 5, 1, 3}, {2, 3, 1, 0} }};
-                for( const auto &face : faces ) {
-                    const auto corners = corners_t{{ vertices[face[0]], vertices[face[1]], vertices[face[2]], vertices[face[3]] }};
-                    sink.add_colored( { .sprite = material, .corners = corners, .uvs = make_solid_uvs( material ),
-                                        .ref = light_ref{}, .color = no_pull( found->second.light ) } );
+                if( fin_present ) {
+                    const auto tail = rotor_pieces( { .diameter = std::clamp( info.rotor_diameter() * 0.16f, 0.8f, 2.8f ), .blades = 2, .broken = !fin_intact } );
+                    emit_vehicle_rotor( { .sink = sink, .palette = view.cache.fixture_palette(), .pieces = tail, .transform = transform,
+                                          .forward = static_cast<float>( silhouette.tail_rear - pivot_mnt.x() ),
+                                          .right = silhouette.tail_center - pivot_mnt.y(),
+                                          .base = z_base + 1.0f, .light = found->second.light, .vertical = true } );
                 }
             }
         }

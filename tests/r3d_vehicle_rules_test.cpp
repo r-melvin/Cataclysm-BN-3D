@@ -1,6 +1,7 @@
 #include "catch/catch.hpp"
 #include "r3d_shapes.h"
 #include "r3d_vehicle_rules.h"
+#include "r3d_vehicle_silhouette.h"
 #include "vehicle/veh_type.h"
 #include "vehicle/vehicle.h"
 #include "vehicle/vehicle_part.h"
@@ -14,6 +15,90 @@
 #include <span>
 #include <string_view>
 #include <vector>
+
+TEST_CASE("r3d_cabin_proportions_follow_installed_parts", "[r3d][vehicle][silhouette]") {
+    const auto sports = vehicle(vproto_id("car_sports"), 0, 0);
+    const auto sedan = vehicle(vproto_id("car"), 0, 0);
+    const auto suv = vehicle(vproto_id("suv"), 0, 0);
+    const auto van = vehicle(vproto_id("cube_van"), 0, 0);
+    const auto heli = vehicle(vproto_id("2seater2"), 0, 0);
+    const auto sports_shape = r3d::describe_vehicle(sports);
+    const auto sedan_shape = r3d::describe_vehicle(sedan);
+    const auto suv_shape = r3d::describe_vehicle(suv);
+    const auto van_shape = r3d::describe_vehicle(van);
+    const auto heli_shape = r3d::describe_vehicle(heli);
+    CHECK(sports_shape.enclosed);
+    CHECK(sedan_shape.enclosed);
+    CHECK(suv_shape.enclosed);
+    CHECK(van_shape.enclosed);
+    CHECK(sports_shape.cabin_height < sedan_shape.cabin_height);
+    CHECK(sedan_shape.cabin_height < suv_shape.cabin_height);
+    CHECK(suv_shape.cabin_height < van_shape.cabin_height);
+    CHECK(heli_shape.rotorcraft);
+    CHECK(heli_shape.cabin_rear == -2);
+    CHECK(heli_shape.tail_rear == -5);
+    CHECK(heli_shape.tail_center == Approx(0.5f));
+    CHECK(heli_shape.main_rotors == 1);
+    CHECK(heli_shape.rotor_forward == Approx(-1.0f));
+    CHECK(heli_shape.rotor_right == Approx(0.5f));
+    const auto tandem = vehicle(vproto_id("helicopter_osprey_2a"), 0, 0);
+    CHECK(r3d::describe_vehicle(tandem).main_rotors == 2);
+    CHECK_FALSE(sedan_shape.rotorcraft);
+    // A roof on a custom open platform must not infer a complete enclosed cabin.
+    auto platform = vehicle(vproto_id("none"), 0, 0);
+    REQUIRE(
+        platform.install_part(tripoint_mnt_veh::zero(), vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(platform.install_part(tripoint_mnt_veh::zero(), vpart_id("roof"), true) >= 0);
+    CHECK_FALSE(r3d::describe_vehicle(platform).enclosed);
+}
+
+TEST_CASE("r3d_airframe_shapes_only_existing_aft_panels", "[r3d][vehicle][silhouette]") {
+    auto heli = vehicle(vproto_id("2seater2"), 0, 0);
+    const auto shape = r3d::describe_vehicle(heli);
+    const auto section = [&](const tripoint_mnt_veh& mount) {
+        return r3d::describe_airframe_section({.veh = heli, .silhouette = shape, .mount = mount});
+    };
+    const auto boom = tripoint_mnt_veh(-3, 0, 0);
+    CHECK(section(boom) == r3d::airframe_section::boom);
+    CHECK(section(tripoint_mnt_veh(-5, -1, 0)) == r3d::airframe_section::stabilizer);
+    CHECK(section(tripoint_mnt_veh(-5, 0, 0)) == r3d::airframe_section::fin);
+    CHECK(section(tripoint_mnt_veh(0, 0, 0)) == r3d::airframe_section::cabin);
+    CHECK(section(tripoint_mnt_veh(-8, 0, 0)) == r3d::airframe_section::cabin);
+    // Player-installed cargo keeps its native usable footprint rather than becoming a boom.
+    REQUIRE(vpart_id("box").is_valid());
+    REQUIRE(heli.install_part(boom, vpart_id("box"), true) >= 0);
+    CHECK(section(boom) == r3d::airframe_section::cabin);
+    // Road-vehicle quarterpanels do not acquire aircraft styling.
+    const auto car = vehicle(vproto_id("car"), 0, 0);
+    CHECK(
+        r3d::describe_airframe_section(
+            {.veh = car,
+             .silhouette = r3d::describe_vehicle(car),
+             .mount = tripoint_mnt_veh(-3, 0, 0)})
+        == r3d::airframe_section::cabin);
+}
+
+TEST_CASE("r3d_tire_proportions_use_the_installed_wheel_dimensions", "[r3d][vehicle][silhouette]") {
+    auto veh = vehicle(vproto_id("none"), 0, 0);
+    const auto origin = tripoint_mnt_veh::zero();
+    const auto other = tripoint_mnt_veh(1, 0, 0);
+    REQUIRE(veh.install_part(origin, vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh.install_part(other, vpart_id("frame_horizontal"), true) >= 0);
+    const auto regular = veh.install_part(origin, vpart_id("wheel"), true);
+    const auto wide = veh.install_part(other, vpart_id("wheel_wide"), true);
+    REQUIRE(regular >= 0);
+    REQUIRE(wide >= 0);
+    const auto regular_shape = r3d::native_wheel_dimensions(veh.cpart(regular));
+    const auto wide_shape = r3d::native_wheel_dimensions(veh.cpart(wide));
+    CHECK(regular_shape.radius_forward
+          == Approx(veh.cpart(regular).wheel_diameter() * 0.001f * 0.5f));
+    CHECK(wide_shape.radius_forward > regular_shape.radius_forward);
+    CHECK(wide_shape.width > regular_shape.width);
+    CHECK(wide_shape.radius_forward == Approx(wide_shape.radius_up * 1.8f));
+    veh.set_hp(veh.part(wide), 0);
+    CHECK(
+        r3d::native_wheel_dimensions(veh.cpart(wide)).radius_forward == wide_shape.radius_forward);
+}
 
 TEST_CASE("r3d_native_quarterpanels_stay_half_height_under_roofs", "[r3d][vehicle]") {
     auto veh = vehicle(vproto_id("none"), 0, 0);
@@ -54,7 +139,7 @@ TEST_CASE("r3d_native_panel_corner_shapes_clip_the_matching_corner", "[r3d][vehi
         const auto profile = r3d::vehicle_profile(veh, mount);
         const auto outline = r3d::panel_outline(
             {.corner = profile.corner, .front = 0.5f, .rear = -0.5f, .left = -0.5f, .right = 0.5f});
-        REQUIRE(outline.size() == 5);
+        REQUIRE(outline.size() == 8);
         const auto front =
             std::string_view(id).ends_with("_nw") || std::string_view(id).ends_with("_ne");
         const auto left =
@@ -70,7 +155,7 @@ TEST_CASE("r3d_native_panel_corner_shapes_clip_the_matching_corner", "[r3d][vehi
             }
             return std::abs(sum) * 0.5f;
         }();
-        CHECK(area == Approx(0.955f));
+        CHECK(area == Approx(0.978883f));
     }
 }
 
@@ -186,7 +271,7 @@ TEST_CASE("r3d_shaped_panel_outline_edges_are_classified_by_cell_side", "[r3d][v
                  .left = -0.5f,
                  .right = 0.5f})];
         }
-        CHECK(counts[r3d::outline_edge::chamfer] == 1);
+        CHECK(counts[r3d::outline_edge::chamfer] == 4);
         CHECK(counts[r3d::outline_edge::front] == 1);
         CHECK(counts[r3d::outline_edge::rear] == 1);
         CHECK(counts[r3d::outline_edge::left] == 1);
@@ -573,8 +658,10 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
     CHECK(voxel_wheeled.vertices.size() > wheeled.vertices.size());
     CHECK(voxel_wheeled.indices.size() > wheeled.indices.size());
     // The voxel wheel's own vertices (those the sprite wheel mesh lacks) stay inside the wheel's
-    // extent: a lone centreline wheel is 0.58 long and 0.26 wide, centred in the cell at mount x=1,
-    // and as tall as vehicle_wheel_h from the chassis base.
+    // installed native dimensions, centred in the cell at mount x=1.
+    const auto wheel_index =
+        r3d::preferred_wheel_layer(r3d::vehicle_profile(*veh, wheel_mount).layers)->part_idx;
+    const auto wheel_size = r3d::native_wheel_dimensions(veh->cpart(wheel_index));
     auto known = std::set<std::array<float, 3>>{};
     for (const auto& v : wheeled.vertices) { known.insert({v.x, v.y, v.z}); }
     auto low = std::array<float, 3>{1e9f, 1e9f, 1e9f};
@@ -590,15 +677,15 @@ TEST_CASE("r3d_visible_vehicle_retains_parts_with_unlit_mounts", "[r3d][vehicle]
     constexpr auto eps = 0.001f;
     constexpr auto base = r3d::floor_height + 0.02f;
     REQUIRE(high[0] >= low[0]);
-    CHECK(low[0] >= 1.5f - 0.29f - eps);
-    CHECK(high[0] <= 1.5f + 0.29f + eps);
-    CHECK(high[0] - low[0] > 0.45f);
-    CHECK(low[1] >= -0.5f - 0.13f - eps);
-    CHECK(high[1] <= -0.5f + 0.13f + eps);
-    CHECK(high[1] - low[1] > 0.2f);
+    CHECK(low[0] >= 1.5f - wheel_size.radius_forward - eps);
+    CHECK(high[0] <= 1.5f + wheel_size.radius_forward + eps);
+    CHECK(high[0] - low[0] > wheel_size.radius_forward * 1.7f);
+    CHECK(low[1] >= -0.5f - wheel_size.width * 0.5f - eps);
+    CHECK(high[1] <= -0.5f + wheel_size.width * 0.5f + eps);
+    CHECK(high[1] - low[1] > wheel_size.width * 0.8f);
     CHECK(low[2] >= base - eps);
-    CHECK(high[2] <= base + r3d::vehicle_wheel_h + eps);
-    CHECK(high[2] - low[2] > 0.28f);
+    CHECK(high[2] <= base + wheel_size.radius_up * 2.0f + eps);
+    CHECK(high[2] - low[2] > wheel_size.radius_up * 1.7f);
     const auto& roof_art =
         cache.named({.category = C_VEHICLE_PART, .id = "vp_roof", .tiles = *tilecontext}).main();
     REQUIRE(roof_art.valid);
@@ -773,6 +860,7 @@ TEST_CASE("r3d_car_hatch_blueprint_rules", "[r3d][vehicle][tiles][car_hatch]") {
     REQUIRE_FALSE(mesh.empty());
     REQUIRE(mesh.vertices.size() >= 4);
 
+    const auto cabin_height = r3d::describe_vehicle(*veh).cabin_height;
     // Verify presence of sloped quads (both z_low ~0.55f and z_high ~0.85f on same quad)
     auto has_sloped_windshield = false;
     auto has_sloped_hatch = false;
@@ -793,7 +881,7 @@ TEST_CASE("r3d_car_hatch_blueprint_rules", "[r3d][vehicle][tiles][car_hatch]") {
         const auto rel_min_x = min_x - 0.5f;
         const auto rel_max_x = max_x - 0.5f;
         // Sloped surface rising ~0.30f longitudinally between body_h and cabin_h
-        if (std::abs(max_z - min_z - (r3d::vehicle_cabin_h - r3d::vehicle_body_h)) < 0.05f) {
+        if (std::abs(max_z - min_z - (cabin_height - r3d::vehicle_body_h)) < 0.05f) {
             if (rel_min_x > 0.0f) {
                 has_sloped_windshield = true;
             } else if (rel_max_x < 0.0f) {
@@ -995,7 +1083,7 @@ TEST_CASE("r3d_vehicle_mounts_keep_their_material_without_double_tint", "[r3d][v
                 || !std::ranges::all_of(quad, [i, deck_height, roof](const auto& vertex) {
                        return vertex.x >= i && vertex.x <= i + 1
                            && (roof ? vertex.z >= deck_height - 1e-6f
-                                          && vertex.z <= deck_height + 0.061f
+                                          && vertex.z <= deck_height + 0.101f
                                     : vertex.z == Approx(deck_height));
                    })) {
                 continue;
@@ -1133,6 +1221,131 @@ TEST_CASE(
         }
     }
     CHECK(explicit_paint);
+}
+
+TEST_CASE(
+    "r3d_single_helicopter_rotors_center_over_cabin_and_turn_vertically_at_tail",
+    "[r3d][vehicle][tiles][silhouette]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("2seater2"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    const auto shape = r3d::describe_vehicle(*veh);
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {},
+        .vehicle_mount_visible = [](const tripoint_bub_ms& /*p*/) { return true; }};
+    const auto mesh = r3d::build_vehicle_mesh(view);
+    const auto base = r3d::floor_height + 0.02f;
+    const auto pivot = veh->pivot_anchor[0];
+    const auto offset = veh->bub_ms_location() - origin;
+    const auto expected_x = offset.x() + 0.5f + shape.rotor_forward - pivot.x();
+    const auto expected_y = -(offset.y() + 0.5f + shape.rotor_right - pivot.y());
+    auto mast_left = 1e9f;
+    auto mast_right = -1e9f;
+    auto mast_front = -1e9f;
+    auto mast_back = 1e9f;
+    for (const auto& batch : mesh.batches) {
+        if (batch.sheet != cache.fixture_palette().sheet) { continue; }
+        for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+            const auto& v = mesh.vertices[mesh.indices[i]];
+            if (v.u != Approx(1.5f / 7.0f) || v.z != Approx(base + shape.cabin_height + 0.24f)) {
+                continue;
+            }
+            mast_left = std::min(mast_left, v.y);
+            mast_right = std::max(mast_right, v.y);
+            mast_back = std::min(mast_back, v.x);
+            mast_front = std::max(mast_front, v.x);
+        }
+    }
+    REQUIRE(mast_left < mast_right);
+    CHECK((mast_left + mast_right) * 0.5f == Approx(expected_y));
+    CHECK((mast_back + mast_front) * 0.5f == Approx(expected_x));
+    const auto tail_x = offset.x() + 0.5f + shape.tail_rear - pivot.x();
+    struct tail_span {
+        float low = 1e9f;
+        float high = -1e9f;
+        float bottom = 1e9f;
+        float top = -1e9f;
+    };
+    const auto tail_bounds = [&](const auto& model) {
+        auto bounds = tail_span{};
+        for (const auto& batch : model.batches) {
+            if (batch.sheet != cache.fixture_palette().sheet) { continue; }
+            for (auto i = batch.first_index; i < batch.first_index + batch.index_count; ++i) {
+                const auto& v = model.vertices[model.indices[i]];
+                if (v.u != Approx(2.5f / 7.0f) || v.x < tail_x - 0.8f || v.x > tail_x + 0.8f
+                    || v.z > base + shape.cabin_height + 0.24f) {
+                    continue;
+                }
+                bounds.low = std::min(bounds.low, v.x);
+                bounds.high = std::max(bounds.high, v.x);
+                bounds.bottom = std::min(bounds.bottom, v.z);
+                bounds.top = std::max(bounds.top, v.z);
+            }
+        }
+        return bounds;
+    };
+    const auto tail = tail_bounds(mesh);
+    REQUIRE(tail.low < tail.high);
+    CHECK(tail.high - tail.low > 0.9f);
+    CHECK(tail.top - tail.bottom > 0.2f);
+    // Damage to existing fin panels shortens the visual tail blades to stubs.
+    for (auto i = 0; i < veh->part_count(); ++i) {
+        const auto& part = veh->cpart(i);
+        if (part.mount.x() == shape.tail_rear && veh->part_flag(i, "HALF_BOARD")
+            && !veh->part_info(i).id.str().ends_with("_cover")) {
+            veh->set_hp(veh->part(i), 0);
+        }
+    }
+    const auto broken = tail_bounds(r3d::build_vehicle_mesh(view));
+    REQUIRE(broken.low < broken.high);
+    CHECK(broken.high - broken.low < tail.high - tail.low);
+}
+
+TEST_CASE("r3d_rooftop_accessories_clear_the_faceted_roof", "[r3d][vehicle][tiles][silhouette]") {
+    const auto cleanup = on_out_of_scope([] { clear_all_state(); });
+    clear_all_state();
+    clear_map();
+    const auto contexts = tile_context_fixture(true);
+    REQUIRE(contexts.valid());
+    tilecontext->load_tileset("UltimateCataclysm", {}, false, true, false);
+    const auto origin = tripoint_bub_ms(60, 60, 0);
+    auto* const veh = get_map().add_vehicle(vproto_id("none"), origin, 0_degrees, 0, 0);
+    REQUIRE(veh);
+    REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("frame_horizontal"), true) >= 0);
+    REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("roof"), true) >= 0);
+    auto cache = r3d::tile_info_cache{};
+    const auto cam = r3d::camera{};
+    const auto view = r3d::entity_view{
+        .tiles = *tilecontext,
+        .cache = cache,
+        .cam = cam,
+        .center = origin,
+        .light = [](const tripoint_bub_ms& /*p*/) { return r3d::pack_light(255, 255, 255); },
+        .markers = {},
+        .uprights = {},
+        .surface = {}};
+    const auto roof = r3d::build_vehicle_mesh(view);
+    REQUIRE_FALSE(roof.vertices.empty());
+    const auto roof_top = std::ranges::max(roof.vertices, {}, &r3d::vertex::z).z;
+    REQUIRE(veh->install_part(tripoint_mnt_veh::zero(), vpart_id("solar_panel"), true) >= 0);
+    const auto panel = r3d::build_vehicle_mesh(view);
+    CHECK(panel.vertices.size() > roof.vertices.size());
+    CHECK(std::ranges::max(panel.vertices, {}, &r3d::vertex::z).z >= roof_top + 0.002f);
 }
 
 #endif

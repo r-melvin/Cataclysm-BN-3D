@@ -268,7 +268,22 @@ visual support. These models preserve native furniture and terrain collision.
 Metal vehicle roofs follow adjacent exterior materials instead of generic blue
 roof filler, while distinct native roof paint remains visible. Roof crowns and
 bonnet slopes soften the silhouette without changing the native footprint.
-Helicopter main rotors use the native rotor diameter and mount position, with
+Helicopter main rotors use native diameters and the installed assembly, with
 masts, hubs, blades and broken stubs. Blades are currently posed, without rotor
 animation. Private reproduction scenes are documented in
 `tools/r3d_spike/fixtures/README.md`.
+
+Vehicle proportions follow the installed assembly: short cabins sit lower, long
+enclosed bodies sit taller, and wheel diameter/width use native millimetres.
+Existing corner panels use four broad facets around their curved edge; roofs
+arch across their width and length, with inward-tapering canopy edges. Sprite
+materials, doors, cargo and native gameplay footprints remain in use. Roof
+accessories sit above the arched roof surface.
+
+On enclosed helicopters with one main rotor, the visible mast is centred over
+the roof/cabin rather than offset onto its installation tile. Multiple main
+rotors keep their separate native positions. The civilian main rotor has four
+blades. Existing aft half-panels form the raised boom, tailplane and fin; a
+vertical visual tail rotor is added on conventional single-main-rotor tails.
+It follows fin damage, has no separate gameplay part or collision, and is omitted
+when no supporting fin remains. Rotor blades remain static.
